@@ -69,8 +69,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Kalender & Ringkasan Schedule (di tab Schedule)
     Route::get('/proyek/{proyek}/calendar-events', [ProyekController::class, 'calendarEvents'])->name('proyek.calendar.events');
-    Route::get('/proyek/{proyek}/schedule-summary/tree', [ProyekController::class, 'scheduleSummaryTree'])->name('proyek.schedule.summary.tree');
-
+    Route::get('/proyek/{proyek}/schedule-summary-tree', [ProyekController::class, 'scheduleSummaryTree'])->name('proyek.schedule.summary.tree');
     // Generate Schedule mingguan dari Proyek (lama)
     Route::post('/proyek/{id}/generate-schedule', [ProyekController::class, 'generateSchedule'])->name('proyek.generateSchedule');
     Route::delete('/proyek/{id}/rab-reset', [ProyekController::class, 'resetRab'])->name('proyek.resetRab');

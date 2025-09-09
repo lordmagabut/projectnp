@@ -51,12 +51,12 @@
         <tr>
           <td class="text-nowrap">{{ $r->kode }}</td>
           <td>{{ $r->uraian }}</td>
-          <td class="text-end">{{ $fmt($r->Wi) }}</td>
+          <td class="text-end"></td>
           <td class="text-end">{{ $fmt($r->tgt) }}</td>
           <td class="text-end">{{ $fmt($r->bPrev) }}</td>
           <td class="text-end">{{ $fmt($r->bDelta) }}</td>
           <td class="text-end">{{ $fmt($r->bNow) }}</td>
-          <td class="text-end">{{ $fmt($r->pNow) }}</td>
+          <td class="text-end"></td>
         </tr>
       @empty
         <tr><td colspan="8" class="text-center text-muted py-3">Tidak ada item.</td></tr>
@@ -65,7 +65,7 @@
     <tfoot class="table-light fw-semibold">
       <tr>
         <td colspan="2" class="text-end">TOTAL</td>
-        <td class="text-end">{{ $fmt($totWi) }}</td>
+        <td class="text-end"></td>
         <td class="text-end">{{ $fmt($totTarget) }}</td>
         <td class="text-end">{{ $fmt($totPrev) }}</td>
         <td class="text-end">{{ $fmt($totDelta) }}</td>

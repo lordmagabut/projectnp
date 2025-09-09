@@ -59,10 +59,9 @@
             <th>URAIAN</th>
             <th class="text-end" style="width:10%">BOBOT</th>
             <th class="text-end" style="width:11%">TARGET S/D MINGGU KE-{{ $mingguKe }}</th>
-            {{-- kalau ingin kumulatif ganti judul jadi "TARGET S/D MINGGU KE-{{ $mingguKe }}" dan sumbernya plannedToMap --}}
             <th class="text-end" style="width:11%">PROG. S/D MINGGU LALU (%)</th>
-            <th class="text-end" style="width:11%">BOBOT S/D MINGGU LALU</th>
             <th style="width:12%">PROGRESS SAAT INI (%)</th>
+            <th class="text-end" style="width:11%">BOBOT S/D MINGGU LALU</th>
             <th class="text-end" style="width:10%">BOBOT SAAT INI</th>
             <th class="text-end" style="width:10%">Δ% MINGGU INI</th>
             <th class="text-end" style="width:11%">Δ BOBOT MINGGU INI</th>
@@ -93,9 +92,9 @@
     @php
       $id       = $it->id;
       $bobot    = (float)($it->bobot ?? ($bobotMap[$id] ?? 0));  // % proyek utk item
-      // TARGET minggu N (non-kumulatif). Jika mau kumulatif, ganti ke plannedToMap[$id] ?? 0
-      $targetN = (float)($plannedToMap[$id] ?? 0);
-      // Prev dari controller
+      // Target kumulatif s/d minggu N:
+      $targetCum = (float)($plannedToMap[$id] ?? 0);
+      // Progress s/d minggu lalu:
       $prevArr  = $prevMap[$id] ?? ['prev_bobot_pct_project'=>0.0,'prev_pct_of_item'=>0.0];
       $prevPct  = (float)$prevArr['prev_pct_of_item'];        // % terhadap item
       $prevProj = (float)$prevArr['prev_bobot_pct_project'];  // % terhadap proyek
@@ -105,15 +104,15 @@
         data-bobot="{{ $bobot }}"
         data-prevpct="{{ $prevPct }}"
         data-realprev="{{ $prevProj }}"
-        data-target="{{ $targetN }}">
+        data-target="{{ $targetCum }}">
       <td class="fw-semibold">{{ $it->kode }}</td>
       <td>{{ $it->uraian }}</td>
 
       <td class="text-end bobot-item">{{ $fmt($bobot) }}</td>
-      <td class="text-end target-2week">{{ $fmt($targetN) }}</td>
+
+      <td class="text-end target-2week">{{ $fmt($targetCum) }}</td>
 
       <td class="text-end prev-pct">{{ $fmt($prevPct) }}</td>
-      <td class="text-end prev-bobot">{{ $fmt($prevProj) }}</td>
 
       {{-- input progress sekarang (kumulatif % terhadap item) --}}
       <td>
@@ -130,6 +129,7 @@
         <input type="hidden" name="prev_pct[{{ $id }}]"   value="{{ number_format($prevPct, 6, '.', '') }}">
       </td>
 
+      <td class="text-end prev-bobot">{{ $fmt($prevProj) }}</td>
 
 
       <td class="text-end now-bobot">0,00</td>
@@ -143,13 +143,17 @@
 @endforelse
         </tbody>
 
+        {{-- FOOTER: total per kolom (target kumulatif, bobot saat ini, delta %, delta bobot) --}}
         <tfoot class="table-light">
           <tr>
-            <th colspan="6" class="text-end">TOTAL</th>
-            <th class="text-end" id="tot-now">0,00</th>
-            <th></th>
-            <th class="text-end" id="tot-delta-pct">0,00</th>
-            <th class="text-end" id="tot-delta-bobot">0,00</th>
+            <th colspan="3" class="text-end">TOTAL</th>
+            <th class="text-end" id="tot-target">0,00</th>      {{-- kolom 4: TARGET S/D MINGGU KE-N --}}
+            <th></th>                                           {{-- kolom 5: prev % (tidak ditotal) --}}
+            <th></th>                                           {{-- kolom 6: prev bobot (opsional) --}}
+            <th></th>                                           {{-- kolom 7: input % (tidak ditotal) --}}
+            <th class="text-end" id="tot-now">0,00</th>         {{-- kolom 8: BOBOT SAAT INI --}}
+            <th class="text-end" id="tot-delta-pct">0,00</th>   {{-- kolom 9: Δ% MINGGU INI (agregat item) --}}
+            <th class="text-end" id="tot-delta-bobot">0,00</th> {{-- kolom 10: Δ BOBOT MINGGU INI --}}
           </tr>
         </tfoot>
       </table>
@@ -192,12 +196,14 @@
   }
 
   function recalcTotal(){
-    let tNow=0, tDB=0;
+    let tTarget = 0, tNow = 0, tDB = 0, tDP = 0;
     document.querySelectorAll('#tbl-progress tbody tr[data-row="item"]').forEach(tr=>{
-      tNow += deID(tr.querySelector('.now-bobot')?.textContent);
-      tDB  += deID(tr.querySelector('.delta-bobot')?.textContent);
+      tTarget += deID(tr.querySelector('.target-2week')?.textContent);
+      tNow    += deID(tr.querySelector('.now-bobot')?.textContent);
+      tDB     += deID(tr.querySelector('.delta-bobot')?.textContent);
+      tDP     += deID(tr.querySelector('.delta-pct')?.textContent);
     });
-    const tDP = tDB; // Δ% total = Δ bobot total (as project scale)
+    document.getElementById('tot-target').textContent     = fmt(tTarget);
     document.getElementById('tot-now').textContent        = fmt(tNow);
     document.getElementById('tot-delta-pct').textContent  = fmt(tDP);
     document.getElementById('tot-delta-bobot').textContent= fmt(tDB);

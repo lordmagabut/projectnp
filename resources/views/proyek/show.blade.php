@@ -256,46 +256,6 @@
               @endif
             </div>
           </div>
-
-          {{-- Fallback flat table (optional, hidden by default) --}}
-          @if(!empty($calendarRows))
-          <div class="card mb-4 shadow-sm d-none" id="flatCard">
-            <div class="card-header bg-light">
-              <h6 class="mb-0 d-flex align-items-center">
-                <i data-feather="list" class="me-2 text-secondary"></i> Ringkasan Tanggal per Item
-              </h6>
-            </div>
-            <div class="card-body p-0">
-              <div class="table-responsive">
-                <table class="table table-hover table-bordered table-sm mb-0">
-                  <thead class="table-light">
-                    <tr>
-                      <th style="width:12%">Kode</th>
-                      <th>Uraian</th>
-                      <th class="text-end" style="width:10%">Minggu Mulai</th>
-                      <th class="text-end" style="width:10%">Durasi (minggu)</th>
-                      <th style="width:13%">Tgl Mulai</th>
-                      <th style="width:13%">Tgl Selesai</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @foreach($calendarRows as $r)
-                      <tr>
-                        <td>{{ $r['kode'] }}</td>
-                        <td>{{ $r['deskripsi'] }}</td>
-                        <td class="text-end">{{ $r['minggu_ke'] }}</td>
-                        <td class="text-end">{{ $r['durasi'] }}</td>
-                        <td>{{ $r['tgl_mulai'] }}</td>
-                        <td>{{ $r['tgl_selesai'] }}</td>
-                      </tr>
-                    @endforeach
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          @endif
-
         </div>
 
         {{-- =======================
@@ -478,6 +438,7 @@
 document.addEventListener('DOMContentLoaded', function () {
   feather.replace();
 
+  // pertahankan tab dari query ?tab=
   (function keepTabFromQuery(){
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
@@ -487,6 +448,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   })();
 
+  // Kurva S
   const chartEl = document.querySelector('#kurvaSChart');
   if (chartEl) {
     const options = {
@@ -496,28 +458,17 @@ document.addEventListener('DOMContentLoaded', function () {
         { name: 'Realisasi', data: @json($realisasi) }
       ],
       grid: { row: { colors: ['#f8f9fa', 'transparent'], opacity: 0.5 } },
-      xaxis: {
-        categories: @json($minggu),
-        title: { text: 'Minggu' },
-        labels: { style: { colors: '#6c757d' } }
-      },
+      xaxis: { categories: @json($minggu), title: { text: 'Minggu' }, labels: { style: { colors: '#6c757d' } } },
       yaxis: {
         max: 100,
         title: { text: 'Bobot (%)' },
-        labels: {
-          formatter: function (val) { return (val ?? 0).toFixed(2); },
-          style: { colors: '#6c757d' }
-        }
+        labels: { formatter: (v) => (v ?? 0).toFixed(2), style: { colors: '#6c757d' } }
       },
       tooltip: {
-        x: { formatter: function (value) { return 'Minggu ke-' + value; } },
-        y: { formatter: function (val) { return (val === null ? '-' : Number(val).toFixed(2) + ' %'); } }
+        x: { formatter: (v) => 'Minggu ke-' + v },
+        y: { formatter: (v) => (v === null ? '-' : Number(v).toFixed(2) + ' %') }
       },
-      title: {
-        text: 'Kurva S Rencana - Realisasi',
-        align: 'left',
-        style: { fontSize: '16px', fontWeight: 'bold', color: '#343a40' }
-      },
+      title: { text: 'Kurva S Rencana - Realisasi', align: 'left', style: { fontSize: '16px', fontWeight: 'bold', color: '#343a40' } },
       markers: { size: 4, strokeWidth: 2, hover: { sizeOffset: 2 } },
       stroke: { width: 3, curve: 'straight' },
       colors: ['#28a745', '#dc3545']
@@ -526,6 +477,7 @@ document.addEventListener('DOMContentLoaded', function () {
     chart.render();
   }
 
+  // Kalender
   const calEl = document.getElementById('scheduleCalendar');
   if (calEl) {
     const calendar = new FullCalendar.Calendar(calEl, {
@@ -556,8 +508,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // ===== Ringkasan Tree (AJAX) =====
   const PENAWARAN_ID = @json($currentPenawaranId ?? null);
   const treeTbody   = document.querySelector('#tree-summary tbody');
-  const treeCard    = document.getElementById('treeCard');
-  const flatCard    = document.getElementById('flatCard');
 
   function toggleIcon(el, open){ if(el) el.textContent = open ? '▼' : '▶'; }
   function collapse(branchKey){
@@ -598,12 +548,9 @@ document.addEventListener('DOMContentLoaded', function () {
       const html = await res.text();
       if (!res.ok) { console.error('Tree HTTP', res.status, html); throw new Error('HTTP '+res.status); }
       treeTbody.innerHTML = html;
-      treeCard?.classList.remove('d-none');
-      flatCard?.classList.add('d-none');
     } catch (err) {
       console.error('Gagal load tree:', err);
-      treeCard?.classList.add('d-none');
-      flatCard?.classList.remove('d-none');
+      treeTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Gagal memuat ringkasan.</td></tr>';
     }
   }
 

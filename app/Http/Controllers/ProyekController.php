@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 use App\Models\Proyek;
 use App\Models\PemberiKerja;
@@ -20,6 +21,7 @@ use App\Models\RabSchedule;
 use App\Models\RabScheduleDetail;
 use App\Models\RabProgress;
 use App\Models\RabScheduleMeta;
+use App\Models\RabPenawaranItem;
 
 use App\Services\ProyekService;
 use App\Helpers\FileUploadHelper;
@@ -120,7 +122,7 @@ class ProyekController extends Controller
         $grandTotal = $headers->flatMap->rabDetails->sum('total');
 
         /* ============================
-           Penawaran FINAL & pilihan
+        Penawaran FINAL & pilihan
         ============================ */
         $finalPenawarans = RabPenawaranHeader::where('proyek_id', $id)
             ->where('status', 'final')
@@ -130,7 +132,7 @@ class ProyekController extends Controller
         $selectedId = (int) request('penawaran_id', optional($finalPenawarans->last())->id);
 
         /* ============================
-           Kurva-S (PLANNED) dari detail
+        Kurva-S (PLANNED) dari detail
         ============================ */
         $scheduleDetailQ = RabScheduleDetail::where('proyek_id', $id)
             ->when($selectedId, fn ($q) => $q->where('penawaran_id', $selectedId));
@@ -142,9 +144,9 @@ class ProyekController extends Controller
 
         // deteksi kolom bobot
         $sdTable  = (new RabScheduleDetail)->getTable();
-        $bobotCol = Schema::hasColumn($sdTable, 'bobot_mingguan')
+        $bobotCol = \Schema::hasColumn($sdTable, 'bobot_mingguan')
             ? 'bobot_mingguan'
-            : (Schema::hasColumn($sdTable, 'bobot') ? 'bobot' : null);
+            : (\Schema::hasColumn($sdTable, 'bobot') ? 'bobot' : null);
 
         $grouped = $scheduleDetailQ->orderBy('minggu_ke')->get()->groupBy('minggu_ke');
         $hasScheduleSelected = $grouped->isNotEmpty();
@@ -166,9 +168,10 @@ class ProyekController extends Controller
         }
 
         /* ============================
-           PROGRESS (tabel ringkasan)
-           - tampilkan semua, termasuk draft
-           - bobot realisasi = sum( bobotItemRencana(detail) * %minggu_ini / 100 )
+        PROGRESS (tabel ringkasan)
+        -> Pakai angka yang kita simpan:
+            - pertumbuhan   = SUM(rpd.bobot_minggu_ini) untuk progress_id itu
+            - kumulatif saat ini = kumulatif sebelumnya + pertumbuhan
         ============================ */
         $progressRaw = RabProgress::with(['details'])
             ->where('proyek_id', $id)
@@ -176,21 +179,15 @@ class ProyekController extends Controller
             ->orderBy('minggu_ke')
             ->get();
 
-        // Bobot item rencana per detail_id dari schedule
-        $itemWeight = $this->itemWeightMapFromSchedule($id, $selectedId); // [detail_id => total bobot]
+        $progressSummary      = [];
+        $progressSebelumnya   = 0.0;
 
-        $progressSummary = [];
-        $progressSebelumnya = 0.0;
-        
         foreach ($progressRaw as $row) {
-            $bobotMingguIni = 0.0;
-            foreach ($row->details as $d) {
-                $w = (float)($itemWeight[$d->rab_detail_id] ?? 0.0);
-                $bobotMingguIni += ($w * (float)$d->bobot_minggu_ini) / 100.0;
-            }
-        
+            // !!! TIDAK perlu dikalikan bobot item lagi.
+            $bobotMingguIni = (float) $row->details->sum('bobot_minggu_ini'); // % proyek (delta)
+
             $progressSummary[] = [
-                'id'                  => $row->id,             // <<< tambahkan ini
+                'id'                  => $row->id,
                 'minggu_ke'           => (int) $row->minggu_ke,
                 'tanggal'             => $row->tanggal,
                 'progress_sebelumnya' => round($progressSebelumnya, 2),
@@ -198,54 +195,51 @@ class ProyekController extends Controller
                 'progress_saat_ini'   => round($progressSebelumnya + $bobotMingguIni, 2),
                 'status'              => $row->status,
             ];
-        
+
             $progressSebelumnya += $bobotMingguIni;
         }
 
         /* ============================
-           Kurva-S REALISASI (FINAL saja)
+        Kurva-S REALISASI (FINAL saja)
+        -> Setiap minggu = SUM(rpd.bobot_minggu_ini) (FINAL)
+        -> Lalu akumulasi; untuk minggu yang belum FINAL, isi null
         ============================ */
         if (!empty($minggu)) {
-            // peta minggu => bobot final minggu tsb
             $finalWeekly = [];
             foreach ($progressRaw as $row) {
                 if ($row->status !== 'final') continue;
-
-                $val = 0.0;
-                foreach ($row->details as $d) {
-                    $w = (float) ($itemWeight[$d->rab_detail_id] ?? 0.0);
-                    $val += ($w * (float) $d->bobot_minggu_ini) / 100.0;
-                }
-                $finalWeekly[(int) $row->minggu_ke] = ($finalWeekly[(int) $row->minggu_ke] ?? 0) + $val;
+                $val = (float) $row->details->sum('bobot_minggu_ini'); // % proyek (delta)
+                $week = (int) $row->minggu_ke;
+                $finalWeekly[$week] = ($finalWeekly[$week] ?? 0.0) + $val;
             }
 
             $cumFinal = 0.0;
             foreach ($minggu as $w) {
                 if (isset($finalWeekly[$w])) {
-                    $cumFinal  += (float) $finalWeekly[$w];
+                    $cumFinal   += (float) $finalWeekly[$w];
                     $realisasi[] = round($cumFinal, 2);
                 } else {
-                    // null supaya garis realisasi putus di minggu yg belum final
+                    // null supaya garis realisasi putus pada minggu yang belum final
                     $realisasi[] = null;
                 }
             }
         }
 
         /* ============================
-           META jadwal penawaran terpilih
+        META jadwal penawaran terpilih
         ============================ */
         $selectedMeta = $selectedId
             ? RabScheduleMeta::where('proyek_id', $id)->where('penawaran_id', $selectedId)->first()
             : null;
 
         /* ============================
-           EVENT KALENDER per item (RabSchedule)
+        EVENT KALENDER per item (RabSchedule)
         ============================ */
         $calendarEvents = [];
         $calendarRows   = [];
 
         if ($selectedId && $hasScheduleSelected && $selectedMeta) {
-            $metaStart = Carbon::parse($selectedMeta->start_date)->startOfDay();
+            $metaStart = \Carbon\Carbon::parse($selectedMeta->start_date)->startOfDay();
 
             $schedRows = RabSchedule::where('proyek_id', $id)
                 ->where('penawaran_id', $selectedId)
@@ -277,7 +271,7 @@ class ProyekController extends Controller
                 $endExclusive = (clone $end)->addDay(); // FullCalendar end eksklusif
 
                 $calendarEvents[] = [
-                    'title'  => trim(($kode ? ($kode . ' — ') : '') . Str::limit($desc, 60)),
+                    'title'  => trim(($kode ? ($kode . ' — ') : '') . \Illuminate\Support\Str::limit($desc, 60)),
                     'start'  => $start->toDateString(),
                     'end'    => $endExclusive->toDateString(),
                     'allDay' => true,
@@ -295,8 +289,8 @@ class ProyekController extends Controller
 
             usort($calendarRows, function ($a, $b) {
                 if ($a['tgl_mulai'] === $b['tgl_mulai']) return strcmp($a['kode'], $b['kode']);
-                $da = Carbon::createFromFormat('d-m-Y', $a['tgl_mulai']);
-                $db = Carbon::createFromFormat('d-m-Y', $b['tgl_mulai']);
+                $da = \Carbon\Carbon::createFromFormat('d-m-Y', $a['tgl_mulai']);
+                $db = \Carbon\Carbon::createFromFormat('d-m-Y', $b['tgl_mulai']);
                 return $da <=> $db;
             });
         }
@@ -321,6 +315,7 @@ class ProyekController extends Controller
             'calendarRows'
         ));
     }
+
 
     public function generateSchedule(Request $request, $proyek_id)
     {
@@ -439,232 +434,220 @@ class ProyekController extends Controller
     /* =========================================================
        Ringkasan Tree (header → subheader → item)
     ========================================================== */
-    public function scheduleSummaryTree(\App\Models\Proyek $proyek, \Illuminate\Http\Request $request)
-    {
-        try {
-            if (!$proyek->tanggal_mulai) {
-                return response('tanggal_mulai proyek belum diisi', 400);
-            }
+    public function scheduleSummaryTree(Proyek $proyek, Request $request)
+{
+    $proyekId   = $proyek->id;
+    $penawaranId= (int) $request->query('penawaran_id');
 
-            $base        = Carbon::parse($proyek->tanggal_mulai)->startOfDay();
-            $penawaranId = $request->integer('penawaran_id');
+    // Helper: pilih kolom yang ada pada tabel
+    $pickCol = function (string $table, array $cands) {
+        foreach ($cands as $c) if (Schema::hasColumn($table, $c)) return $c;
+        return null;
+    };
 
-            $pick = function (string $table, array $candidates): ?string {
-                foreach ($candidates as $c) if (Schema::hasColumn($table, $c)) return $c;
-                return null;
-            };
-
-            // 1) Header
-            $hdrCodeCol = $pick('rab_header', ['kode', 'wbs_kode', 'kode_wbs', 'no', 'nomor']);
-            $hdrNameCol = $pick('rab_header', ['uraian', 'deskripsi', 'nama', 'judul']);
-
-            $headersQ = RabHeader::where('proyek_id', $proyek->id)->select(['id', 'parent_id']);
-            $headersQ->addSelect($hdrCodeCol ? DB::raw("$hdrCodeCol as kode") : DB::raw("CAST(id AS CHAR) as kode"));
-            $headersQ->addSelect($hdrNameCol ? DB::raw("$hdrNameCol as uraian") : DB::raw("'' as uraian"));
-            $headersQ->orderBy($hdrCodeCol ?: 'id');
-            $headers = $headersQ->get();
-            $headersById = $headers->keyBy('id');
-
-            $children = [];
-            foreach ($headers as $h) {
-                $pid    = $h->parent_id;
-                $isRoot = ($pid === null || $pid === 0 || $pid === '0' || $pid === '' || !isset($headersById[$pid]));
-                $children[$isRoot ? 0 : (int) $pid][] = $h;
-            }
-
-            // 2) Range minggu header dari rab_schedule
-            $hMin = RabSchedule::where('proyek_id', $proyek->id)
-                ->when($penawaranId, fn ($q) => $q->where('penawaran_id', $penawaranId))
-                ->select('rab_header_id', DB::raw('MIN(minggu_ke) as mn'))
-                ->groupBy('rab_header_id')->pluck('mn', 'rab_header_id')->toArray();
-
-            $hMax = RabSchedule::where('proyek_id', $proyek->id)
-                ->when($penawaranId, fn ($q) => $q->where('penawaran_id', $penawaranId))
-                ->select('rab_header_id', DB::raw('MAX(minggu_ke) as mx'))
-                ->groupBy('rab_header_id')->pluck('mx', 'rab_header_id')->toArray();
-
-            // 3) Ambil agregat item dari rab_schedule_detail (adaptif)
-            $iMin = $iMax = [];
-            $allowedDetailIds = [];
-
-            if (class_exists(\App\Models\RabScheduleDetail::class)) {
-                $sd      = new RabScheduleDetail;
-                $sdTable = $sd->getTable();
-                $sdKeyCol = $pick($sdTable, ['rab_detail_id','detail_id','rab_penawaran_item_id','penawaran_item_id']);
-
-                if ($sdKeyCol) {
-                    $baseQ = RabScheduleDetail::where('proyek_id', $proyek->id)
-                        ->when($penawaranId, fn ($q) => $q->where('penawaran_id', $penawaranId));
-
-                    if (in_array($sdKeyCol, ['rab_detail_id','detail_id'], true)) {
-                        $iMin = (clone $baseQ)->selectRaw("$sdKeyCol as k, MIN(minggu_ke) as mn")->groupBy('k')->pluck('mn', 'k')->toArray();
-                        $iMax = (clone $baseQ)->selectRaw("$sdKeyCol as k, MAX(minggu_ke) as mx")->groupBy('k')->pluck('mx', 'k')->toArray();
-                        $allowedDetailIds = array_unique(array_merge(array_keys($iMin), array_keys($iMax)));
-
-                    } elseif (in_array($sdKeyCol, ['rab_penawaran_item_id','penawaran_item_id'], true)
-                        && class_exists(\App\Models\RabPenawaranItem::class)) {
-
-                        $tmpMin = (clone $baseQ)->selectRaw("$sdKeyCol as k, MIN(minggu_ke) as mn")->groupBy('k')->pluck('mn', 'k')->toArray();
-                        $tmpMax = (clone $baseQ)->selectRaw("$sdKeyCol as k, MAX(minggu_ke) as mx")->groupBy('k')->pluck('mx', 'k')->toArray();
-                        $pids   = array_unique(array_merge(array_keys($tmpMin), array_keys($tmpMax)));
-
-                        $pi      = new \App\Models\RabPenawaranItem;
-                        $piTable = $pi->getTable();
-                        $piDetailCol = $pick($piTable, ['rab_detail_id','detail_id']);
-
-                        if ($piDetailCol && !empty($pids)) {
-                            $map = \App\Models\RabPenawaranItem::whereIn('id', $pids)
-                                ->select('id', DB::raw("$piDetailCol as did"))
-                                ->pluck('did', 'id')->toArray();
-
-                            foreach ($tmpMin as $pid => $mn) {
-                                $did = $map[$pid] ?? null;
-                                if ($did) {
-                                    $iMin[$did] = isset($iMin[$did]) ? min($iMin[$did], $mn) : $mn;
-                                    $allowedDetailIds[] = $did;
-                                }
-                            }
-                            foreach ($tmpMax as $pid => $mx) {
-                                $did = $map[$pid] ?? null;
-                                if ($did) {
-                                    $iMax[$did] = isset($iMax[$did]) ? max($iMax[$did], $mx) : $mx;
-                                    $allowedDetailIds[] = $did;
-                                }
-                            }
-                            $allowedDetailIds = array_values(array_unique($allowedDetailIds));
-                        }
-                    }
-                }
-            }
-
-            // 4) Ambil item (RabDetail) hanya utk allowed IDs
-            $detCodeCol = $pick('rab_detail', ['kode', 'wbs_kode', 'kode_wbs', 'no', 'nomor']);
-            $detNameCol = $pick('rab_detail', ['uraian', 'deskripsi', 'nama', 'judul']);
-
-            $itemsQ = RabDetail::where('proyek_id', $proyek->id)->select(['id', 'rab_header_id']);
-            $itemsQ->addSelect($detCodeCol ? DB::raw("$detCodeCol as kode") : DB::raw("CAST(id AS CHAR) as kode"));
-            $itemsQ->addSelect($detNameCol ? DB::raw("$detNameCol as uraian") : DB::raw("'' as uraian"));
-            if ($penawaranId && !empty($allowedDetailIds)) {
-                $itemsQ->whereIn('id', $allowedDetailIds);
-            } elseif ($penawaranId) {
-                $itemsQ->whereRaw('1=0');
-            }
-            $itemsQ->orderBy($detCodeCol ?: 'id');
-            $items = $itemsQ->get();
-
-            $itemsByHeader = [];
-            foreach ($items as $it) { $itemsByHeader[$it->rab_header_id][] = $it; }
-
-            // 5) DFS range per header
-            $rangeByHeader = [];
-            $visiting = [];
-            $calc = function ($hdrId) use (&$calc, $children, $itemsByHeader, &$rangeByHeader, &$visiting, $hMin, $hMax, $iMin, $iMax) {
-                if (isset($visiting[$hdrId])) return $rangeByHeader[$hdrId] ?? ['sw' => null, 'ew' => null];
-                $visiting[$hdrId] = true;
-
-                $mn = $hMin[$hdrId] ?? null;
-                $mx = $hMax[$hdrId] ?? null;
-
-                foreach ($children[$hdrId] ?? [] as $ch) {
-                    $r = $rangeByHeader[$ch->id] ?? $calc($ch->id);
-                    if ($r['sw'] !== null) $mn = ($mn === null) ? $r['sw'] : min($mn, $r['sw']);
-                    if ($r['ew'] !== null) $mx = ($mx === null) ? $r['ew'] : max($mx, $r['ew']);
-                }
-                foreach ($itemsByHeader[$hdrId] ?? [] as $it) {
-                    $imn = $iMin[$it->id] ?? null;
-                    $imx = $iMax[$it->id] ?? null;
-                    if ($imn !== null) $mn = ($mn === null) ? $imn : min($mn, $imn);
-                    if ($imx !== null) $mx = ($mx === null) ? $imx : max($mx, $imx);
-                }
-
-                unset($visiting[$hdrId]);
-                return $rangeByHeader[$hdrId] = ['sw' => $mn, 'ew' => $mx];
-            };
-            foreach ($headers as $h) { $calc($h->id); }
-
-            // 6) Header visible?
-            $visibleHeader = [];
-            $isVisible = function ($hdrId) use (&$isVisible, $children, $itemsByHeader, $rangeByHeader, &$visibleHeader) {
-                if (isset($visibleHeader[$hdrId])) return $visibleHeader[$hdrId];
-                $vis = false;
-
-                $r = $rangeByHeader[$hdrId] ?? ['sw' => null, 'ew' => null];
-                if ($r['sw'] || $r['ew']) $vis = true;
-                if (!empty($itemsByHeader[$hdrId])) $vis = true;
-
-                foreach ($children[$hdrId] ?? [] as $ch) {
-                    if ($isVisible($ch->id)) { $vis = true; break; }
-                }
-                return $visibleHeader[$hdrId] = $vis;
-            };
-            foreach ($headers as $h) { $isVisible($h->id); }
-
-            // 7) Render tbody
-            $html = '';
-            $esc  = fn ($v) => e($v ?? '');
-
-            $renderHeader = function ($hdr, $level, $parentKey) use (&$renderHeader, $children, $itemsByHeader, $rangeByHeader, $base, $esc, &$html, $visibleHeader) {
-                if (empty($visibleHeader[$hdr->id])) return;
-
-                $key = "H-{$hdr->id}";
-
-                $hasChild = false;
-                foreach ($children[$hdr->id] ?? [] as $ch) { if (!empty($visibleHeader[$ch->id])) { $hasChild = true; break; } }
-                if (!$hasChild && !empty($itemsByHeader[$hdr->id])) $hasChild = true;
-
-                $indentCls  = $level === 1 ? 'level-1' : 'level-2';
-                $parentAttr = $parentKey ? ' data-parent="' . $esc($parentKey) . '" style="display:none"' : '';
-                $caret      = $hasChild ? '<span class="caret">▼</span>' : '<span class="caret disabled">•</span>';
-
-                $html .= '
-                <tr class="' . $indentCls . '" data-key="' . $esc($key) . '"' . $parentAttr . '>
-                  <td class="tree-cell">' . $caret . '
-                    <span class="wbs">' . $esc($hdr->kode) . '</span>
-                    <span class="uraian">' . $esc($hdr->uraian) . '</span>
-                  </td>
-                  <td class="text-end">—</td>
-                  <td class="text-end">—</td>
-                  <td>—</td>
-                  <td>—</td>
-                </tr>';
-
-                foreach ($children[$hdr->id] ?? [] as $child) {
-                    if (!empty($visibleHeader[$child->id])) $renderHeader($child, $level + 1, $key);
-                }
-
-                foreach ($itemsByHeader[$hdr->id] ?? [] as $it) {
-                    $ik = "D-{$it->id}";
-                    $html .= '
-                    <tr class="level-3" data-key="' . $esc($ik) . '" data-parent="' . $esc($key) . '" style="display:none">
-                      <td class="tree-cell"><span class="dot">•</span>
-                        <span class="wbs">' . $esc($it->kode) . '</span>
-                        <span class="uraian">' . $esc($it->uraian) . '</span>
-                      </td>
-                      <td class="text-end">—</td>
-                      <td class="text-end">—</td>
-                      <td>—</td>
-                      <td>—</td>
-                    </tr>';
-                }
-            };
-
-            $roots = $children[0] ?? [];
-            foreach ($roots as $root) { $renderHeader($root, 1, null); }
-
-            if ($html === '') {
-                $html = '<tr><td colspan="5" class="text-center text-muted py-3">Tidak ada data ringkasan untuk penawaran terpilih.</td></tr>';
-            }
-
-            return response($html, 200)->header('Content-Type', 'text/html; charset=UTF-8');
-        } catch (\Throwable $e) {
-            \Log::error('scheduleSummaryTree error', [
-                'proyek_id' => $proyek->id ?? null,
-                'message'   => $e->getMessage(),
-                'line'      => $e->getLine(),
-            ]);
-            return response('Terjadi kesalahan saat memuat ringkasan.', 500);
+    try {
+        /* =================================
+           1) Siapkan alias kolom per tabel
+        ==================================*/
+        // RabSchedule
+        $schTable   = (new RabSchedule)->getTable();
+        $schWeekCol = $pickCol($schTable, ['minggu_ke','week']);
+        $schDurCol  = $pickCol($schTable, ['durasi','duration_weeks','lama_minggu']);
+        $schFkCol   = $pickCol($schTable, ['rab_penawaran_item_id','penawaran_item_id','rab_detail_id','detail_id']);
+        if (!$schWeekCol || !$schDurCol || !$schFkCol) {
+            return response('<tr><td colspan="5" class="text-muted py-3 text-center">Struktur kolom jadwal tidak lengkap.</td></tr>', 200);
         }
+
+        // RabPenawaranItem (dipakai jika jadwal simpan id item penawaran)
+        $piTable  = (new RabPenawaranItem)->getTable();
+        $piDetCol = $pickCol($piTable, ['rab_detail_id','detail_id']);
+
+        // RabDetail
+        $detTable   = (new RabDetail)->getTable();
+        $detCodeCol = $pickCol($detTable, ['kode','wbs_kode','kode_wbs','no','nomor']) ?: 'id';
+        $detNameCol = $pickCol($detTable, ['uraian','deskripsi','nama','judul']);
+        $detNameSel = $detNameCol ? DB::raw("$detNameCol as uraian") : DB::raw("'' as uraian");
+
+        // RabHeader
+        $hdrTable   = (new RabHeader)->getTable();
+        $hCodeCol   = $pickCol($hdrTable, ['kode','wbs_kode','kode_wbs','no','nomor']) ?: 'id';
+        $hNameCol   = $pickCol($hdrTable, ['uraian','deskripsi','nama','judul']);
+        $hNameSel   = $hNameCol ? DB::raw("$hNameCol as uraian") : DB::raw("'' as uraian");
+
+        /* =================================
+           2) Agregasi jadwal per detail (FIX)
+           - Jika jadwal punya rab_detail_id langsung → groupBy kolom itu
+           - Jika jadwal simpan id item penawaran → LEFT JOIN ke rab_penawaran_items,
+             lalu groupBy pi.$piDetCol (menghindari subquery di SELECT)
+        ==================================*/
+        if (in_array($schFkCol, ['rab_detail_id','detail_id'])) {
+            // Langsung pakai kolom detail_id di jadwal
+            $schedAgg = DB::table("$schTable as sch")
+                ->where('sch.proyek_id', $proyekId)
+                ->when($penawaranId && Schema::hasColumn($schTable,'penawaran_id'),
+                    fn($q)=>$q->where('sch.penawaran_id',$penawaranId))
+                ->selectRaw("sch.$schFkCol as did, MIN(sch.$schWeekCol) as minggu_mulai, SUM(sch.$schDurCol) as durasi_total")
+                ->groupBy("sch.$schFkCol")
+                ->get();
+        } else {
+            // Harus map via item penawaran → JOIN
+            if (!$piDetCol) {
+                return response('<tr><td colspan="5" class="text-muted py-3 text-center">Tidak bisa memetakan item penawaran ke detail (kolom FK tidak ditemukan).</td></tr>', 200);
+            }
+
+            $schedAgg = DB::table("$schTable as sch")
+                ->leftJoin("$piTable as pi", "pi.id", "=", "sch.$schFkCol")
+                ->where('sch.proyek_id', $proyekId)
+                ->when($penawaranId && Schema::hasColumn($schTable,'penawaran_id'),
+                    fn($q)=>$q->where('sch.penawaran_id',$penawaranId))
+                ->whereNotNull("pi.$piDetCol")
+                ->selectRaw("pi.$piDetCol as did, MIN(sch.$schWeekCol) as minggu_mulai, SUM(sch.$schDurCol) as durasi_total")
+                ->groupBy("pi.$piDetCol")
+                ->get();
+        }
+
+        if ($schedAgg->isEmpty()) {
+            return response('<tr><td colspan="5" class="text-muted py-3 text-center">Belum ada schedule detail untuk penawaran terpilih.</td></tr>', 200);
+        }
+
+        $detailIds = $schedAgg->pluck('did')->filter()->unique()->values()->all();
+        if (empty($detailIds)) {
+            return response('<tr><td colspan="5" class="text-muted py-3 text-center">Belum ada schedule detail untuk penawaran terpilih.</td></tr>', 200);
+        }
+
+        // Map: detail_id => (minggu_mulai, durasi_total)
+        $aggByDetail = [];
+        foreach ($schedAgg as $a) {
+            $aggByDetail[(int)$a->did] = [
+                'wmin' => max(1, (int)$a->minggu_mulai),
+                'wdur' => max(1, (int)$a->durasi_total),
+            ];
+        }
+
+        /* =================================
+           3) Ambil meta (start_date) utk tanggal
+        ==================================*/
+        $meta = RabScheduleMeta::where('proyek_id', $proyekId)
+            ->when($penawaranId && Schema::hasColumn((new RabScheduleMeta)->getTable(),'penawaran_id'),
+                fn($q)=>$q->where('penawaran_id',$penawaranId))
+            ->first();
+        $metaStart = $meta ? Carbon::parse($meta->start_date)->startOfDay() : null;
+
+        /* =================================
+           4) Ambil detail + header
+        ==================================*/
+        $details = RabDetail::where('proyek_id', $proyekId)
+            ->whereIn('id', $detailIds)
+            ->select('id','rab_header_id', DB::raw("$detCodeCol as kode"), $detNameSel)
+            ->get();
+
+        if ($details->isEmpty()) {
+            return response('<tr><td colspan="5" class="text-muted py-3 text-center">Detail RAB tidak ditemukan.</td></tr>', 200);
+        }
+
+        $byHeader = $details->groupBy('rab_header_id');  // header level-2
+        $h2Ids    = $byHeader->keys()->filter()->unique()->values();
+
+        $h2 = RabHeader::whereIn('id', $h2Ids)
+            ->select('id','parent_id', DB::raw("$hCodeCol as kode"), $hNameSel)
+            ->get();
+
+        $h1Ids = $h2->pluck('parent_id')->filter()->unique()->values();
+        $h1 = RabHeader::whereIn('id', $h1Ids)
+            ->select('id','parent_id', DB::raw("$hCodeCol as kode"), $hNameSel)
+            ->get();
+
+        // Header L1 yang langsung punya item (ketika tidak ada L2)
+        $hdrNoL2 = $details->filter(fn($d)=>!$h2->contains('id',$d->rab_header_id))
+                           ->groupBy('rab_header_id');
+
+        /* =================================
+           5) Render HTML <tbody>
+        ==================================*/
+        $esc = fn($s)=>e((string)$s);
+
+        $rowHeader = function(string $key, ?string $parentKey, string $kode, string $nama, bool $canToggle, int $level=1) use ($esc) {
+            $caret = $canToggle ? '<span class="caret">▼</span>' : '<span class="caret disabled">•</span>';
+            $cls   = $level===1 ? 'level-1' : 'level-2';
+            return '<tr data-key="'.$esc($key).'"'.($parentKey?' data-parent="'.$esc($parentKey).'"':'').' class="'.$cls.'">'.
+                     '<td class="tree-cell">'.$caret.'<span class="wbs">'.$esc($kode).'</span> '.$esc($nama).'</td>'.
+                     '<td class="text-end">—</td>'.
+                     '<td class="text-end">—</td>'.
+                     '<td>—</td>'.
+                     '<td>—</td>'.
+                   '</tr>';
+        };
+
+        $rowItem = function($key,$parentKey,$kode,$nama,$wmin,$wdur,?Carbon $metaStart) use ($esc){
+            $tgl1='—'; $tgl2='—';
+            if ($metaStart) {
+                $start = (clone $metaStart)->addWeeks(max(0,$wmin-1));
+                $end   = (clone $start)->addWeeks(max(1,$wdur))->subDay();
+                $tgl1 = $start->format('d-m-Y');
+                $tgl2 = $end->format('d-m-Y');
+            }
+            return '<tr data-key="'.$esc($key).'" data-parent="'.$esc($parentKey).'" class="level-3">'.
+                     '<td class="tree-cell"><span class="dot">·</span><span class="wbs">'.$esc($kode).'</span> '.$esc($nama).'</td>'.
+                     '<td class="text-end">'.$esc($wmin).'</td>'.
+                     '<td class="text-end">'.$esc($wdur).'</td>'.
+                     '<td>'.$esc($tgl1).'</td>'.
+                     '<td>'.$esc($tgl2).'</td>'.
+                   '</tr>';
+        };
+
+        $html = '';
+
+        foreach ($h1->sortBy('kode', SORT_NATURAL|SORT_FLAG_CASE) as $L1) {
+            $keyL1 = 'H1-'.$L1->id;
+            $childL2 = $h2->where('parent_id',$L1->id)->sortBy('kode', SORT_NATURAL|SORT_FLAG_CASE);
+            $itemsUnderL1Direct = $hdrNoL2->get($L1->id, collect());
+
+            $canToggleL1 = $childL2->isNotEmpty() || $itemsUnderL1Direct->isNotEmpty();
+            $html .= $rowHeader($keyL1, null, (string)$L1->kode, (string)$L1->uraian, $canToggleL1, 1);
+
+            foreach ($childL2 as $L2) {
+                $keyL2 = 'H2-'.$L2->id;
+                $items = $byHeader->get($L2->id, collect())->sortBy('kode', SORT_NATURAL|SORT_FLAG_CASE);
+                $html .= $rowHeader($keyL2, $keyL1, (string)$L2->kode, (string)$L2->uraian, $items->isNotEmpty(), 2);
+
+                foreach ($items as $it) {
+                    $agg = $aggByDetail[(int)$it->id] ?? ['wmin'=>1,'wdur'=>1];
+                    $html .= $rowItem('IT-'.$it->id, $keyL2, (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart);
+                }
+            }
+
+            if ($itemsUnderL1Direct->isNotEmpty()) {
+                foreach ($itemsUnderL1Direct->sortBy('kode', SORT_NATURAL|SORT_FLAG_CASE) as $it) {
+                    $agg = $aggByDetail[(int)$it->id] ?? ['wmin'=>1,'wdur'=>1];
+                    $html .= $rowItem('IT-'.$it->id, $keyL1, (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart);
+                }
+            }
+        }
+
+        if ($html === '') {
+            // Fallback: flat list items (jika tidak ada header terhubung)
+            foreach ($details->sortBy('kode', SORT_NATURAL|SORT_FLAG_CASE) as $it) {
+                $agg = $aggByDetail[(int)$it->id] ?? ['wmin'=>1,'wdur'=>1];
+                $html .= $rowItem('IT-'.$it->id, '', (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart);
+            }
+        }
+
+        return response($html ?: '<tr><td colspan="5" class="text-muted py-3 text-center">Tidak ada data untuk ditampilkan.</td></tr>', 200);
+
+    } catch (\Throwable $e) {
+        Log::error('scheduleSummaryTree error', [
+            'proyek_id'    => $proyekId,
+            'penawaran_id' => $penawaranId,
+            'message'      => $e->getMessage(),
+            'file'         => $e->getFile(),
+            'line'         => $e->getLine(),
+        ]);
+
+        return response('<tr><td colspan="5" class="text-danger py-3 text-center">Gagal memuat ringkasan.</td></tr>', 500);
     }
+}
+
+
 
     private function e($v) { return e($v ?? ''); }
 

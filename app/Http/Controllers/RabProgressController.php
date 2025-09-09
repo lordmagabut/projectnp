@@ -234,54 +234,42 @@ class RabProgressController extends Controller
         //     - NORMALISASI SATUAN: auto-detect %item vs %proyek
         // ===============================
         // --- PROGRESS S/D minggu (N-1) dari rab_progress_detail (status FINAL) ---
-        $prevBobotByDetail = DB::table('rab_progress_detail as rpd')
-        ->join('rab_progress as rp', 'rp.id', '=', 'rpd.rab_progress_id')
-        ->where('rp.proyek_id', $proyek->id)
-        ->where('rp.minggu_ke', '<', $mingguKe)
-        ->where('rp.status', 'final')
-        ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
-        ->whereIn('rpd.rab_detail_id', $detailIds)
-        ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.bobot_minggu_ini) as raw_prev'))
-        ->groupBy('rpd.rab_detail_id')
-        ->pluck('raw_prev','rpd.rab_detail_id')
-        ->toArray();
+        // PROGRESS S/D minggu lalu (FINAL) — dari kolom baru
+// % ITEM kumulatif < N (tanpa filter status)
+$prevPctItemMap = DB::table('rab_progress_detail as rpd')
+    ->join('rab_progress as rp', 'rp.id', '=', 'rpd.rab_progress_id')
+    ->where('rp.proyek_id', $proyek->id)
+    ->where('rp.minggu_ke', '<', $mingguKe)
+    ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
+    ->whereIn('rpd.rab_detail_id', $detailIds)
+    ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.pct_item_minggu_ini) as s'))
+    ->groupBy('rpd.rab_detail_id')
+    ->pluck('s','rpd.rab_detail_id')
+    ->toArray();
 
-        // Normalisasi satuan & bangun prevMap
-        $prevMap = [];
-        foreach ($detailIds as $did) {
-        $bobotItem = (float)($bobotMap[$did] ?? 0.0);    // total bobot item (% proyek)
-        $raw       = (float)($prevBobotByDetail[$did] ?? 0.0);
+// % PROYEK kumulatif < N (tanpa filter status)
+$prevProjMap = DB::table('rab_progress_detail as rpd')
+    ->join('rab_progress as rp', 'rp.id', '=', 'rpd.rab_progress_id')
+    ->where('rp.proyek_id', $proyek->id)
+    ->where('rp.minggu_ke', '<', $mingguKe)
+    ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
+    ->whereIn('rpd.rab_detail_id', $detailIds)
+    ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.bobot_minggu_ini) as s'))
+    ->groupBy('rpd.rab_detail_id')
+    ->pluck('s','rpd.rab_detail_id')
+    ->toArray();
 
-        $prevBobotProj = 0.0;  // % proyek
-        $prevPctItem   = 0.0;  // % terhadap item
+// Map untuk Blade
+$prevMap = [];
+foreach ($detailIds as $did) {
+    $prevMap[$did] = [
+        'prev_pct_of_item'       => (float)($prevPctItemMap[$did] ?? 0), // tampilkan di "PROG. S/D MINGGU LALU (%)"
+        'prev_bobot_pct_project' => (float)($prevProjMap[$did] ?? 0),    // tampilkan di "BOBOT S/D MINGGU LALU"
+    ];
+}
 
-        if ($bobotItem <= 0) {
-            // no-op
-        } elseif ($raw <= $bobotItem + 1e-9) {
-            // data sudah % proyek (benar)
-            $prevBobotProj = $raw;
-            $prevPctItem   = ($prevBobotProj / $bobotItem) * 100.0;
-        } elseif ($raw <= 100.0001) {
-            // data ternyata % item → konversi ke % proyek
-            $prevPctItem   = $raw;
-            $prevBobotProj = $bobotItem * ($prevPctItem / 100.0);
-        } else {
-            // data salah (>100) → caps 100% item
-            $prevPctItem   = 100.0;
-            $prevBobotProj = $bobotItem;
-        }
-
-        $prevPctItem   = max(0, min(100, $prevPctItem));
-        $prevBobotProj = max(0, min($bobotItem, $prevBobotProj));
-
-        $prevMap[$did] = [
-            'prev_bobot_pct_project' => $prevBobotProj,
-            'prev_pct_of_item'       => $prevPctItem,
-        ];
-        }
-
-        // (opsional kompatibilitas)
-        $realizedMap = $prevMap;
+// (opsional kompatibilitas lama)
+$realizedMap = $prevMap;
 
         return view('proyek.progress.create', [
             'proyek'           => $proyek,
@@ -307,126 +295,84 @@ class RabProgressController extends Controller
     public function store(Request $request, Proyek $proyek)
 {
     try {
-        // --- helper parser angka lokal ---
-        $toFloat = function($v) {
-            if ($v === null) return null;
-            $s = trim((string)$v);
-            if ($s === '') return null;
-
-            $hasDot = strpos($s, '.') !== false;
-            $hasCom = strpos($s, ',') !== false;
-
-            if ($hasCom && !$hasDot) {              // "12,34" -> "12.34"
-                $s = str_replace(',', '.', $s);
-            } elseif ($hasCom && $hasDot) {
-                // "1.234,56" (EU) vs "1,234.56" (US)
-                if (strpos($s, '.') < strpos($s, ',')) {
-                    $s = str_replace('.', '', $s);   // hapus ribuan
-                    $s = str_replace(',', '.', $s);  // desimal titik
-                } else {
-                    $s = str_replace(',', '', $s);   // hapus ribuan
-                }
+        // --- Parse input kumulatif % item dari form ---
+        $raw = (array) $request->input('details_pct', []); // name="details_pct[detail_id]"
+        $nowPctById = [];
+        foreach ($raw as $k => $v) {
+            $id = (int) $k; if ($id <= 0) continue;
+            $s = trim((string) $v);
+            if ($s === '') continue;
+            // normalisasi "1.234,56" / "12,5" → 1234.56 / 12.5
+            $hasDot = str_contains($s,'.'); $hasCom = str_contains($s,',');
+            if ($hasCom && !$hasDot) $s = str_replace(',', '.', $s);
+            elseif ($hasCom && $hasDot) {
+                if (strpos($s,'.') < strpos($s,',')) { $s = str_replace('.','',$s); $s = str_replace(',', '.',$s); }
+                else { $s = str_replace(',','',$s); }
             }
-            return is_numeric($s) ? (float)$s : null;
-        };
-
-        // --- ambil input kumulatif % item dari form ---
-        $rawInputs = $request->input('details_pct', []);
-        $inputs = [];
-        foreach ((array)$rawInputs as $k => $v) {
-            $id = (int)$k; if ($id<=0) continue;
-            $f = $toFloat($v);
-            if ($f === null) continue;                         // kosong boleh
-            if ($f < 0 || $f > 100) {
-                return back()->withErrors("Nilai item #$id harus 0–100.")->withInput();
-            }
-            $inputs[$id] = $f;
+            if (!is_numeric($s)) return back()->withErrors("Nilai item #$id tidak valid.")->withInput();
+            $nowPctById[$id] = max(0.0, min(100.0, (float)$s));
         }
-        if (empty($inputs)) return back()->withErrors('Tidak ada nilai progress yang diisi.')->withInput();
+        if (empty($nowPctById)) return back()->withErrors('Tidak ada nilai progress yang diisi.')->withInput();
 
-        $penawaranId = (int)$request->input('penawaran_id');
-        $mingguKe    = (int)$request->input('minggu_ke');
+        $penawaranId = (int) $request->input('penawaran_id');
+        $mingguKe    = (int) $request->input('minggu_ke');
         $tanggal     = $request->input('tanggal');
-        $detailIds   = array_keys($inputs);
+        $detailIds   = array_keys($nowPctById);
 
-        // --- referensi yang DIKIRIM form (utamakan ini agar konsisten dgn tampilan) ---
-        $bobotPosted = [];
-        foreach ((array)$request->input('bobot_item', []) as $k => $v) {
-            $id = (int)$k; if ($id<=0) continue;
-            $f = $toFloat($v); if ($f !== null) $bobotPosted[$id] = $f;
-        }
-        $prevPctPosted = [];
-        foreach ((array)$request->input('prev_pct', []) as $k => $v) {
-            $id = (int)$k; if ($id<=0) continue;
-            $f = $toFloat($v); if ($f !== null) $prevPctPosted[$id] = max(0,min(100,$f));
-        }
+        // --- Snapshot bobot item dari schedule untuk setiap detail ---
+        $bobotSnap = DB::table('rab_schedule_detail as sd')
+            ->join('rab_penawaran_items as pi', 'pi.id', '=', 'sd.rab_penawaran_item_id')
+            ->where('sd.proyek_id', $proyek->id)
+            ->when($penawaranId, fn($q)=>$q->where('sd.penawaran_id', $penawaranId))
+            ->whereIn('pi.rab_detail_id', $detailIds)
+            ->select('pi.rab_detail_id as did', DB::raw('SUM(sd.bobot_mingguan) as s'))
+            ->groupBy('pi.rab_detail_id')
+            ->pluck('s', 'did')->toArray();
 
-        // --- fallback bobot dari DB untuk item yg tidak punya hidden ---
-        $needBobot = array_values(array_diff($detailIds, array_keys($bobotPosted)));
-        $bobotFromDb = [];
-        if ($needBobot) {
-            $bobotFromDb = \DB::table('rab_schedule_detail as sd')
-                ->join('rab_penawaran_items as pi','pi.id','=','sd.rab_penawaran_item_id')
-                ->where('sd.proyek_id',$proyek->id)
-                ->when($penawaranId, fn($q)=>$q->where('sd.penawaran_id',$penawaranId))
-                ->whereIn('pi.rab_detail_id',$needBobot)
-                ->select('pi.rab_detail_id as did', \DB::raw('SUM(sd.bobot_mingguan) as s'))
-                ->groupBy('pi.rab_detail_id')
-                ->pluck('s','did')->toArray();
-        }
+        // --- Prev % item s/d (N-1) dari kolom BARU (FINAL) — ini kunci sederhananya ---
+        $prevPctItem = DB::table('rab_progress_detail as rpd')
+            ->join('rab_progress as rp', 'rp.id', '=', 'rpd.rab_progress_id')
+            ->where('rp.proyek_id', $proyek->id)
+            ->where('rp.minggu_ke', '<', $mingguKe)
+            ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
+            ->where('rp.status', 'final')
+            ->whereIn('rpd.rab_detail_id', $detailIds)
+            ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.pct_item_minggu_ini) as s'))
+            ->groupBy('rpd.rab_detail_id')
+            ->pluck('s','rpd.rab_detail_id')->toArray();
 
-        // --- fallback prev % item dari DB (FINAL, kumulatif < N) ---
-        $needPrev = array_values(array_diff($detailIds, array_keys($prevPctPosted)));
-        $prevPctFromDb = [];
-        if ($needPrev) {
-            $prevRaw = \DB::table('rab_progress_detail as rpd')
-                ->join('rab_progress as rp','rp.id','=','rpd.rab_progress_id')
-                ->where('rp.proyek_id',$proyek->id)
-                ->where('rp.minggu_ke','<',$mingguKe)
-                ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id',$penawaranId))
-                ->where('rp.status','final')
-                ->whereIn('rpd.rab_detail_id',$needPrev)
-                ->select('rpd.rab_detail_id', \DB::raw('SUM(rpd.bobot_minggu_ini) as prev_proj'))
-                ->groupBy('rpd.rab_detail_id')->pluck('prev_proj','rpd.rab_detail_id')->toArray();
+        return DB::transaction(function() use ($request,$proyek,$penawaranId,$mingguKe,$tanggal,$detailIds,$nowPctById,$bobotSnap,$prevPctItem) {
 
-            foreach ($needPrev as $did) {
-                $bobotItem = (float)($bobotFromDb[$did] ?? $bobotPosted[$did] ?? 0);
-                $prevProj  = (float)($prevRaw[$did] ?? 0);
-                $prevPctFromDb[$did] = $bobotItem>0 ? ($prevProj/$bobotItem)*100.0 : 0.0;
-            }
-        }
-
-        // --- simpan ---
-        return \DB::transaction(function() use ($request,$proyek,$penawaranId,$mingguKe,$tanggal,$inputs,$bobotPosted,$bobotFromDb,$prevPctPosted,$prevPctFromDb){
             $rp = \App\Models\RabProgress::create([
                 'proyek_id'    => $proyek->id,
                 'penawaran_id' => $penawaranId ?: null,
                 'minggu_ke'    => $mingguKe,
                 'tanggal'      => $tanggal,
                 'user_id'      => auth()->id(),
-                'status'       => 'draft',
+                'status'       => 'draft',   // atau 'final' sesuai tombol
             ]);
 
             $rows = [];
-            foreach ($inputs as $did => $nowPctItem) {
-                $bobotItem = (float)($bobotPosted[$did] ?? $bobotFromDb[$did] ?? 0.0);   // << sudah benar (2.73, 53.94, …)
-                $prevPct   = (float)($prevPctPosted[$did] ?? $prevPctFromDb[$did] ?? 0.0);
+            foreach ($detailIds as $did) {
+                $bobotItem = (float)($bobotSnap[$did] ?? 0.0);
+                $prevPct   = (float)($prevPctItem[$did] ?? 0.0);
+                $nowPct    = (float)$nowPctById[$did];
 
-                $nowPctItem = max(0,min(100,$nowPctItem));
-                $prevPct    = max(0,min(100,$prevPct));
-                $deltaPct   = max(0.0, $nowPctItem - $prevPct);        // % of item minggu ini
-                $deltaProj  = $bobotItem * ($deltaPct / 100.0);        // % proyek minggu ini
+                $deltaPct  = max(0.0, $nowPct - $prevPct);               // % item minggu ini
+                $deltaProj = $bobotItem * ($deltaPct / 100.0);           // % proyek minggu ini
 
                 $rows[] = [
-                    'rab_progress_id'  => $rp->id,
-                    'rab_detail_id'    => $did,
-                    'bobot_minggu_ini' => $deltaProj,                   // DECIMAL(8,4) aman (0..100)
-                    'created_at'       => now(),
-                    'updated_at'       => now(),
+                    'rab_progress_id'      => $rp->id,
+                    'rab_detail_id'        => $did,
+                    'bobot_minggu_ini'     => $deltaProj,                 // % proyek (delta)
+                    'pct_item_minggu_ini'  => $deltaPct,                  // % item (delta)
+                    'bobot_item_snapshot'  => $bobotItem,                 // snapshot
+                    'created_at'           => now(),
+                    'updated_at'           => now(),
                 ];
             }
 
-            \DB::table('rab_progress_detail')->insert($rows);
+            DB::table('rab_progress_detail')->insert($rows);
 
             return redirect()->to(
                 route('proyek.show', $proyek->id).'?tab=progress'
@@ -440,8 +386,6 @@ class RabProgressController extends Controller
         return back()->withErrors('Error: '.$e->getMessage())->withInput();
     }
 }
-
-    
 
 
     private function pickCol(string $table, array $candidates): ?string
@@ -691,158 +635,129 @@ private function realizedToDateMap(int $proyekId, ?int $penawaranId, int $uptoWe
         if (Schema::hasColumn($t, 'bobot'))          return 'bobot';
         return null;
     }
-    
-    public function detail(Proyek $proyek, RabProgress $progress, Request $request)
+
+    public function detail($proyekId, $progressId, Request $request)
     {
-        abort_if($progress->proyek_id !== $proyek->id, 404);
-    
-        $penawaranId = (int)($progress->penawaran_id ?? $request->query('penawaran_id'));
-    
-        $pick = function (string $table, array $cands) {
-            foreach ($cands as $c) if (\Schema::hasColumn($table, $c)) return $c;
-            return null;
-        };
-    
-        // --- ambil semua detail_id yang ada pada progress ini
-        $pdTbl = (new \App\Models\RabProgressDetail)->getTable(); // pastikan model pakai table 'rab_progress_detail'
-        $detailIds = \DB::table($pdTbl)
-            ->where('rab_progress_id', $progress->id)
-            ->pluck('rab_detail_id')
-            ->all();
-    
+        $proyek   = Proyek::findOrFail($proyekId);
+        $progress = RabProgress::findOrFail($progressId);
+
+        $penawaranId = $progress->penawaran_id ?: null;
+        $mingguKe    = (int) $progress->minggu_ke;
+
+        // item yang muncul di progress ini
+        $detailIds = RabProgressDetail::where('rab_progress_id', $progress->id)
+            ->pluck('rab_detail_id')->map(fn($v)=>(int)$v)->all();
+
         if (empty($detailIds)) {
             return view('proyek.progress.detail', [
-                'proyek'    => $proyek,
-                'progress'  => $progress,
-                'rows'      => [],
-                'totWi'     => 0, 'totTarget'=>0, 'totPrev'=>0, 'totDelta'=>0, 'totNow'=>0,
+                'proyek'   => $proyek,
+                'progress' => $progress,
+                'rows'     => collect(),
+                'totWi'    => 0, 'totTarget' => 0, 'totPrev' => 0, 'totDelta' => 0, 'totNow' => 0,
             ]);
         }
-    
-        // --- master item
-        $detTbl  = (new \App\Models\RabDetail)->getTable();
-        $detCode = $pick($detTbl, ['kode','wbs_kode','kode_wbs','no','nomor']) ?: 'id';
-        $detName = $pick($detTbl, ['uraian','deskripsi','nama','judul']);
-    
-        $items = \App\Models\RabDetail::whereIn('id', $detailIds)
-            ->select(['id','rab_header_id'])
-            ->addSelect($detCode === 'id' ? \DB::raw('CAST(id AS CHAR) as kode') : \DB::raw("$detCode as kode"))
-            ->addSelect($detName ? \DB::raw("$detName as uraian") : \DB::raw("'' as uraian"))
-            ->orderBy($detCode === 'id' ? 'id' : $detCode)
-            ->get()->keyBy('id');
-    
-        // --- dari schedule_detail: Wi (total bobot item) & target kumulatif s/d minggu ini
-        $sdTbl  = (new \App\Models\RabScheduleDetail)->getTable();
-        $sdKey  = $pick($sdTbl, ['rab_detail_id','detail_id','rab_penawaran_item_id','penawaran_item_id']);
-        $sdVal  = $pick($sdTbl, ['bobot_mingguan','bobot','porsi']);
-        $sdWeek = $pick($sdTbl, ['minggu_ke','week']);
-        if (!$sdKey || !$sdVal || !$sdWeek) abort(500, 'Struktur rab_schedule_detail tidak lengkap.');
-    
-        $Wi  = [];
-        $tgt = [];
-    
-        if (in_array($sdKey, ['rab_detail_id','detail_id'], true)) {
-            $Wi = \DB::table($sdTbl)
-                ->where('proyek_id', $proyek->id)
-                ->when($penawaranId && \Schema::hasColumn($sdTbl,'penawaran_id'),
-                    fn($q)=>$q->where('penawaran_id',$penawaranId))
-                ->whereIn($sdKey, $detailIds)
-                ->groupBy($sdKey)
-                ->selectRaw("$sdKey as did, SUM($sdVal) as s")
-                ->pluck('s','did')->toArray();
-    
-            $tgt = \DB::table($sdTbl)
-                ->where('proyek_id', $proyek->id)
-                ->when($penawaranId && \Schema::hasColumn($sdTbl,'penawaran_id'),
-                    fn($q)=>$q->where('penawaran_id',$penawaranId))
-                ->where($sdWeek,'<=',$progress->minggu_ke)
-                ->whereIn($sdKey, $detailIds)
-                ->groupBy($sdKey)
-                ->selectRaw("$sdKey as did, SUM($sdVal) as s")
-                ->pluck('s','did')->toArray();
-    
+
+        /* ===== util pick kolom yang tersedia ===== */
+        $pick = function(string $table, array $cands){
+            foreach ($cands as $c) if (Schema::hasColumn($table, $c)) return $c;
+            return null;
+        };
+
+        /* ====== PLAN dari schedule_detail ====== */
+        $sdTable   = (new RabScheduleDetail)->getTable();           // rab_schedule_detail
+        $valCol    = $pick($sdTable, ['bobot_mingguan','bobot','porsi']);
+        $weekCol   = $pick($sdTable, ['minggu_ke','week']);
+        $sdDetCol  = $pick($sdTable, ['rab_detail_id','detail_id','rab_penawaran_item_id','penawaran_item_id']);
+
+        if (!$valCol || !$weekCol || !$sdDetCol) {
+            abort(400, 'Kolom di rab_schedule_detail tidak lengkap.');
+        }
+
+        $sdBase = RabScheduleDetail::where('proyek_id', $proyek->id)
+            ->when($penawaranId && Schema::hasColumn($sdTable,'penawaran_id'),
+                fn($q)=>$q->where('penawaran_id', $penawaranId));
+
+        // sd → rab_detail_id
+        if (in_array($sdDetCol, ['rab_detail_id','detail_id'])) {
+            $detailExpr = "{$sdTable}.{$sdDetCol}";
         } else {
-            $piTbl = (new \App\Models\RabPenawaranItem)->getTable();
-            $piDet = $pick($piTbl, ['rab_detail_id','detail_id']) ?: abort(500,'FK penawaran_item → detail tidak ada.');
-    
-            $Wi = \DB::table("$sdTbl as sd")
-                ->join("$piTbl as pi",'pi.id','=','sd.'.$sdKey)
-                ->where('sd.proyek_id', $proyek->id)
-                ->when($penawaranId && \Schema::hasColumn($sdTbl,'penawaran_id'),
-                    fn($q)=>$q->where('sd.penawaran_id',$penawaranId))
-                ->whereIn("pi.$piDet", $detailIds)
-                ->groupBy("pi.$piDet")
-                ->selectRaw("pi.$piDet as did, SUM(sd.$sdVal) as s")
-                ->pluck('s','did')->toArray();
-    
-            $tgt = \DB::table("$sdTbl as sd")
-                ->join("$piTbl as pi",'pi.id','=','sd.'.$sdKey)
-                ->where('sd.proyek_id', $proyek->id)
-                ->when($penawaranId && \Schema::hasColumn($sdTbl,'penawaran_id'),
-                    fn($q)=>$q->where('sd.penawaran_id',$penawaranId))
-                ->where("sd.$sdWeek",'<=',$progress->minggu_ke)
-                ->whereIn("pi.$piDet", $detailIds)
-                ->groupBy("pi.$piDet")
-                ->selectRaw("pi.$piDet as did, SUM(sd.$sdVal) as s")
-                ->pluck('s','did')->toArray();
+            // lewat penawaran item
+            $piTable = (new RabPenawaranItem)->getTable();
+            $piDet   = $pick($piTable, ['rab_detail_id','detail_id']) ?? 'rab_detail_id';
+            $detailExpr =
+                "(select {$piDet} from {$piTable} pi where pi.id = {$sdTable}.{$sdDetCol} limit 1)";
         }
-    
-        // --- prevPct (FINAL s/d < minggu ini) & deltaPct (minggu ini)
-        $pTbl   = (new \App\Models\RabProgress)->getTable();
-        $valCol = $this->pdValueColumn(); // bobot_minggu_ini | bobot | progress | qty_minggu_ini
-    
-        $prevPct = \DB::table("$pdTbl as pd")
-            ->join("$pTbl as p", 'p.id', '=', 'pd.rab_progress_id')
-            ->where('p.proyek_id', $proyek->id)
-            ->when($penawaranId && \Schema::hasColumn($pTbl,'penawaran_id'),
-                fn($q)=>$q->where('p.penawaran_id', $penawaranId))
-            ->where('p.status', 'final')
-            ->where('p.minggu_ke', '<', $progress->minggu_ke)
-            ->whereIn('pd.rab_detail_id', $detailIds)
-            ->groupBy('pd.rab_detail_id')
-            ->selectRaw('pd.rab_detail_id as did, SUM(pd.'.$valCol.') as s')
-            ->pluck('s','did')->toArray();
-    
-        $deltaPct = \DB::table($pdTbl)
-            ->where('rab_progress_id', $progress->id)
-            ->selectRaw('rab_detail_id as did, '.$valCol.' as s')
-            ->pluck('s','did')->toArray();
-    
-        // --- hitung baris & total (konversi % → bobot dengan Wi)
-        $rows = [];
-        $totWi = $totTarget = $totPrev = $totDelta = $totNow = 0.0;
-    
-        foreach ($detailIds as $did) {
-            $it = $items[$did] ?? null; if (!$it) continue;
-    
-            $Wi_i    = (float)($Wi[$did]  ?? 0);
-            $tgt_i   = (float)($tgt[$did] ?? 0);
-            $prevP   = (float)($prevPct[$did]  ?? 0);   // %
-            $deltaP  = (float)($deltaPct[$did] ?? 0);   // %
-    
-            $bPrev  = $Wi_i * $prevP  / 100.0;
-            $bDelta = $Wi_i * $deltaP / 100.0;
-            $bNow   = $bPrev + $bDelta;
-            $pNow   = $prevP + $deltaP;
-    
-            $rows[] = (object)[
-                'kode'  => $it->kode,
-                'uraian'=> $it->uraian,
-                'Wi'    => $Wi_i,
-                'tgt'   => $tgt_i,
-                'bPrev' => $bPrev,
-                'bDelta'=> $bDelta,
-                'bNow'  => $bNow,
-                'pNow'  => $pNow,
-            ];
-    
-            $totWi     += $Wi_i;
-            $totTarget += $tgt_i;
-            $totPrev   += $bPrev;
-            $totDelta  += $bDelta;
-            $totNow    += $bNow;
-        }
-    
+
+        // bobot item (total plan semua minggu)
+        $WiMap = (clone $sdBase)
+            ->selectRaw("$detailExpr as did, SUM($valCol) as s")
+            ->whereIn(DB::raw($detailExpr), $detailIds)
+            ->groupBy('did')->pluck('s','did')->toArray();
+
+        // target kumulatif ≤ N
+        $targetToMap = (clone $sdBase)
+            ->where($weekCol, '<=', $mingguKe)
+            ->selectRaw("$detailExpr as did, SUM($valCol) as s")
+            ->whereIn(DB::raw($detailExpr), $detailIds)
+            ->groupBy('did')->pluck('s','did')->toArray();
+
+        /* ====== REALISASI dari progress_detail ====== */
+
+        // delta minggu ini (% proyek)
+        $deltaMap = RabProgressDetail::where('rab_progress_id', $progress->id)
+            ->select('rab_detail_id', DB::raw('SUM(bobot_minggu_ini) as s'))
+            ->groupBy('rab_detail_id')
+            ->pluck('s','rab_detail_id')->toArray();
+
+        // kumulatif s/d minggu (N-1) FINAL saja
+        $prevMap  = DB::table('rab_progress_detail as rpd')
+            ->join('rab_progress as rp', 'rp.id', '=', 'rpd.rab_progress_id')
+            ->where('rp.proyek_id', $proyek->id)
+            ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
+            ->where('rp.status', 'final')
+            ->where('rp.minggu_ke', '<', $mingguKe)
+            ->whereIn('rpd.rab_detail_id', $detailIds)
+            ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.bobot_minggu_ini) as s'))
+            ->groupBy('rpd.rab_detail_id')
+            ->pluck('s','rpd.rab_detail_id')->toArray();
+
+        /* ====== Master item untuk nama/kode ====== */
+        $detTable   = (new RabDetail)->getTable();
+        $detCodeCol = $pick($detTable, ['kode','wbs_kode','kode_wbs','no','nomor']) ?: 'id';
+        $detNameCol = $pick($detTable, ['uraian','deskripsi','nama','judul']);
+        $detNameSel = $detNameCol ? DB::raw("$detNameCol as uraian") : DB::raw("'' as uraian");
+
+        $items = RabDetail::where('proyek_id', $proyek->id)
+            ->whereIn('id', $detailIds)
+            ->select(['id', DB::raw("$detCodeCol as kode"), $detNameSel])
+            ->orderBy($detCodeCol === 'id' ? 'id' : $detCodeCol)
+            ->get();
+
+        // rakit baris untuk Blade
+        $rows = $items->map(function($it) use ($WiMap,$targetToMap,$prevMap,$deltaMap){
+            $Wi    = (float)($WiMap[$it->id]        ?? 0);
+            $tgt   = (float)($targetToMap[$it->id]  ?? 0);
+            $bPrev = (float)($prevMap[$it->id]      ?? 0);
+            $bDelta= (float)($deltaMap[$it->id]     ?? 0);
+            $bNow  = $bPrev + $bDelta;
+            $pNow  = $bNow; // % proyek
+
+            $it->Wi   = $Wi;
+            $it->tgt  = $tgt;
+            $it->bPrev= $bPrev;
+            $it->bDelta=$bDelta;
+            $it->bNow = $bNow;
+            $it->pNow = $pNow;
+            return $it;
+        });
+
+        // totals
+        $totWi    = $rows->sum('Wi');
+        $totTarget= $rows->sum('tgt');
+        $totPrev  = $rows->sum('bPrev');
+        $totDelta = $rows->sum('bDelta');
+        $totNow   = $rows->sum('bNow');
+
         return view('proyek.progress.detail', [
             'proyek'    => $proyek,
             'progress'  => $progress,
@@ -854,7 +769,7 @@ private function realizedToDateMap(int $proyekId, ?int $penawaranId, int $uptoWe
             'totNow'    => $totNow,
         ]);
     }
-    
+
 
 
 // app/Http/Controllers/RabProgressController.php
