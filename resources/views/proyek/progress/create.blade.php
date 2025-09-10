@@ -147,15 +147,16 @@
         <tfoot class="table-light">
           <tr>
             <th colspan="3" class="text-end">TOTAL</th>
-            <th class="text-end" id="tot-target">0,00</th>      {{-- kolom 4: TARGET S/D MINGGU KE-N --}}
-            <th></th>                                           {{-- kolom 5: prev % (tidak ditotal) --}}
-            <th></th>                                           {{-- kolom 6: prev bobot (opsional) --}}
-            <th></th>                                           {{-- kolom 7: input % (tidak ditotal) --}}
-            <th class="text-end" id="tot-now">0,00</th>         {{-- kolom 8: BOBOT SAAT INI --}}
-            <th class="text-end" id="tot-delta-pct">0,00</th>   {{-- kolom 9: Δ% MINGGU INI (agregat item) --}}
-            <th class="text-end" id="tot-delta-bobot">0,00</th> {{-- kolom 10: Δ BOBOT MINGGU INI --}}
+            <th class="text-end" id="tot-target">0,00</th>        {{-- kolom 4: Target s/d minggu ke-N --}}
+            <th></th>                                             {{-- kolom 5: Prev % (tidak ditotal) --}}
+            <th></th>                                             {{-- kolom 6: Input % (tidak ditotal) --}}
+            <th class="text-end" id="tot-prev-bobot">0,00</th>    {{-- kolom 7: Bobot s/d minggu lalu --}}
+            <th class="text-end" id="tot-now">0,00</th>           {{-- kolom 8: Bobot saat ini --}}
+            <th class="text-end visually-hidden" id="tot-delta-pct">0,00</th>  {{-- kolom 9: disembunyikan --}}
+            <th class="text-end" id="tot-delta-bobot">0,00</th>   {{-- kolom 10: Δ Bobot minggu ini --}}
           </tr>
         </tfoot>
+
       </table>
     </div>
 
@@ -196,18 +197,26 @@
   }
 
   function recalcTotal(){
-    let tTarget = 0, tNow = 0, tDB = 0, tDP = 0;
-    document.querySelectorAll('#tbl-progress tbody tr[data-row="item"]').forEach(tr=>{
-      tTarget += deID(tr.querySelector('.target-2week')?.textContent);
-      tNow    += deID(tr.querySelector('.now-bobot')?.textContent);
-      tDB     += deID(tr.querySelector('.delta-bobot')?.textContent);
-      tDP     += deID(tr.querySelector('.delta-pct')?.textContent);
-    });
-    document.getElementById('tot-target').textContent     = fmt(tTarget);
-    document.getElementById('tot-now').textContent        = fmt(tNow);
-    document.getElementById('tot-delta-pct').textContent  = fmt(tDP);
-    document.getElementById('tot-delta-bobot').textContent= fmt(tDB);
-  }
+  let tTarget = 0, tPrevBob = 0, tNow = 0, tDB = 0, tDP = 0;
+
+  document.querySelectorAll('#tbl-progress tbody tr[data-row="item"]').forEach(tr=>{
+    tTarget += deID(tr.querySelector('.target-2week')?.textContent);
+    tPrevBob+= deID(tr.querySelector('.prev-bobot')?.textContent);
+    tNow    += deID(tr.querySelector('.now-bobot')?.textContent);
+    tDB     += deID(tr.querySelector('.delta-bobot')?.textContent);
+    tDP     += deID(tr.querySelector('.delta-pct')?.textContent);
+  });
+
+  document.getElementById('tot-target').textContent      = fmt(tTarget);
+  document.getElementById('tot-prev-bobot').textContent  = fmt(tPrevBob);
+  document.getElementById('tot-now').textContent         = fmt(tNow);
+  document.getElementById('tot-delta-bobot').textContent = fmt(tDB);
+
+  // tetap isi kalau suatu saat perlu ditampilkan
+  const elDP = document.getElementById('tot-delta-pct');
+  if (elDP) elDP.textContent = fmt(tDP);
+}
+
 
   // init
   document.querySelectorAll('#tbl-progress tbody tr[data-row="item"]').forEach(tr=>{
