@@ -161,6 +161,13 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('{progress}',       [RabProgressController::class, 'destroy'])->name('destroy');
     });
 
+    
+    Route::get(
+        '/proyek/{proyek}/penawaran/{penawaran}/pdf-mixed',
+        [\App\Http\Controllers\RabPenawaranController::class, 'generatePdfMixed']
+      )->name('proyek.penawaran.pdf-mixed');
+      
+
     // ========== Akuntansi & Laporan ==========
     Route::get('/jurnal/detail/{id}', [JurnalController::class, 'showDetail'])->name('jurnal.showDetail');
     Route::resource('jurnal', JurnalController::class)->middleware('cek_akses_jurnal');

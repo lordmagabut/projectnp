@@ -16,6 +16,7 @@ use App\Models\RabScheduleDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
+use iio\libmergepdf\Merger;
 
 class RabPenawaranController extends Controller
 {
@@ -958,5 +959,40 @@ class RabPenawaranController extends Controller
     }
 
 
+    
+    public function generatePdfMixed(Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        // Pastikan relasi yang dibutuhkan sudah diload
+        $penawaran->load([
+            'sections' => function($q){
+                $q->with(['rabHeader', 'items.rabDetail'])->orderBy('id');
+            }
+        ]);
+    
+        // 1) Render ringkasan (portrait)
+        $pdfSummary = Pdf::loadView(
+            'rab_penawaran.pdf_summary',
+            compact('proyek','penawaran')
+        )->setPaper('A4', 'portrait');
+    
+        // 2) Render detail (landscape)
+        $pdfDetail = Pdf::loadView(
+            'rab_penawaran.pdf_detail',
+            compact('proyek','penawaran')
+        )->setPaper('A4', 'landscape');
+    
+        // 3) Merge kedua PDF (tanpa menulis file sementara)
+        $merger = new Merger;
+        $merger->addRaw($pdfSummary->output());
+        $merger->addRaw($pdfDetail->output());
+        $final = $merger->merge(); // binary PDF
+    
+        $filename = 'Penawaran_' . str_replace(' ', '_', $penawaran->nama_penawaran) . '_v' . $penawaran->versi . '.pdf';
+    
+        return response($final)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="'.$filename.'"');
+    }
+    
 
 }

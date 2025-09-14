@@ -315,11 +315,12 @@
                 <i data-feather="printer" class="me-1"></i> PDF (Standar)
             </a>
 
-            <a target="_blank"
-                href="{{ route('proyek.penawaran.generatePdfSplit', ['proyek' => $proyek->id, 'penawaran' => $penawaran->id]) }}"
-                class="btn btn-primary btn-sm">
-                <i data-feather="printer" class="me-1"></i> PDF (Split Material/Jasa)
+            <a target="_blank" 
+            class="btn btn-outline-primary"
+            href="{{ route('proyek.penawaran.pdf-mixed', [$proyek->id, $penawaran->id]) }}">
+            PDF (Ringkasan + Detail Landscape)
             </a>
+
             {{-- Setujui --}}
             <form method="POST" action="{{ route('proyek.penawaran.approve', [$proyek->id, $penawaran->id]) }}">
                 @csrf
