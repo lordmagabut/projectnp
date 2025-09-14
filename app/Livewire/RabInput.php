@@ -9,13 +9,12 @@ use App\Models\AhspHeader;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
 
-
 class RabInput extends Component
 {
     public $proyek_id;
-    public $kategori_id; // Ini adalah kategori_id proyek
-    public $headers;
-    public $ahspList; // Daftar AHSP yang akan digunakan untuk dropdown
+    public $kategori_id;          // kategori untuk pohon header yang sedang dibuka
+    public $headers;              // koleksi header (root + children eager)
+    public $ahspList;             // daftar AHSP (untuk dropdown/search)
     public $projectGrandTotal = 0;
 
     public $newHeader = [
@@ -24,95 +23,92 @@ class RabInput extends Component
     ];
 
     public $newItem = [
-        'header_id' => '',
-        'ahsp_id' => '',
-        'deskripsi' => '',
-        'volume' => 1,
-        'satuan' => '', // Tambahkan satuan di newItem
-        'area' => '',
-        'spesifikasi' => '',
+        'header_id'    => '',
+        'ahsp_id'      => '',
+        'deskripsi'    => '',
+        'volume'       => 1,
+        'satuan'       => '',
+        'area'         => '',
+        'spesifikasi'  => '',
         'harga_satuan' => 0,
-    ];
+        'harga_material' => 0,   // <— tambah
+        'harga_upah'     => 0,   // <— tambah
+      ];
+      
 
-    public $flatHeaders = [];
+    public $flatHeaders = [];     // untuk dropdown header (dengan indent)
 
+    // edit detail (inline/modal)
     public $editingDetailId = null;
     public $editingDetailSpesifikasi = '';
     public $editingDetailVolume = 0;
     public $editingDetailSatuan = '';
     public $editingDetailDeskripsi = '';
 
+    // edit header (deskripsi)
     public $editingHeaderId = null;
     public $editingHeaderDescription = '';
 
-    // --- PROPERTI UNTUK FILTER AHSP ---
-    public $ahspSearch = ''; // Properti untuk istilah pencarian AHSP
-    public $selectedHeaderCategoryId = null; // Menyimpan kategori_id dari header yang dipilih
-    // --- AKHIR PROPERTI FILTER AHSP ---
-
+    // Filter AHSP
+    public $ahspSearch = '';
+    public $selectedHeaderCategoryId = null;
 
     public function mount($proyek_id, $kategori_id)
     {
-        $this->proyek_id = $proyek_id;
-        $this->kategori_id = $kategori_id; // Kategori ID proyek
-        $this->loadData();
-        // Saat mount, inisialisasi selectedHeaderCategoryId dengan kategori_id proyek
-        $this->selectedHeaderCategoryId = $kategori_id;
-        $this->loadAhspList(); // Muat daftar AHSP awal
+        $this->proyek_id  = (int)$proyek_id;
+        $this->kategori_id = (int)$kategori_id;
+
+        $this->selectedHeaderCategoryId = $this->kategori_id;
+
+        $this->loadData();     // muat header + hitung rekap
+        $this->loadAhspList(); // muat daftar AHSP awal
     }
 
-    // --- LOGIKA UPDATED PROPERTY ---
+    // =====================
+    // UPDATED hooks
+    // =====================
     public function updated($propertyName)
     {
         if ($propertyName === 'newItem.header_id') {
-            // Reset AHSP search dan selection saat header berubah
+            // reset pilihan AHSP saat header berubah
             $this->ahspSearch = '';
             $this->newItem['ahsp_id'] = '';
             $this->newItem['deskripsi'] = '';
-            $this->newItem['satuan'] = ''; // Reset satuan juga
-            $this->newItem['harga_satuan'] = 0; // <- reset juga
+            $this->newItem['satuan'] = '';
+            $this->newItem['harga_satuan'] = 0;
 
             if (!empty($this->newItem['header_id'])) {
                 $header = RabHeader::find($this->newItem['header_id']);
-                if ($header) {
-                    $this->selectedHeaderCategoryId = $header->kategori_id;
-                } else {
-                    $this->selectedHeaderCategoryId = $this->kategori_id; // Kembali ke kategori proyek jika header tidak ditemukan
-                }
+                $this->selectedHeaderCategoryId = $header?->kategori_id ?? $this->kategori_id;
             } else {
-                // Jika header tidak dipilih, kembali ke kategori proyek
                 $this->selectedHeaderCategoryId = $this->kategori_id;
             }
-            $this->loadAhspList(); // Muat ulang daftar AHSP dengan filter kategori baru
+            $this->loadAhspList();
+
         } elseif ($propertyName === 'ahspSearch') {
-            $this->loadAhspList(); // Muat ulang daftar AHSP dengan filter pencarian baru
+            $this->loadAhspList();
+
         } elseif ($propertyName === 'newItem.ahsp_id') {
             if (!empty($this->newItem['ahsp_id'])) {
-                $ahsp = AhspHeader::find($this->newItem['ahsp_id']);
-                if ($ahsp) {
-                    $this->newItem['deskripsi'] = $ahsp->nama_pekerjaan;
-                    $this->newItem['satuan'] = $ahsp->satuan;
-        
-                    // gunakan harga pembulatan; fallback bila kolom lama kosong
-                    $rounded = (int) ($ahsp->total_harga_pembulatan
-                        ?? ceil(($ahsp->total_harga ?? 0) / 1000) * 1000);
-        
-                    $this->newItem['harga_satuan'] = $rounded; // <- untuk ditampilkan di form
-                } else {
-                    $this->newItem['deskripsi'] = '';
-                    $this->newItem['satuan'] = '';
-                    $this->newItem['harga_satuan'] = 0;
-                    session()->flash('error', 'AHSP yang dipilih tidak ditemukan.');
-                }
+                $komp = $this->getAhspKomponen((int) $this->newItem['ahsp_id']);
+                $this->newItem['deskripsi']      = $komp['nama'];
+                $this->newItem['satuan']         = $komp['satuan'];
+                $this->newItem['harga_material'] = (float)$komp['harga_material']; // <—
+                $this->newItem['harga_upah']     = (float)$komp['harga_upah'];     // <—
+                $this->newItem['harga_satuan']   = (float)$komp['harga_gabungan'];
             } else {
                 $this->newItem['deskripsi'] = '';
-                $this->newItem['satuan'] = '';
-                $this->newItem['harga_satuan'] = 0;
+                $this->newItem['satuan']    = '';
+                $this->newItem['harga_material'] = 0; // <—
+                $this->newItem['harga_upah']     = 0; // <—
+                $this->newItem['harga_satuan']   = 0;
             }
         }
-    }
-    // --- AKHIR LOGIKA UPDATED PROPERTY ---
+    }        
 
+    // =====================
+    // LOAD & LIST AHSP
+    // =====================
     #[On('rabHeaderCreated')]
     #[On('rabDetailUpdated')]
     public function loadData()
@@ -124,84 +120,123 @@ class RabInput extends Component
             ->orderBy('kode_sort')
             ->get();
 
-        $this->projectGrandTotal = RabDetail::whereHas('header', function ($query) {
-            $query->where('proyek_id', $this->proyek_id);
+        // Grand total proyek (dari detail gabungan)
+        $this->projectGrandTotal = RabDetail::whereHas('header', function ($q) {
+            $q->where('proyek_id', $this->proyek_id);
         })->sum('total');
 
         $this->dispatch('projectTotalUpdated', total: $this->projectGrandTotal);
 
+        // Rekap tiap root header (rekursif ke children) → isi nilai_material, nilai_upah, nilai
         DB::beginTransaction();
         try {
             foreach ($this->headers as $header) {
                 $this->updateHeaderAndChildrenTotals($header);
             }
             DB::commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
             session()->flash('error', 'Gagal memperbarui nilai header: ' . $e->getMessage());
         }
 
         $this->flatHeaders = $this->generateFlatHeadersForDropdown($this->headers);
-        $this->loadAhspList(); // Pastikan AHSP list dimuat ulang setelah data header
     }
 
-    // --- METODE UNTUK MEMUAT DAFTAR AHSP ---
     private function loadAhspList()
     {
         $query = AhspHeader::orderBy('kode_pekerjaan');
 
-        // Filter berdasarkan kategori ID jika ada yang dipilih
         if ($this->selectedHeaderCategoryId) {
             $query->where('kategori_id', $this->selectedHeaderCategoryId);
         }
 
-        // Filter berdasarkan istilah pencarian
         if (!empty($this->ahspSearch)) {
-            $searchTerm = '%' . $this->ahspSearch . '%';
-            $query->where(function ($q) use ($searchTerm) {
-                $q->where('kode_pekerjaan', 'like', $searchTerm)
-                  ->orWhere('nama_pekerjaan', 'like', $searchTerm);
+            $term = '%' . $this->ahspSearch . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('kode_pekerjaan', 'like', $term)
+                  ->orWhere('nama_pekerjaan', 'like', $term);
             });
         }
 
         $this->ahspList = $query->get();
     }
-    // --- AKHIR METODE MEMUAT DAFTAR AHSP ---
 
-
-    private function updateHeaderAndChildrenTotals(RabHeader $header)
+    // =====================
+    // AHSP helper
+    // =====================
+    /**
+     * Ambil komponen harga per 1 satuan analisa dari AHSP:
+     * - harga material = SUM(subtotal) WHERE tipe='material'
+     * - harga upah     = SUM(subtotal) WHERE tipe='upah'
+     * - harga gabungan = header.total_harga_pembulatan || header.total_harga || (material+upah)
+     */
+    private function getAhspKomponen(int $ahspId): array
     {
-        $currentHeaderTotal = $header->rabDetails->sum('total');
+        $material = (float) DB::table('ahsp_detail')->where('ahsp_id',$ahspId)->where('tipe','material')->sum('subtotal');
+        $upah     = (float) DB::table('ahsp_detail')->where('ahsp_id',$ahspId)->where('tipe','upah')->sum('subtotal');
+        $hdr      = DB::table('ahsp_header')->where('id',$ahspId)->first();
+    
+        // ❌ JANGAN: total_harga_pembulatan / ceil ke ribuan
+        // ✅ YA: gabungan mentah = material + upah
+        $gab = $material + $upah;
+    
+        return [
+            'harga_material' => $material,
+            'harga_upah'     => $upah,
+            'harga_gabungan' => $gab,
+            'satuan'         => $hdr?->satuan ?? null,
+            'kode'           => $hdr?->kode_pekerjaan ?? '',
+            'nama'           => $hdr?->nama_pekerjaan ?? '',
+        ];
+    }
+    
 
-        foreach ($header->children as $childHeader) {
-            $currentHeaderTotal += $this->updateHeaderAndChildrenTotals($childHeader);
+    // =====================
+    // HEADER utils
+    // =====================
+    /**
+     * Rekursif: hitung total material/upah/total dari header ini + seluruh children.
+     * Mengembalikan array ['mat'=>..., 'uph'=>..., 'tot'=>...]
+     */
+    private function updateHeaderAndChildrenTotals(RabHeader $header): array
+    {
+        $sumMat = (float)$header->rabDetails->sum('total_material');
+        $sumUph = (float)$header->rabDetails->sum('total_upah');
+        $sumTot = (float)$header->rabDetails->sum('total');
+
+        foreach ($header->children as $child) {
+            $childAgg = $this->updateHeaderAndChildrenTotals($child);
+            $sumMat += $childAgg['mat'];
+            $sumUph += $childAgg['uph'];
+            $sumTot += $childAgg['tot'];
         }
 
-        if ($header->nilai !== $currentHeaderTotal) {
-            $header->nilai = $currentHeaderTotal;
-            $header->save();
-        }
+        $dirty = false;
+        if ((float)$header->nilai_material !== $sumMat) { $header->nilai_material = $sumMat; $dirty = true; }
+        if ((float)$header->nilai_upah     !== $sumUph) { $header->nilai_upah     = $sumUph; $dirty = true; }
+        if ((float)$header->nilai          !== $sumTot) { $header->nilai          = $sumTot; $dirty = true; }
+        if ($dirty) { $header->save(); }
 
-        return $currentHeaderTotal;
+        return ['mat' => $sumMat, 'uph' => $sumUph, 'tot' => $sumTot];
     }
 
-    private function generateFlatHeadersForDropdown($headers, $level = 0)
+    private function generateFlatHeadersForDropdown($headers, $level = 0): array
     {
-        $flatList = [];
-        foreach ($headers as $header) {
+        $flat = [];
+        foreach ($headers as $h) {
             $indent = str_repeat('-- ', $level);
-            $flatList[] = [
-                'id' => $header->id,
-                'display_name' => $indent . $header->kode . ' - ' . $header->deskripsi,
-            ];
+            $flat[] = ['id' => $h->id, 'display_name' => $indent . $h->kode . ' - ' . $h->deskripsi];
 
-            if ($header->children->isNotEmpty()) {
-                $flatList = array_merge($flatList, $this->generateFlatHeadersForDropdown($header->children, $level + 1));
+            if ($h->children->isNotEmpty()) {
+                $flat = array_merge($flat, $this->generateFlatHeadersForDropdown($h->children, $level + 1));
             }
         }
-        return $flatList;
+        return $flat;
     }
 
+    // =====================
+    // AKSI: header
+    // =====================
     public function tambahHeader()
     {
         $this->validate([
@@ -209,233 +244,98 @@ class RabInput extends Component
             'newHeader.parent_id' => 'nullable|exists:rab_header,id',
         ], [
             'newHeader.deskripsi.required' => 'Deskripsi header harus diisi.',
-            'newHeader.parent_id.exists' => 'Induk yang dipilih tidak valid.',
+            'newHeader.parent_id.exists'   => 'Induk yang dipilih tidak valid.',
         ]);
 
-        $parentHeader = null;
-        $parentKode = '';
-        $existingChildrenCount = 0;
+        $parentId = $this->newHeader['parent_id'] ?: null;
         $newKode = '';
         $newKodeSort = '';
 
-        if ($this->newHeader['parent_id']) {
-            $parentHeader = RabHeader::find($this->newHeader['parent_id']);
-            if (!$parentHeader) {
+        if ($parentId) {
+            $parent = RabHeader::find($parentId);
+            if (!$parent) {
                 session()->flash('error', 'Induk yang dipilih tidak ditemukan.');
                 return;
             }
-            $parentKode = $parentHeader->kode;
-            $existingChildrenCount = $parentHeader->children()
-                                                    ->where('proyek_id', $this->proyek_id)
-                                                    ->where('kategori_id', $this->kategori_id)
-                                                    ->count();
-            $nextSequence = $existingChildrenCount + 1;
-            $newKode = $parentKode . '.' . $nextSequence;
-            $newKodeSort = implode('.', array_map(fn($part) => str_pad($part, 4, '0', STR_PAD_LEFT), explode('.', $newKode)));
-
+            $existingChildren = $parent->children()
+                ->where('proyek_id', $this->proyek_id)
+                ->where('kategori_id', $this->kategori_id)
+                ->count();
+            $seq = $existingChildren + 1;
+            $newKode = $parent->kode . '.' . $seq;
+            $newKodeSort = implode('.', array_map(fn($p) => str_pad($p, 4, '0', STR_PAD_LEFT), explode('.', $newKode)));
         } else {
-            $existingKategoriRoot = RabHeader::where('proyek_id', $this->proyek_id)
-                                              ->where('kategori_id', $this->kategori_id)
-                                              ->whereNull('parent_id')
-                                              ->where('kode', (string)$this->kategori_id)
-                                              ->first();
+            // Root header untuk kategori ini = kode kategori (hanya 1)
+            $existsRoot = RabHeader::where('proyek_id', $this->proyek_id)
+                ->where('kategori_id', $this->kategori_id)
+                ->whereNull('parent_id')
+                ->where('kode', (string)$this->kategori_id)
+                ->first();
 
-            if ($existingKategoriRoot) {
-                session()->flash('error', 'Header utama untuk kategori ini (Kode: ' . $this->kategori_id . ') sudah ada. Mohon pilih header tersebut sebagai induk jika Anda ingin membuat sub-header.');
+            if ($existsRoot) {
+                session()->flash('error', 'Header utama kategori (Kode: ' . $this->kategori_id . ') sudah ada. Gunakan header tersebut sebagai induk.');
                 return;
-            } else {
-                $newKode = (string)$this->kategori_id;
-                $newKodeSort = str_pad($this->kategori_id, 4, '0', STR_PAD_LEFT);
             }
+            $newKode = (string)$this->kategori_id;
+            $newKodeSort = str_pad($this->kategori_id, 4, '0', STR_PAD_LEFT);
         }
 
         RabHeader::create([
-            'proyek_id' => $this->proyek_id,
+            'proyek_id'   => $this->proyek_id,
             'kategori_id' => $this->kategori_id,
-            'parent_id' => $this->newHeader['parent_id'] ?: null,
-            'kode' => $newKode,
-            'kode_sort' => $newKodeSort,
-            'deskripsi' => $this->newHeader['deskripsi'],
-            'nilai' => 0,
-            'bobot' => 0,
+            'parent_id'   => $parentId,
+            'kode'        => $newKode,
+            'kode_sort'   => $newKodeSort,
+            'deskripsi'   => $this->newHeader['deskripsi'],
+            'nilai'       => 0,
+            'bobot'       => 0,
+            // kolom nilai_material & nilai_upah otomatis diisi saat loadData() berikutnya
         ]);
 
-        session()->flash('success', 'Header RAB berhasil ditambahkan!');
-        $this->newHeader = [
-            'parent_id' => null,
-            'deskripsi' => '',
-        ];
+        session()->flash('success', 'Header RAB berhasil ditambahkan.');
+        $this->newHeader = ['parent_id' => null, 'deskripsi' => ''];
         $this->dispatch('rabHeaderCreated');
-    }
-
-    public function tambahDetail()
-    {
-        $this->validate([
-            'newItem.header_id' => 'required',
-            'newItem.ahsp_id' => 'required|exists:ahsp_header,id',
-            'newItem.deskripsi' => 'required|string|max:255',
-            'newItem.volume' => 'required|numeric|min:0.01',
-            'newItem.area' => 'nullable|string|max:255',
-            'newItem.spesifikasi' => 'nullable|string',
-        ], [
-            'newItem.header_id.required' => 'Pilih Sub-Induk (Header).',
-            'newItem.ahsp_id.required' => 'Pilih AHSP.',
-            'newItem.ahsp_id.exists' => 'AHSP tidak valid.',
-            'newItem.deskripsi.required' => 'Deskripsi detail harus diisi.',
-            'newItem.volume.required' => 'Volume harus diisi.',
-            'newItem.volume.numeric' => 'Volume harus berupa angka.',
-            'newItem.volume.min' => 'Volume harus lebih besar dari 0.',
-            'newItem.area.max' => 'Area terlalu panjang (maksimal 255 karakter).',
-        ]);
-
-        $ahsp = AhspHeader::find($this->newItem['ahsp_id']);
-        $header = RabHeader::find($this->newItem['header_id']);
-
-        if (!$ahsp || !$header) {
-            session()->flash('error', 'Data AHSP atau Header tidak ditemukan.');
-            return;
-        }
-
-        // Ambil harga pembulatan dari AHSP; fallback bila kolom lama kosong
-        $harga_satuan = (int) ($ahsp->total_harga_pembulatan
-        ?? ceil(($ahsp->total_harga ?? 0) / 1000) * 1000);
-
-        $volume = (float) $this->newItem['volume'];
-        $total  = $volume * $harga_satuan;
-
-        $existingDetailsCount = RabDetail::where('rab_header_id', $header->id)->count();
-        $nextSequence = $existingDetailsCount + 1;
-        $detail_kode = $header->kode . '.' . $nextSequence;
-        $detail_kode_sort = implode('.', array_map(fn($part) => str_pad($part, 4, '0', STR_PAD_LEFT), explode('.', $detail_kode)));
-
-        RabDetail::create([
-            'proyek_id' => $this->proyek_id,
-            'rab_header_id' => $header->id,
-            'ahsp_id' => $ahsp->id,
-            'kode' => $detail_kode,
-            'kode_sort' => $detail_kode_sort,
-            'deskripsi' => $this->newItem['deskripsi'],
-            'area' => $this->newItem['area'] ?: null,
-            'spesifikasi' => $this->newItem['spesifikasi'] ?: null,
-            'satuan' => $ahsp->satuan,
-            'volume' => $volume,
-            'harga_satuan' => $harga_satuan,
-            'total' => $total,
-            'bobot' => 0,
-        ]);
-
-            // --- LOGIKA PENGUNCIAN AHSP DITAMBAHKAN DI SINI ---
-            // Pastikan AHSP ada dan belum terkunci sebelum menguncinya
-            if ($ahsp && !$ahsp->is_locked) {
-                $ahsp->is_locked = true;
-                $ahsp->save();
-            }
-            // --- AKHIR LOGIKA PENGUNCIAN ---        
-
-        session()->flash('success', 'Detail RAB berhasil ditambahkan!');
-        $this->newItem = [
-            'header_id' => '',
-            'ahsp_id' => '',
-            'deskripsi' => '',
-            'volume' => 1,
-            'area' => '',
-            'spesifikasi' => '',
-            'harga_satuan' => 0,
-        ];
-        $this->dispatch('rabDetailUpdated');
-    }
-
-    public function hapusDetail($id)
-    {
-        RabDetail::find($id)?->delete();
-        session()->flash('success', 'Detail RAB berhasil dihapus!');
-        $this->dispatch('rabDetailUpdated');
     }
 
     public function hapusHeader($id)
     {
         $header = RabHeader::find($id);
-        if ($header) {
-            if ($header->rabDetails()->count() > 0 || $header->children()->count() > 0) {
-                session()->flash('error', 'Header tidak bisa dihapus karena masih memiliki detail atau sub-header.');
-                return;
-            }
-            $header->delete();
-            session()->flash('success', 'Header RAB berhasil dihapus!');
-            $this->dispatch('rabHeaderCreated');
-        }
-    }
+        if (!$header) return;
 
-    public function startEditDetail($detailId)
-    {
-        $this->editingDetailId = $detailId;
-        $detail = RabDetail::find($detailId);
-        if ($detail) {
-            $this->editingDetailSpesifikasi = $detail->spesifikasi;
-            $this->editingDetailVolume = $detail->volume;
-            $this->editingDetailSatuan = $detail->satuan;
-            $this->editingDetailDeskripsi = $detail->deskripsi;
-        }
-    }
-
-    public function saveDetailChanges()
-    {
-        $this->validate([
-            'editingDetailSpesifikasi' => 'nullable|string',
-            'editingDetailVolume' => 'required|numeric|min:0.01',
-            'editingDetailSatuan' => 'nullable|string',
-            'editingDetailDeskripsi' => 'required|string|max:255',
-        ], [
-            'editingDetailVolume.required' => 'Volume harus diisi.',
-            'editingDetailVolume.numeric' => 'Volume harus berupa angka.',
-            'editingDetailVolume.min' => 'Volume harus lebih besar dari 0.',
-            'editingDetailDeskripsi.required' => 'Deskripsi detail harus diisi.',
-        ]);
-
-        $detail = RabDetail::find($this->editingDetailId);
-        if ($detail) {
-            $detail->spesifikasi = $this->editingDetailSpesifikasi;
-            $detail->volume = $this->editingDetailVolume;
-            $detail->satuan = $this->editingDetailSatuan;
-            $detail->deskripsi = $this->editingDetailDeskripsi;
-
-            $detail->total = $detail->volume * $detail->harga_satuan;
-            $detail->save();
-
-            $this->dispatch('rabDetailUpdated');
-            session()->flash('success', 'Detail RAB berhasil diperbarui.');
+        if ($header->rabDetails()->count() > 0 || $header->children()->count() > 0) {
+            session()->flash('error', 'Header tidak bisa dihapus karena masih memiliki detail atau sub-header.');
+            return;
         }
 
-        $this->reset(['editingDetailId', 'editingDetailSpesifikasi', 'editingDetailVolume', 'editingDetailSatuan', 'editingDetailDeskripsi']);
+        $header->delete();
+        session()->flash('success', 'Header RAB berhasil dihapus.');
+        $this->dispatch('rabHeaderCreated');
     }
 
     public function startEditHeader($headerId)
     {
         $this->editingHeaderId = $headerId;
-        $header = RabHeader::find($headerId);
-        if ($header) {
-            $this->editingHeaderDescription = $header->deskripsi;
-        }
+        $h = RabHeader::find($headerId);
+        if ($h) $this->editingHeaderDescription = $h->deskripsi;
     }
 
     public function saveHeaderDescription()
     {
-        $this->validate([
-            'editingHeaderDescription' => 'required|string|max:255',
-        ]);
+        $this->validate(['editingHeaderDescription' => 'required|string|max:255']);
 
-        $header = RabHeader::find($this->editingHeaderId);
-        if ($header) {
-            $header->deskripsi = $this->editingHeaderDescription;
-            $header->save();
+        $h = RabHeader::find($this->editingHeaderId);
+        if ($h) {
+            $h->deskripsi = $this->editingHeaderDescription;
+            $h->save();
 
-            $rootHeaders = RabHeader::where('proyek_id', $this->proyek_id)
-                                    ->whereNull('parent_id')
-                                    ->with('children', 'rabDetails')
-                                    ->get();
+            // rekap ulang seluruh root di proyek (aman)
+            $roots = RabHeader::where('proyek_id', $this->proyek_id)
+                ->whereNull('parent_id')
+                ->with('children', 'rabDetails')
+                ->get();
 
-            foreach ($rootHeaders as $rootHeader) {
-                $this->updateHeaderAndChildrenTotals($rootHeader);
+            foreach ($roots as $root) {
+                $this->updateHeaderAndChildrenTotals($root);
             }
 
             session()->flash('success', 'Deskripsi header berhasil diperbarui.');
@@ -445,6 +345,179 @@ class RabInput extends Component
         $this->dispatch('rabHeaderUpdated');
     }
 
+    // =====================
+    // AKSI: detail
+    // =====================
+    public function tambahDetail()
+    {
+        $this->validate([
+            'newItem.header_id'   => 'required',
+            'newItem.ahsp_id'     => 'required|exists:ahsp_header,id',
+            'newItem.deskripsi'   => 'required|string|max:255',
+            'newItem.volume'      => 'required|numeric|min:0.01',
+            'newItem.area'        => 'nullable|string|max:255',
+            'newItem.spesifikasi' => 'nullable|string',
+        ], [
+            'newItem.header_id.required' => 'Pilih Sub-Induk (Header).',
+            'newItem.ahsp_id.required'   => 'Pilih AHSP.',
+            'newItem.ahsp_id.exists'     => 'AHSP tidak valid.',
+            'newItem.deskripsi.required' => 'Deskripsi detail harus diisi.',
+            'newItem.volume.required'    => 'Volume harus diisi.',
+            'newItem.volume.numeric'     => 'Volume harus berupa angka.',
+            'newItem.volume.min'         => 'Volume harus lebih besar dari 0.',
+            'newItem.area.max'           => 'Area terlalu panjang (maksimal 255 karakter).',
+        ]);
+
+        $ahsp   = AhspHeader::find($this->newItem['ahsp_id']);
+        $header = RabHeader::find($this->newItem['header_id']);
+
+        if (!$ahsp || !$header) {
+            session()->flash('error', 'Data AHSP atau Header tidak ditemukan.');
+            return;
+        }
+
+        $volume = (float)$this->newItem['volume'];
+
+        // Ambil komponen harga per satuan analisa dari AHSP
+        $komp          = $this->getAhspKomponen((int)$ahsp->id);
+        $hargaMaterial = (float)$komp['harga_material'];
+        $hargaUpah     = (float)$komp['harga_upah'];
+        $hargaSatuan   = $hargaMaterial + $hargaUpah; // RAW
+        
+        $totalMaterial = $hargaMaterial * $volume;
+        $totalUpah     = $hargaUpah * $volume;
+        $totalGab      = $hargaSatuan * $volume;
+
+        // Penomoran detail dibawah header
+        $seq = RabDetail::where('rab_header_id', $header->id)->count() + 1;
+        $detailKode = $header->kode . '.' . $seq;
+        $detailKodeSort = implode('.', array_map(
+            fn($p) => str_pad($p, 4, '0', STR_PAD_LEFT), explode('.', $detailKode)
+        ));
+
+        RabDetail::create([
+            'proyek_id'       => $this->proyek_id,
+            'rab_header_id'   => $header->id,
+            'ahsp_id'         => $ahsp->id,
+            'kode'            => $detailKode,
+            'kode_sort'       => $detailKodeSort,
+            'deskripsi'       => $this->newItem['deskripsi'],
+            'area'            => $this->newItem['area'] ?: null,
+            'spesifikasi'     => $this->newItem['spesifikasi'] ?: null,
+            'satuan'          => $komp['satuan'],
+            'volume'          => $volume,
+
+            'sumber_harga'    => 'ahsp',
+            'harga_material'  => $hargaMaterial,
+            'harga_upah'      => $hargaUpah,
+            'harga_satuan'    => $hargaSatuan,
+
+            'total_material'  => $totalMaterial,
+            'total_upah'      => $totalUpah,
+            'total'           => $totalGab,
+
+            'bobot'           => 0,
+        ]);
+
+        // Optional: kunci AHSP jika kebijakan Anda demikian
+        if (!$ahsp->is_locked) {
+            $ahsp->is_locked = true;
+            $ahsp->save();
+        }
+
+        session()->flash('success', 'Detail RAB berhasil ditambahkan.');
+        $this->newItem = [
+            'header_id'    => '',
+            'ahsp_id'      => '',
+            'deskripsi'    => '',
+            'volume'       => 1,
+            'satuan'       => '',
+            'area'         => '',
+            'spesifikasi'  => '',
+            'harga_satuan' => 0,
+        ];
+        $this->dispatch('rabDetailUpdated');
+    }
+
+    public function startEditDetail($detailId)
+    {
+        $this->editingDetailId = $detailId;
+        $d = RabDetail::find($detailId);
+        if (!$d) return;
+
+        $this->editingDetailSpesifikasi = $d->spesifikasi;
+        $this->editingDetailVolume      = $d->volume;
+        $this->editingDetailSatuan      = $d->satuan;
+        $this->editingDetailDeskripsi   = $d->deskripsi;
+    }
+
+    public function saveDetailChanges()
+    {
+        $this->validate([
+            'editingDetailSpesifikasi' => 'nullable|string',
+            'editingDetailVolume'      => 'required|numeric|min:0.01',
+            'editingDetailSatuan'      => 'nullable|string',
+            'editingDetailDeskripsi'   => 'required|string|max:255',
+        ]);
+
+        $d = RabDetail::find($this->editingDetailId);
+        if (!$d) return;
+
+        $d->spesifikasi = $this->editingDetailSpesifikasi;
+        $d->volume      = (float)$this->editingDetailVolume;
+        $d->satuan      = $this->editingDetailSatuan;
+        $d->deskripsi   = $this->editingDetailDeskripsi;
+
+        // Hitung ulang total-total
+        $vol = (float)$d->volume;
+        $hargaPakai = (float)($d->harga_satuan ?? 0);   // jika nanti ada override manual, prioritaskan di sini
+        $d->total_material = (float)($d->harga_material ?? 0) * $vol;
+        $d->total_upah     = (float)($d->harga_upah ?? 0)     * $vol;
+        $d->total          = $hargaPakai * $vol;
+
+        $d->save();
+
+        // Rekap header terkait
+        $this->rekapHeaderId($d->rab_header_id);
+
+        $this->dispatch('rabDetailUpdated');
+        session()->flash('success', 'Detail RAB berhasil diperbarui.');
+
+        $this->reset(['editingDetailId','editingDetailSpesifikasi','editingDetailVolume','editingDetailSatuan','editingDetailDeskripsi']);
+    }
+
+    public function hapusDetail($id)
+    {
+        $d = RabDetail::find($id);
+        if (!$d) return;
+
+        $headerId = $d->rab_header_id;
+        $d->delete();
+
+        // Rekap ulang header terkait
+        $this->rekapHeaderId($headerId);
+
+        session()->flash('success', 'Detail RAB berhasil dihapus.');
+        $this->dispatch('rabDetailUpdated');
+    }
+
+    private function rekapHeaderId(int $headerId): void
+    {
+        $h = RabHeader::with(['children.rabDetails','rabDetails'])->find($headerId);
+        if (!$h) return;
+
+        // cari root dari header ini agar rekap konsisten naik ke atas
+        $root = $h;
+        while ($root->parent_id) {
+            $root = RabHeader::with(['children.rabDetails','rabDetails'])->find($root->parent_id) ?? $root;
+            if ($root->id === $h->id) break;
+        }
+        $this->updateHeaderAndChildrenTotals($root);
+    }
+
+    // =====================
+    // RENDER
+    // =====================
     public function render()
     {
         return view('livewire.rab-input');

@@ -118,119 +118,124 @@ class RabPenawaranController extends Controller
         DB::beginTransaction();
         try {
             $request->validate([
-                'nama_penawaran' => 'required|string|max:255',
-                'tanggal_penawaran' => 'required|date',
-                'sections' => 'required|array|min:1',
-                'sections.*.rab_header_id' => 'required|exists:rab_header,id',
-                'sections.*.profit_percentage' => 'required|numeric|min:0|max:100',
-                'sections.*.overhead_percentage' => 'required|numeric|min:0|max:100',
-                'sections.*.items' => 'nullable|array',
-                'sections.*.items.*.rab_detail_id' => 'nullable|exists:rab_detail,id',
-                'sections.*.items.*.kode' => 'nullable|string|max:255',
-                'sections.*.items.*.deskripsi' => 'nullable|string|max:255',
-                'sections.*.items.*.volume' => 'nullable|numeric|min:0.0001',
-                'sections.*.items.*.satuan' => 'nullable|string|max:20',
-    
-                // ⇩⇩ area & spesifikasi hanya di item
-                'sections.*.items.*.area' => 'nullable|string|max:255',
-                'sections.*.items.*.spesifikasi' => 'nullable|string',
-                'discount_percentage' => 'nullable|numeric|min:0|max:100',
+                'nama_penawaran'                      => 'required|string|max:255',
+                'tanggal_penawaran'                   => 'required|date',
+                'discount_percentage'                 => 'nullable|numeric|min:0|max:100',
+
+                'sections'                            => 'required|array|min:1',
+                'sections.*.rab_header_id'            => 'required|exists:rab_header,id',
+                'sections.*.profit_percentage'        => 'required|numeric|min:0|max:100',
+                'sections.*.overhead_percentage'      => 'required|numeric|min:0|max:100',
+                'sections.*.items'                    => 'nullable|array',
+                'sections.*.items.*.rab_detail_id'    => 'nullable|exists:rab_detail,id',
+                'sections.*.items.*.kode'             => 'nullable|string|max:255',
+                'sections.*.items.*.deskripsi'        => 'nullable|string|max:255',
+                'sections.*.items.*.volume'           => 'nullable|numeric|min:0.0001',
+                'sections.*.items.*.satuan'           => 'nullable|string|max:20',
+                'sections.*.items.*.area'             => 'nullable|string|max:255',
+                'sections.*.items.*.spesifikasi'      => 'nullable|string',
             ]);
-    
-            $totalPenawaranBruto = 0;
-    
+
+            $totalPenawaranBruto = 0.0;
+
             $penawaranHeader = RabPenawaranHeader::create([
-                'proyek_id' => $proyek->id,
-                'nama_penawaran' => $request->nama_penawaran,
-                'tanggal_penawaran' => $request->tanggal_penawaran,
-                'versi' => 1,
-                'total_penawaran_bruto' => 0,
-                'discount_percentage' => $request->discount_percentage,
-                'discount_amount' => 0,
-                'final_total_penawaran' => 0,
-                'status' => 'draft',
-                // ❌ HAPUS: 'area' dan 'spesifikasi' di header
+                'proyek_id'              => $proyek->id,
+                'nama_penawaran'         => $request->nama_penawaran,
+                'tanggal_penawaran'      => $request->tanggal_penawaran,
+                'versi'                  => 1,
+                'total_penawaran_bruto'  => 0,
+                'discount_percentage'    => (float)($request->discount_percentage ?? 0),
+                'discount_amount'        => 0,
+                'final_total_penawaran'  => 0,
+                'status'                 => 'draft',
             ]);
-    
+
             foreach ($request->sections as $sectionData) {
-                $profitPercentage = (float) $sectionData['profit_percentage'];
-                $overheadPercentage = (float) $sectionData['overhead_percentage'];
-                $totalSectionPenawaran = 0;
-    
+                $profitPercentage   = (float)$sectionData['profit_percentage'];
+                $overheadPercentage = (float)$sectionData['overhead_percentage'];
+                $totalSection       = 0.0;
+
                 $newSection = RabPenawaranSection::create([
                     'rab_penawaran_header_id' => $penawaranHeader->id,
-                    'rab_header_id' => $sectionData['rab_header_id'],
-                    'profit_percentage' => $profitPercentage,
-                    'overhead_percentage' => $overheadPercentage,
+                    'rab_header_id'           => $sectionData['rab_header_id'],
+                    'profit_percentage'       => $profitPercentage,
+                    'overhead_percentage'     => $overheadPercentage,
                     'total_section_penawaran' => 0,
                 ]);
-    
-                if (isset($sectionData['items']) && is_array($sectionData['items'])) {
+
+                if (!empty($sectionData['items']) && is_array($sectionData['items'])) {
                     foreach ($sectionData['items'] as $itemData) {
                         if (empty($itemData['rab_detail_id'])) continue;
-    
+
+                        // Ambil detail + ahsp details (kalau ada)
                         $rabDetail = RabDetail::with('ahsp.details')->find($itemData['rab_detail_id']);
-                        $hargaSatuanDasar = $rabDetail->harga_satuan ?? 0;
-                        $ahsp = $rabDetail->ahsp;
-    
-                        $hargaMaterialDasarItem = $ahsp ? $ahsp->details->where('tipe','material')->sum(fn($d)=>$d->koefisien*$d->harga_satuan) : null;
-                        $hargaUpahDasarItem     = $ahsp ? $ahsp->details->where('tipe','upah')->sum(fn($d)=>$d->koefisien*$d->harga_satuan) : null;
-    
-                        $koef = 1 + ($profitPercentage/100) + (($overheadPercentage ?? 0)/100);
+                        if (!$rabDetail) continue;
+
+                        // Field identitas item
+                        $kode      = $itemData['kode']      ?? $rabDetail->kode;
+                        $deskripsi = $itemData['deskripsi'] ?? $rabDetail->deskripsi;
+                        $satuan    = $itemData['satuan']    ?? $rabDetail->satuan ?? 'LS';
+                        $volume    = (float)($itemData['volume'] ?? $rabDetail->volume ?? 0);
+
+                        // Material & upah dasar (AHSP → fallback kolom rab_detail)
+                        [$matDasar, $upahDasar] = $this->deriveMaterialUpahFromDetail($rabDetail);
+
+                        // Harga satuan dasar: rab_detail->harga_satuan atau (material+upah)
+                        $hargaSatuanDasar = (float)($rabDetail->harga_satuan ?? ($matDasar + $upahDasar));
+
+                        // Mark-up koef
+                        $koef = 1 + ($profitPercentage / 100) + ($overheadPercentage / 100);
+
+                        // Hitung turunan
                         $hargaSatuanCalculated = $hargaSatuanDasar * $koef;
                         $hargaSatuanPenawaran  = $hargaSatuanCalculated;
-    
-                        $volume = (float) ($itemData['volume'] ?? 0);
-                        $totalPenawaranItem = $hargaSatuanPenawaran * $volume;
-    
-                        $hargaMaterialCalculatedItem = $hargaMaterialDasarItem ? $hargaMaterialDasarItem * $koef : null;
-                        $hargaUpahCalculatedItem     = $hargaUpahDasarItem     ? $hargaUpahDasarItem     * $koef : null;
-    
+                        $totalItem             = $hargaSatuanPenawaran * $volume;
+
+                        $matCalc  = $matDasar  * $koef;
+                        $upahCalc = $upahDasar * $koef;
+
                         RabPenawaranItem::create([
-                            'rab_penawaran_section_id' => $newSection->id,
-                            'rab_detail_id'            => $itemData['rab_detail_id'],
-                            'kode'                     => $itemData['kode'] ?? null,
-                            'deskripsi'                => $itemData['deskripsi'] ?? null,
-                            'volume'                   => $volume,
-                            'satuan'                   => $itemData['satuan'] ?? null,
-    
-                            'harga_satuan_dasar'      => $hargaSatuanDasar,
-                            'harga_satuan_calculated' => $hargaSatuanCalculated,
-                            'harga_satuan_penawaran'  => $hargaSatuanPenawaran,
-                            'total_penawaran_item'    => $totalPenawaranItem,
-    
-                            'harga_material_dasar_item'      => $hargaMaterialDasarItem,
-                            'harga_upah_dasar_item'          => $hargaUpahDasarItem,
-                            'harga_material_calculated_item' => $hargaMaterialCalculatedItem,
-                            'harga_upah_calculated_item'     => $hargaUpahCalculatedItem,
-                            'harga_material_penawaran_item'  => $hargaMaterialCalculatedItem,
-                            'harga_upah_penawaran_item'      => $hargaUpahCalculatedItem,
-    
-                            // ✅ SIMPAN di ITEM
-                            'area'        => $itemData['area'] ?? null,
-                            'spesifikasi' => $itemData['spesifikasi'] ?? null,
+                            'rab_penawaran_section_id'       => $newSection->id,
+                            'rab_detail_id'                  => $rabDetail->id,
+                            'kode'                           => $kode,
+                            'deskripsi'                      => $deskripsi,
+                            'volume'                         => (float)$volume,
+                            'satuan'                         => $satuan ?: 'LS',
+
+                            'harga_satuan_dasar'             => (float)$hargaSatuanDasar,
+                            'harga_satuan_calculated'        => (float)$hargaSatuanCalculated,
+                            'harga_satuan_penawaran'         => (float)$hargaSatuanPenawaran,
+                            'total_penawaran_item'           => (float)$totalItem,
+
+                            'harga_material_dasar_item'      => (float)$matDasar,
+                            'harga_upah_dasar_item'          => (float)$upahDasar,
+                            'harga_material_calculated_item' => (float)$matCalc,
+                            'harga_upah_calculated_item'     => (float)$upahCalc,
+                            'harga_material_penawaran_item'  => (float)$matCalc,
+                            'harga_upah_penawaran_item'      => (float)$upahCalc,
+
+                            'area'                           => $itemData['area']        ?? null,
+                            'spesifikasi'                    => $itemData['spesifikasi'] ?? null,
                         ]);
-    
-                        $totalSectionPenawaran += $totalPenawaranItem;
+
+                        $totalSection += $totalItem;
                     }
                 }
-    
-                $newSection->total_section_penawaran = $totalSectionPenawaran;
-                $newSection->save();
-    
-                $totalPenawaranBruto += $totalSectionPenawaran;
+
+                $newSection->update(['total_section_penawaran' => $totalSection]);
+                $totalPenawaranBruto += $totalSection;
             }
-    
-            $discountPercentage = (float) $request->discount_percentage;
-            $discountAmount = ($totalPenawaranBruto * $discountPercentage) / 100;
-            $finalTotalPenawaran = $totalPenawaranBruto - $discountAmount;
-    
+
+            $discPct   = (float)($request->discount_percentage ?? 0);
+            $discAmt   = $totalPenawaranBruto * $discPct / 100;
+            $final     = $totalPenawaranBruto - $discAmt;
+
             $penawaranHeader->update([
                 'total_penawaran_bruto' => $totalPenawaranBruto,
-                'discount_amount' => $discountAmount,
-                'final_total_penawaran' => $finalTotalPenawaran,
+                'discount_amount'       => $discAmt,
+                'final_total_penawaran' => $final,
             ]);
-    
+
             DB::commit();
             return redirect()
                 ->route('proyek.penawaran.show', ['proyek' => $proyek->id, 'penawaran' => $penawaranHeader->id])
@@ -239,7 +244,8 @@ class RabPenawaranController extends Controller
             DB::rollBack();
             return back()->withInput()->with('error', 'Gagal menyimpan penawaran: '.$e->getMessage());
         }
-    }    
+    }
+
 
     // Menampilkan detail penawaran
     public function show(Proyek $proyek, RabPenawaranHeader $penawaran)
@@ -302,47 +308,46 @@ class RabPenawaranController extends Controller
         try {
             // Validasi header + (opsional) sections
             $request->validate([
-                'nama_penawaran'        => 'required|string|max:255',
-                'tanggal_penawaran'     => 'required|date',
-                'discount_percentage'   => 'nullable|numeric|min:0|max:100',
-            
-                'sections'                                  => 'nullable|array|min:1',
-                'sections.*.rab_header_id'                  => 'required_with:sections|exists:rab_header,id',
-                'sections.*.profit_percentage'              => 'required_with:sections|numeric|min:0|max:100',
-                'sections.*.overhead_percentage'            => 'required_with:sections|numeric|min:0|max:100',
-                'sections.*.items'                          => 'nullable|array',
-                'sections.*.items.*.rab_detail_id'          => 'nullable|exists:rab_detail,id',
-                'sections.*.items.*.kode'                   => 'nullable|string|max:255',
-                'sections.*.items.*.deskripsi'              => 'nullable|string|max:255',
-                'sections.*.items.*.volume'                 => 'nullable|numeric|min:0.0001',
-                'sections.*.items.*.satuan'                 => 'nullable|string|max:20',
-                'sections.*.items.*.area'                   => 'nullable|string|max:255',
-                'sections.*.items.*.spesifikasi'            => 'nullable|string',
+                'nama_penawaran'                      => 'required|string|max:255',
+                'tanggal_penawaran'                   => 'required|date',
+                'discount_percentage'                 => 'nullable|numeric|min:0|max:100',
+
+                'sections'                            => 'nullable|array|min:1',
+                'sections.*.rab_header_id'            => 'required_with:sections|exists:rab_header,id',
+                'sections.*.profit_percentage'        => 'required_with:sections|numeric|min:0|max:100',
+                'sections.*.overhead_percentage'      => 'required_with:sections|numeric|min:0|max:100',
+                'sections.*.items'                    => 'nullable|array',
+                'sections.*.items.*.rab_detail_id'    => 'nullable|exists:rab_detail,id',
+                'sections.*.items.*.kode'             => 'nullable|string|max:255',
+                'sections.*.items.*.deskripsi'        => 'nullable|string|max:255',
+                'sections.*.items.*.volume'           => 'nullable|numeric|min:0.0001',
+                'sections.*.items.*.satuan'           => 'nullable|string|max:20',
+                'sections.*.items.*.area'             => 'nullable|string|max:255',
+                'sections.*.items.*.spesifikasi'      => 'nullable|string',
             ]);
-            
+
+            // Update info header
             $penawaran->update([
                 'nama_penawaran'       => $request->nama_penawaran,
                 'tanggal_penawaran'    => $request->tanggal_penawaran,
-                'discount_percentage'  => $request->discount_percentage,
+                'discount_percentage'  => (float)($request->discount_percentage ?? 0),
             ]);
-            
 
-            $totalPenawaranBruto = 0;
+            $totalPenawaranBruto = 0.0;
 
-            // Jika ada sections dikirim dari form edit → rebuild semua section & item
             if ($request->filled('sections')) {
-                // Hapus items & sections lama (pastikan urutan: items dulu, lalu sections)
+                // Bersihkan struktur lama (items dulu, lalu sections)
                 $penawaran->loadMissing('sections.items');
                 foreach ($penawaran->sections as $sec) {
                     $sec->items()->delete();
                 }
                 $penawaran->sections()->delete();
 
-                // Bangun ulang dari request
+                // Bangun ulang
                 foreach ($request->sections as $sectionData) {
-                    $profitPercentage   = (float) ($sectionData['profit_percentage']   ?? 0);
-                    $overheadPercentage = (float) ($sectionData['overhead_percentage'] ?? 0);
-                    $totalSectionPenawaran = 0;
+                    $profitPercentage   = (float)($sectionData['profit_percentage']   ?? 0);
+                    $overheadPercentage = (float)($sectionData['overhead_percentage'] ?? 0);
+                    $totalSection       = 0.0;
 
                     $newSection = RabPenawaranSection::create([
                         'rab_penawaran_header_id' => $penawaran->id,
@@ -354,87 +359,71 @@ class RabPenawaranController extends Controller
 
                     if (!empty($sectionData['items']) && is_array($sectionData['items'])) {
                         foreach ($sectionData['items'] as $itemData) {
-                            if (empty($itemData['rab_detail_id'])) {
-                                continue;
-                            }
+                            if (empty($itemData['rab_detail_id'])) continue;
 
-                            // Ambil RAB Detail + AHSP untuk harga dasar
                             $rabDetail = RabDetail::with('ahsp.details')->find($itemData['rab_detail_id']);
-                            if (!$rabDetail) {
-                                continue;
-                            }
+                            if (!$rabDetail) continue;
 
-                            $hargaSatuanDasar = (float) ($rabDetail->harga_satuan ?? 0);
-                            $ahsp             = $rabDetail->ahsp;
+                            $kode      = $itemData['kode']      ?? $rabDetail->kode;
+                            $deskripsi = $itemData['deskripsi'] ?? $rabDetail->deskripsi;
+                            $satuan    = $itemData['satuan']    ?? $rabDetail->satuan ?? 'LS';
+                            $volume    = (float)($itemData['volume'] ?? $rabDetail->volume ?? 0);
 
-                            // Hitung harga dasar material & upah dari AHSP (jika ada)
-                            $hargaMaterialDasarItem = $ahsp
-                                ? $ahsp->details->where('tipe', 'material')->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan)
-                                : null;
+                            [$matDasar, $upahDasar] = $this->deriveMaterialUpahFromDetail($rabDetail);
 
-                            $hargaUpahDasarItem = $ahsp
-                                ? $ahsp->details->where('tipe', 'upah')->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan)
-                                : null;
-
-                            $koef = 1 + ($profitPercentage / 100) + ($overheadPercentage / 100);
+                            $hargaSatuanDasar = (float)($rabDetail->harga_satuan ?? ($matDasar + $upahDasar));
+                            $koef              = 1 + ($profitPercentage / 100) + ($overheadPercentage / 100);
 
                             $hargaSatuanCalculated = $hargaSatuanDasar * $koef;
                             $hargaSatuanPenawaran  = $hargaSatuanCalculated;
+                            $totalItem             = $hargaSatuanPenawaran * $volume;
 
-                            $volume = (float) ($itemData['volume'] ?? 0);
-                            $totalPenawaranItem = $hargaSatuanPenawaran * $volume;
-
-                            $hargaMaterialCalculatedItem = $hargaMaterialDasarItem !== null ? ($hargaMaterialDasarItem * $koef) : null;
-                            $hargaUpahCalculatedItem     = $hargaUpahDasarItem     !== null ? ($hargaUpahDasarItem     * $koef) : null;
-
-                            $hargaMaterialPenawaranItem  = $hargaMaterialCalculatedItem;
-                            $hargaUpahPenawaranItem      = $hargaUpahCalculatedItem;
+                            $matCalc  = $matDasar  * $koef;
+                            $upahCalc = $upahDasar * $koef;
 
                             RabPenawaranItem::create([
-                                'rab_penawaran_section_id'     => $newSection->id,
-                                'rab_detail_id'                => $itemData['rab_detail_id'],
-                                'kode'                         => $itemData['kode']        ?? null,
-                                'deskripsi'                    => $itemData['deskripsi']   ?? null,
-                                'volume'                       => $volume,
-                                'satuan'                       => $itemData['satuan']      ?? null,
+                                'rab_penawaran_section_id'       => $newSection->id,
+                                'rab_detail_id'                  => $rabDetail->id,
+                                'kode'                           => $kode,
+                                'deskripsi'                      => $deskripsi,
+                                'volume'                         => (float)$volume,
+                                'satuan'                         => $satuan ?: 'LS',
 
-                                'harga_satuan_dasar'           => $hargaSatuanDasar,
-                                'harga_satuan_calculated'      => $hargaSatuanCalculated,
-                                'harga_satuan_penawaran'       => $hargaSatuanPenawaran,
-                                'total_penawaran_item'         => $totalPenawaranItem,
+                                'harga_satuan_dasar'             => (float)$hargaSatuanDasar,
+                                'harga_satuan_calculated'        => (float)$hargaSatuanCalculated,
+                                'harga_satuan_penawaran'         => (float)$hargaSatuanPenawaran,
+                                'total_penawaran_item'           => (float)$totalItem,
 
-                                'harga_material_dasar_item'    => $hargaMaterialDasarItem,
-                                'harga_upah_dasar_item'        => $hargaUpahDasarItem,
-                                'harga_material_calculated_item'=> $hargaMaterialCalculatedItem,
-                                'harga_upah_calculated_item'   => $hargaUpahCalculatedItem,
-                                'harga_material_penawaran_item'=> $hargaMaterialPenawaranItem,
-                                'harga_upah_penawaran_item'    => $hargaUpahPenawaranItem,
+                                'harga_material_dasar_item'      => (float)$matDasar,
+                                'harga_upah_dasar_item'          => (float)$upahDasar,
+                                'harga_material_calculated_item' => (float)$matCalc,
+                                'harga_upah_calculated_item'     => (float)$upahCalc,
+                                'harga_material_penawaran_item'  => (float)$matCalc,
+                                'harga_upah_penawaran_item'      => (float)$upahCalc,
 
-                                // Field tambahan dari form (opsional)
-                                'area'                         => $itemData['area']        ?? null,
-                                'spesifikasi'                  => $itemData['spesifikasi'] ?? null,
+                                'area'                           => $itemData['area']        ?? null,
+                                'spesifikasi'                    => $itemData['spesifikasi'] ?? null,
                             ]);
 
-                            $totalSectionPenawaran += $totalPenawaranItem;
+                            $totalSection += $totalItem;
                         }
                     }
 
-                    $newSection->update(['total_section_penawaran' => $totalSectionPenawaran]);
-                    $totalPenawaranBruto += $totalSectionPenawaran;
+                    $newSection->update(['total_section_penawaran' => $totalSection]);
+                    $totalPenawaranBruto += $totalSection;
                 }
 
-                // Setelah rebuild sections → hitung ulang total header & diskon
-                $discountPercentage = (float) ($request->discount_percentage ?? 0);
-                $discountAmount     = ($totalPenawaranBruto * $discountPercentage) / 100;
-                $finalTotalPenawaran= $totalPenawaranBruto - $discountAmount;
+                $discPct   = (float)($request->discount_percentage ?? 0);
+                $discAmt   = $totalPenawaranBruto * $discPct / 100;
+                $final     = $totalPenawaranBruto - $discAmt;
 
                 $penawaran->update([
                     'total_penawaran_bruto' => $totalPenawaranBruto,
-                    'discount_amount'       => $discountAmount,
-                    'final_total_penawaran' => $finalTotalPenawaran,
+                    'discount_amount'       => $discAmt,
+                    'final_total_penawaran' => $final,
                 ]);
             } else {
-                // Tidak ada perubahan sections dari form → hanya hitung ulang berdasarkan data yang sudah ada
+                // Tidak ada perubahan sections → hitung ulang dari data yang ada
                 $this->recalculatePenawaranTotals($penawaran);
             }
 
@@ -445,37 +434,45 @@ class RabPenawaranController extends Controller
                 ->with('success', 'Penawaran berhasil diperbarui!');
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
-            \Log::error('VALIDATION FAILED:');
-            \Log::error('Input:', $request->all());
-            \Log::error('Validation Errors:', $e->errors());
-
+            \Log::error('VALIDATION FAILED:', ['errors' => $e->errors(), 'input' => $request->all()]);
             return back()->withErrors($e->errors())
-                        ->withInput()
-                        ->with('error', 'Terjadi kesalahan validasi. Silakan periksa kembali input.');
-        } catch (\Exception $e) {
+                ->withInput()
+                ->with('error', 'Terjadi kesalahan validasi. Silakan periksa kembali input.');
+        } catch (\Throwable $e) {
             DB::rollBack();
-            \Log::error('GAGAL UPDATE PENAWARAN: ' . $e->getMessage());
-            return back()->withInput()
-                        ->with('error', 'Gagal memperbarui penawaran: ' . $e->getMessage());
+            \Log::error('GAGAL UPDATE PENAWARAN: '.$e->getMessage());
+            return back()->withInput()->with('error', 'Gagal memperbarui penawaran: '.$e->getMessage());
         }
     }
 
 
+
+
     // Menghapus penawaran
-        public function destroy(Proyek $proyek, RabPenawaranHeader $penawaran)
-        {
-            // (opsional) pastikan penawaran milik proyek yang sama
-            if ($penawaran->proyek_id !== $proyek->id) {
-                abort(404);
-            }
-        
-            $penawaran->delete();
-        
-            // Kembali ke proyek.show dengan tab RAB Penawaran aktif
-            return redirect()
-                ->to(route('proyek.show', ['id' => $proyek->id, 'tab' => 'rabpenawaran']) . '#rabpenawaranContent')
-                ->with('success', 'Penawaran berhasil dihapus.');
+    public function destroy(Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        // opsional: pastikan memang milik proyek ini
+        if ($penawaran->proyek_id !== $proyek->id) {
+            abort(404);
         }
+    
+        // (opsional) bersihkan anak-anaknya dulu
+        $penawaran->loadMissing('sections.items');
+        foreach ($penawaran->sections as $sec) {
+            $sec->items()->delete();
+        }
+        $penawaran->sections()->delete();
+    
+        $penawaran->delete();
+    
+        return redirect()
+            ->to(route('proyek.show', [
+                'proyek' => $proyek->id,      // <<— gunakan 'proyek', bukan 'id'
+                'tab'    => 'rabpenawaran',
+            ]) . '#rabpenawaranContent')
+            ->with('success', 'Penawaran berhasil dihapus.');
+    }
+    
     
     /**
      * Membangun struktur data RAB yang dimuat sebelumnya untuk form penawaran.
@@ -553,6 +550,50 @@ class RabPenawaranController extends Controller
         }
         return $flatList;
     }
+
+    private function splitAhsp(AhspHeader $ahsp = null): array
+    {
+        if (!$ahsp) {
+            return [null, null];
+        }
+
+        $material = $ahsp->details
+            ->where('tipe', 'material')
+            ->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan);
+
+        $upah = $ahsp->details
+            ->where('tipe', 'upah')
+            ->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan);
+
+        return [$material, $upah];
+    }
+
+    // letakkan di dalam class RabPenawaranController
+    private function deriveMaterialUpahFromDetail(?RabDetail $detail): array
+    {
+        if (!$detail) return [0.0, 0.0];
+
+        // 1) Jika punya AHSP → jumlahkan dari AHSP details
+        if ($detail->relationLoaded('ahsp') ? $detail->ahsp : $detail->ahsp()->with('details')->first()) {
+            $ahsp = $detail->ahsp;
+            $material = $ahsp->details
+                ->where('tipe', 'material')
+                ->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan);
+
+            $upah = $ahsp->details
+                ->where('tipe', 'upah')
+                ->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan);
+
+            return [(float)$material, (float)$upah];
+        }
+
+        // 2) Tidak punya AHSP → pakai kolom di rab_detail jika ada (atau 0)
+        $material = (float)($detail->harga_material ?? 0);
+        $upah     = (float)($detail->harga_upah ?? 0);
+
+        return [$material, $upah];
+    }
+
 
     // Endpoint AJAX untuk pencarian RAB Headers (untuk Select2/dynamic dropdown)
     public function searchRabHeaders(Request $request, Proyek $proyek)

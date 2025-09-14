@@ -10,10 +10,12 @@ class RabDetail extends Model
     use HasFactory;
 
     protected $table = 'rab_detail';
+
     protected $fillable = [
         'proyek_id',
         'rab_header_id',
-        'ahsp_id', // <<< Tambahkan ini
+        'ahsp_id',
+        'sumber_harga',              // enum: import|manual|ahsp
         'kode',
         'kode_sort',
         'deskripsi',
@@ -21,11 +23,28 @@ class RabDetail extends Model
         'spesifikasi',
         'satuan',
         'volume',
-        'harga_satuan',
-        'total',
+        'harga_material',
+        'harga_upah',
+        'harga_satuan_manual',       // override jika ada negosiasi
+        'harga_satuan',              // gabungan (material + upah) atau manual
+        'total_material',
+        'total_upah',
+        'total',                     // gabungan
         'bobot',
-        'created_at', // Tambahkan jika belum
-        'updated_at', // Tambahkan jika belum
+        // NOTE: created_at/updated_at tak perlu di-fillable
+    ];
+
+    protected $casts = [
+        'volume'            => 'decimal:3',
+        'harga_material'    => 'decimal:2',
+        'harga_upah'        => 'decimal:2',
+        'harga_satuan'      => 'decimal:2',
+        'harga_satuan_manual'=> 'decimal:2',
+        'total_material'    => 'decimal:2',
+        'total_upah'        => 'decimal:2',
+        'total'             => 'decimal:2',
+        'bobot'             => 'decimal:4',
+        // 'tgl_harga'       => 'date',   // aktifkan jika nanti ditambah kolom ini
     ];
 
     // Relasi ke AHSPHeader
@@ -40,19 +59,30 @@ class RabDetail extends Model
         return $this->belongsTo(RabHeader::class, 'rab_header_id');
     }
 
-    public function rabHeader()
-    {
-        return $this->belongsTo(\App\Models\RabHeader::class, 'rab_header_id');
-    }
-
     // Relasi ke proyek
     public function proyek()
     {
         return $this->belongsTo(Proyek::class, 'proyek_id');
     }
-    
+
     public function penawaranItems()
     {
         return $this->hasMany(RabPenawaranItem::class, 'rab_detail_id');
+    }
+
+    // ===== Helper / Accessor =====
+
+    // Harga satuan yang dipakai untuk penghitungan gabungan
+    public function getHargaTerpakaiAttribute()
+    {
+        return $this->harga_satuan_manual ?? $this->harga_satuan ?? 0;
+    }
+
+    // Nilai total yang dipakai (gabungan)
+    public function getNilaiTerpakaiAttribute()
+    {
+        $vol = $this->volume ?? 0;
+        $hs  = $this->harga_satuan_manual ?? $this->harga_satuan ?? 0;
+        return (float) $hs * (float) $vol;
     }
 }

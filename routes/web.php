@@ -102,6 +102,13 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/rab/import',                     [RabController::class, 'import'])->name('rab.import');
     Route::delete('/rab/reset/{proyek_id}',        [RabController::class, 'reset'])->name('rab.reset');
 
+    // ===== RAB template import =====
+    Route::get('/rab/import/template', [\App\Http\Controllers\RabController::class, 'downloadTemplate'])
+    ->name('rab.template');
+    Route::get('/rab/import/template-readme', [\App\Http\Controllers\RabController::class, 'downloadTemplateReadme'])
+    ->name('rab.template.readme');
+
+
     // ========== RAB Penawaran ==========
     Route::prefix('proyek/{proyek}/penawaran')->name('proyek.penawaran.')->group(function () {
         Route::get('/',         [RabPenawaranController::class, 'index'])->name('index');

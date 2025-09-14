@@ -9,7 +9,7 @@ class PemberiKerjaController extends Controller
 {
     public function index()
     {
-        $pemberiKerjas = PemberiKerja::all();
+        $pemberiKerjas = PemberiKerja::orderBy('nama_pemberi_kerja')->get();
         return view('pemberiKerja.index', compact('pemberiKerjas'));
     }
 
@@ -28,65 +28,74 @@ class PemberiKerjaController extends Controller
             abort(403, 'Anda tidak memiliki izin untuk menambah pemberi kerja.');
         }
 
-        $request->validate([
-            'nama_pemberi_kerja' => 'required',
-            'pic' => 'nullable',
-            'no_kontak' => 'nullable',
-            'alamat' => 'nullable',
+        $validated = $request->validate([
+            'nama_pemberi_kerja' => 'required|string|max:255',
+            'pic'                => 'nullable|string|max:100',
+            'jabatan_pic'        => 'nullable|string|max:100',
+            'nama_direktur'      => 'nullable|string|max:255',
+            'jabatan_direktur'   => 'nullable|string|max:100',
+            'no_kontak'          => 'nullable|string|max:30',
+            'alamat'             => 'nullable|string',
         ]);
 
-        PemberiKerja::create([
-            'nama_pemberi_kerja' => $request->nama_pemberi_kerja,
-            'pic' => $request->pic,
-            'no_kontak' => $request->no_kontak,
-            'alamat' => $request->alamat,
-        ]);
+        PemberiKerja::create($request->only([
+            'nama_pemberi_kerja',
+            'pic',
+            'jabatan_pic',
+            'nama_direktur',
+            'jabatan_direktur',
+            'no_kontak',
+            'alamat',
+        ]));
 
         return redirect()->route('pemberiKerja.index')->with('success', 'Data pemberi kerja berhasil disimpan.');
     }
 
-    public function edit($id)
+    // ---- pakai implicit binding ----
+    public function edit(PemberiKerja $pemberiKerja)
     {
         if (auth()->user()->edit_pemberikerja != 1) {
             abort(403, 'Anda tidak memiliki izin untuk mengedit pemberi kerja.');
         }
 
-        $pemberiKerja = PemberiKerja::findOrFail($id);
         return view('pemberiKerja.edit', compact('pemberiKerja'));
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, PemberiKerja $pemberiKerja)
     {
         if (auth()->user()->edit_pemberikerja != 1) {
             abort(403, 'Anda tidak memiliki izin untuk mengedit pemberi kerja.');
         }
 
-        $request->validate([
-            'nama_pemberi_kerja' => 'required',
-            'pic' => 'nullable',
-            'no_kontak' => 'nullable',
-            'alamat' => 'nullable',
+        $validated = $request->validate([
+            'nama_pemberi_kerja' => 'required|string|max:255',
+            'pic'                => 'nullable|string|max:100',
+            'jabatan_pic'        => 'nullable|string|max:100',
+            'nama_direktur'      => 'nullable|string|max:255',
+            'jabatan_direktur'   => 'nullable|string|max:100',
+            'no_kontak'          => 'nullable|string|max:30',
+            'alamat'             => 'nullable|string',
         ]);
 
-        $pemberiKerja = PemberiKerja::findOrFail($id);
-
-        $pemberiKerja->update([
-            'nama_pemberi_kerja' => $request->nama_pemberi_kerja,
-            'pic' => $request->pic,
-            'no_kontak' => $request->no_kontak,
-            'alamat' => $request->alamat,
-        ]);
+        $pemberiKerja->update($request->only([
+            'nama_pemberi_kerja',
+            'pic',
+            'jabatan_pic',
+            'nama_direktur',
+            'jabatan_direktur',
+            'no_kontak',
+            'alamat',
+        ]));
 
         return redirect()->route('pemberiKerja.index')->with('success', 'Data pemberi kerja berhasil diupdate.');
     }
 
-    public function destroy($id)
+    public function destroy(PemberiKerja $pemberiKerja)
     {
         if (auth()->user()->hapus_pemberikerja != 1) {
             abort(403, 'Anda tidak memiliki izin untuk menghapus pemberi kerja.');
         }
 
-        $pemberiKerja = PemberiKerja::findOrFail($id);
         $pemberiKerja->delete();
 
         return redirect()->route('pemberiKerja.index')->with('success', 'Data pemberi kerja berhasil dihapus.');

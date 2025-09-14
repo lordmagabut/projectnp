@@ -4,149 +4,338 @@ namespace App\Imports;
 
 use App\Models\RabHeader;
 use App\Models\RabDetail;
+use App\Models\AhspHeader;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
-class RABImport implements ToCollection, WithHeadingRow
+class RABImport implements WithMultipleSheets
 {
     protected $proyek_id;
-    protected $headerMap = [];
-    protected $headerValues = [];
-    protected $totalProyek = 0;
-    protected $rowsDetail = [];
 
     public function __construct($proyek_id)
     {
         $this->proyek_id = $proyek_id;
     }
 
+    public function sheets(): array
+    {
+        $ctx = new RABImportContext($this->proyek_id);
+        return [
+            'RAB_Header' => new RABHeaderSheetImport($ctx),
+            'RAB_Detail' => new RABDetailSheetImport($ctx),
+            0            => new LegacySingleSheetImport($ctx), // fallback template lama
+        ];
+    }
+}
+
+/* =============== Shared Context =============== */
+class RABImportContext
+{
+    public int $proyek_id;
+    public array $headerMap = [];        // map[kode] = id
+    public array $pendingParents = [];   // [[childId, parent_kode], ...]
+    public array $headerTotals = [];     // map[header_id] = total
+
+    public function __construct(int $proyek_id)
+    {
+        $this->proyek_id = $proyek_id;
+    }
+
+    public static function kodeSort(string $kode): string
+    {
+        $parts = explode('.', trim($kode));
+        $pad = array_map(fn($p) => str_pad($p, 4, '0', STR_PAD_LEFT), $parts);
+        return implode('.', $pad);
+    }
+
+    public static function dec($v): float
+    {
+        if ($v === null || $v === '') return 0.0;
+        $s = trim((string)$v);
+        $s = str_replace([' ', "\xC2\xA0"], '', $s);
+        if (str_contains($s, ',') && str_contains($s, '.')) {
+            $s = str_replace('.', '', $s);
+            $s = str_replace(',', '.', $s);
+        } else {
+            $s = str_replace(',', '.', $s);
+        }
+        return is_numeric($s) ? (float)$s : 0.0;
+    }
+}
+
+/* =============== Sheet RAB_Header (template baru) =============== */
+class RABHeaderSheetImport implements ToCollection, WithHeadingRow
+{
+    public function __construct(private RABImportContext $ctx) {}
+
     public function collection(Collection $rows)
     {
-        // Step 1: Siapkan header dan kumpulkan detail
-        foreach ($rows as $row) {
-            $kode = trim($row['wbs']);
-            if (!$kode) continue;
+        DB::transaction(function () use ($rows) {
+            // 1) Create header tanpa parent dulu
+            foreach ($rows as $row) {
+                if (!isset($row['kode']) || trim((string)$row['kode']) === '') continue;
 
-            $kodeParts = explode('.', $kode);
-            $level = count($kodeParts);
-            $kode_sort = implode('.', array_map(fn($k) => str_pad($k, 4, '0', STR_PAD_LEFT), $kodeParts));
+                $kode        = trim((string)$row['kode']);
+                $deskripsi   = trim((string)($row['deskripsi'] ?? ''));
+                $kategori_id = isset($row['kategori_id']) && $row['kategori_id'] !== '' ? (int)$row['kategori_id'] : null;
+                $parent_kode = trim((string)($row['parent_kode'] ?? ''));
 
-            $volume = floatval(str_replace(',', '.', $row['volume']));
-            $harga = floatval(str_replace(',', '.', $row['harga_satuan']));
-            $total = $volume * $harga;
-
-            // Level 1 & 2 → Header
-            if ($level <= 2) {
-                $header = RabHeader::create([
-                    'proyek_id' => $this->proyek_id,
-                    'kode' => $kode,
-                    'kode_sort' => $kode_sort,
-                    'deskripsi' => $row['uraian_pekerjaan'],
-                    'nilai' => 0,
-                    'bobot' => 0,
+                $h = RabHeader::create([
+                    'proyek_id'   => $this->ctx->proyek_id,
+                    'kategori_id' => $kategori_id,
+                    'parent_id'   => null,
+                    'kode'        => $kode,
+                    'kode_sort'   => RABImportContext::kodeSort($kode),
+                    'deskripsi'   => $deskripsi,
+                    'nilai'       => 0,
+                    'bobot'       => 0,
                 ]);
-                $this->headerMap[$kode] = $header->id;
-                $this->headerValues[$kode] = 0;
+
+                $this->ctx->headerMap[$kode] = $h->id;
+                if ($parent_kode !== '') {
+                    $this->ctx->pendingParents[] = [$h->id, $parent_kode];
+                }
             }
 
-            // Level 3+ → Kumpulkan detail, tapi belum insert
-            if ($level >= 3) {
-                $parentKode = implode('.', array_slice($kodeParts, 0, 2));
-                $header_id = $this->headerMap[$parentKode] ?? null;
+            // 2) Set parent + wariskan kategori bila anak kosong
+            foreach ($this->ctx->pendingParents as [$childId, $parent_kode]) {
+                if ($parent_kode !== '' && isset($this->ctx->headerMap[$parent_kode])) {
+                    $parentId = $this->ctx->headerMap[$parent_kode];
+                    RabHeader::whereKey($childId)->update(['parent_id' => $parentId]);
 
-                // Tambah nilai ke header
-                $this->headerValues[$parentKode] = ($this->headerValues[$parentKode] ?? 0) + $total;
-                $this->totalProyek += $total;
-
-                $this->rowsDetail[] = [
-                    'kode' => $kode,
-                    'kode_sort' => $kode_sort,
-                    'header_id' => $header_id,
-                    'uraian' => trim($row['uraian_pekerjaan'] ?? ''),
-                    'area' => trim($row['area'] ?? '') ?: null,
-                    'spesifikasi' => $row['spesifikasi'] ?? null,
-                    'satuan' => $row['satuan'] ?? null,
-                    'volume' => $volume,
-                    'harga' => $harga,
-                    'total' => $total,
-                    'raw' => $row,
-                ];
+                    $child  = RabHeader::find($childId);
+                    $parent = RabHeader::find($parentId);
+                    if ($child && $parent && is_null($child->kategori_id) && !is_null($parent->kategori_id)) {
+                        $child->kategori_id = $parent->kategori_id;
+                        $child->save();
+                    }
+                }
             }
-        }
+        });
+    }
+}
 
-        // Step 2: Hitung nilai dan bobot header (level 1 dan 2)
-        foreach ($this->headerMap as $kodeInduk => $idInduk) {
-            $childHeaders = array_filter(array_keys($this->headerValues), fn($k) => str_starts_with($k, $kodeInduk . '.') && substr_count($k, '.') == 1);
+/* =============== Sheet RAB_Detail (template baru) =============== */
+class RABDetailSheetImport implements ToCollection, WithHeadingRow
+{
+    public function __construct(private RABImportContext $ctx) {}
 
-            if (count($childHeaders)) {
-                $total = 0;
-                foreach ($childHeaders as $childKode) {
-                    $total += $this->headerValues[$childKode] ?? 0;
+    public function collection(Collection $rows)
+    {
+        DB::transaction(function () use ($rows) {
+
+            foreach ($rows as $row) {
+                if (!isset($row['header_kode']) || trim((string)$row['header_kode']) === '') continue;
+
+                $header_kode = trim((string)$row['header_kode']);
+                $header_id   = $this->ctx->headerMap[$header_kode] ?? null;
+                if (!$header_id) continue;
+
+                $kode        = trim((string)($row['kode'] ?? ''));
+                $deskripsi   = trim((string)($row['deskripsi'] ?? ''));
+                $area        = trim((string)($row['area'] ?? '')) ?: null;
+                $spesifikasi = trim((string)($row['spesifikasi'] ?? '')) ?: null;
+                $satuan      = trim((string)($row['satuan'] ?? '')) ?: null;
+
+                $volume         = RABImportContext::dec($row['volume'] ?? 0);
+                $harga_material = RABImportContext::dec($row['harga_material'] ?? 0);
+                $harga_upah     = RABImportContext::dec($row['harga_upah'] ?? 0);
+                $harga_satuan   = RABImportContext::dec($row['harga_satuan'] ?? 0);
+
+                $ahsp_id   = isset($row['ahsp_id']) && $row['ahsp_id'] !== '' ? (int)$row['ahsp_id'] : null;
+                $ahsp_kode = trim((string)($row['ahsp_kode'] ?? ''));
+
+                // fallback ke AHSP bila semua harga kosong
+                if (($harga_material + $harga_upah + $harga_satuan) == 0 && ($ahsp_id || $ahsp_kode)) {
+                    $q = AhspHeader::query();
+                    if ($ahsp_id)   $q->where('id', $ahsp_id);
+                    if ($ahsp_kode) $q->orWhere('kode_pekerjaan', $ahsp_kode);
+                    if ($ahsp = $q->first()) {
+                        $satuan       = $satuan ?: $ahsp->satuan;
+                        $harga_satuan = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? 0);
+                    }
                 }
 
-                $header = RabHeader::find($idInduk);
-                $header->nilai = $total;
-                $header->bobot = $this->totalProyek > 0 ? ($total / $this->totalProyek) * 100 : 0;
-                $header->save();
+                if ($harga_satuan == 0) {
+                    $harga_satuan = $harga_material + $harga_upah;
+                }
 
-                $this->headerValues[$kodeInduk] = $total;
+                $total_material = RABImportContext::dec($row['total_material'] ?? 0);
+                $total_upah     = RABImportContext::dec($row['total_upah'] ?? 0);
+                $total          = RABImportContext::dec($row['total'] ?? 0);
+
+                if ($total == 0) {
+                    $total_material = $total_material ?: ($harga_material * $volume);
+                    $total_upah     = $total_upah     ?: ($harga_upah * $volume);
+                    $total          = $total ?: ($harga_satuan * $volume);
+                }
+
+                if ($kode === '') {
+                    $existing = RabDetail::where('rab_header_id', $header_id)->count();
+                    $kode     = $header_kode . '.' . ($existing + 1);
+                }
+
+                RabDetail::create([
+                    'proyek_id'      => $this->ctx->proyek_id,
+                    'rab_header_id'  => $header_id,
+                    'ahsp_id'        => $ahsp_id ?: null,
+                    'kode'           => $kode,
+                    'kode_sort'      => RABImportContext::kodeSort($kode),
+                    'deskripsi'      => $deskripsi,
+                    'area'           => $area,
+                    'spesifikasi'    => $spesifikasi,
+                    'satuan'         => $satuan,
+                    'volume'         => $volume,
+                    'harga_material' => $harga_material,
+                    'harga_upah'     => $harga_upah,
+                    'harga_satuan'   => $harga_satuan,
+                    'total_material' => $total_material,
+                    'total_upah'     => $total_upah,
+                    'total'          => $total,
+                    'bobot'          => 0,
+                ]);
+
+                $this->ctx->headerTotals[$header_id] = ($this->ctx->headerTotals[$header_id] ?? 0) + $total;
+            }
+
+            $this->updateAllHeaderTotals();
+        });
+    }
+
+    private function updateAllHeaderTotals(): void
+    {
+        $headers = RabHeader::where('proyek_id', $this->ctx->proyek_id)
+            ->orderBy('kode_sort')->get()->keyBy('id');
+
+        foreach ($headers as $h) {
+            $h->nilai = (float)($this->ctx->headerTotals[$h->id] ?? 0);
+        }
+        $ordered = $headers->sortByDesc(fn($h) => substr_count($h->kode, '.'));
+        foreach ($ordered as $h) {
+            if ($h->parent_id && isset($headers[$h->parent_id])) {
+                $headers[$h->parent_id]->nilai += $h->nilai;
             }
         }
+        foreach ($headers as $h) $h->save();
+    }
+}
 
-        // Hitung ulang bobot untuk header level 2
-        foreach ($this->headerValues as $kode => $nilai) {
-            if (isset($this->headerMap[$kode])) {
-                $header = RabHeader::find($this->headerMap[$kode]);
-                $header->nilai = $nilai;
-                $header->bobot = $this->totalProyek > 0 ? ($nilai / $this->totalProyek) * 100 : 0;
-                $header->save();
+/* =============== Template lama (1 sheet) =============== */
+class LegacySingleSheetImport implements ToCollection, WithHeadingRow
+{
+    public function __construct(private RABImportContext $ctx) {}
+
+    public function collection(Collection $rows)
+    {
+        DB::transaction(function () use ($rows) {
+
+            foreach ($rows as $row) {
+                if (!isset($row['wbs']) || trim((string)$row['wbs']) === '') continue;
+
+                $kode   = trim((string)$row['wbs']);
+                $uraian = trim((string)($row['uraian_pekerjaan'] ?? ''));
+                $area   = trim((string)($row['area'] ?? '')) ?: null;
+                $spes   = trim((string)($row['spesifikasi'] ?? '')) ?: null;
+                $satuan = trim((string)($row['satuan'] ?? '')) ?: null;
+
+                $volume         = RABImportContext::dec($row['volume'] ?? 0);
+                $harga_satuan   = RABImportContext::dec($row['harga_satuan'] ?? 0);
+                // baca jika template lama juga menyediakan split (opsional)
+                $harga_material = RABImportContext::dec($row['harga_material'] ?? 0);
+                $harga_upah     = RABImportContext::dec($row['harga_upah'] ?? 0);
+
+                if ($harga_satuan == 0) $harga_satuan = $harga_material + $harga_upah;
+
+                $parts     = explode('.', $kode);
+                $level     = count($parts);
+                $kode_sort = RABImportContext::kodeSort($kode);
+
+                if ($level <= 2) {
+                    $kategori_id = is_numeric($parts[0]) ? (int)$parts[0] : null;
+                    $parent_kode = $level == 2 ? $parts[0] : null;
+
+                    $h = RabHeader::create([
+                        'proyek_id'   => $this->ctx->proyek_id,
+                        'kategori_id' => $kategori_id,
+                        'parent_id'   => null,
+                        'kode'        => $kode,
+                        'kode_sort'   => $kode_sort,
+                        'deskripsi'   => $uraian,
+                        'nilai'       => 0,
+                        'bobot'       => 0,
+                    ]);
+
+                    $this->ctx->headerMap[$kode] = $h->id;
+                    if ($parent_kode) $this->ctx->pendingParents[] = [$h->id, $parent_kode];
+
+                } else {
+                    $parentKode = implode('.', array_slice($parts, 0, 2));
+                    $header_id  = $this->ctx->headerMap[$parentKode] ?? null;
+                    if (!$header_id) continue;
+
+                    $total_material = $harga_material * $volume;
+                    $total_upah     = $harga_upah * $volume;
+                    $total          = $harga_satuan * $volume;
+
+                    RabDetail::create([
+                        'proyek_id'      => $this->ctx->proyek_id,
+                        'rab_header_id'  => $header_id,
+                        'kode'           => $kode,
+                        'kode_sort'      => $kode_sort,
+                        'deskripsi'      => $uraian,
+                        'area'           => $area,
+                        'spesifikasi'    => $spes,
+                        'satuan'         => $satuan,
+                        'volume'         => $volume,
+                        'harga_material' => $harga_material,
+                        'harga_upah'     => $harga_upah,
+                        'harga_satuan'   => $harga_satuan,
+                        'total_material' => $total_material,
+                        'total_upah'     => $total_upah,
+                        'total'          => $total,
+                        'bobot'          => 0,
+                    ]);
+
+                    $this->ctx->headerTotals[$header_id] = ($this->ctx->headerTotals[$header_id] ?? 0) + $total;
+                }
+            }
+
+            // set parent + wariskan kategori
+            foreach ($this->ctx->pendingParents as [$childId, $parent_kode]) {
+                if ($parent_kode !== '' && isset($this->ctx->headerMap[$parent_kode])) {
+                    $parentId = $this->ctx->headerMap[$parent_kode];
+                    RabHeader::whereKey($childId)->update(['parent_id' => $parentId]);
+
+                    $child  = RabHeader::find($childId);
+                    $parent = RabHeader::find($parentId);
+                    if ($child && $parent && is_null($child->kategori_id) && !is_null($parent->kategori_id)) {
+                        $child->kategori_id = $parent->kategori_id;
+                        $child->save();
+                    }
+                }
+            }
+
+            $this->updateAllHeaderTotals();
+        });
+    }
+
+    private function updateAllHeaderTotals(): void
+    {
+        $headers = RabHeader::where('proyek_id', $this->ctx->proyek_id)
+            ->orderBy('kode_sort')->get()->keyBy('id');
+
+        foreach ($headers as $h) {
+            $h->nilai = (float)($this->ctx->headerTotals[$h->id] ?? 0);
+        }
+        $ordered = $headers->sortByDesc(fn($h) => substr_count($h->kode, '.'));
+        foreach ($ordered as $h) {
+            if ($h->parent_id && isset($headers[$h->parent_id])) {
+                $headers[$h->parent_id]->nilai += $h->nilai;
             }
         }
-
-        // Step 3: Hitung bobot detail & koreksi agar total = 100
-        $details = [];
-        $totalBobot = 0;
-
-        foreach ($this->rowsDetail as $d) {
-            $bobot = $this->totalProyek > 0
-                ? round(($d['total'] / $this->totalProyek) * 100, 4)
-                : 0;
-
-            $totalBobot += $bobot;
-            $d['bobot'] = $bobot;
-            $details[] = $d;
-        }
-
-        $selisih = round(100 - $totalBobot, 4);
-
-        // Tambahkan selisih ke item terbesar
-        $maxIndex = 0;
-        $maxTotal = 0;
-        foreach ($details as $i => $d) {
-            if ($d['total'] > $maxTotal) {
-                $maxTotal = $d['total'];
-                $maxIndex = $i;
-            }
-        }
-        $details[$maxIndex]['bobot'] += $selisih;
-
-        // Step 4: Simpan ke DB
-        foreach ($details as $d) {
-            RabDetail::create([
-                'proyek_id' => $this->proyek_id,
-                'rab_header_id' => $d['header_id'],
-                'kode' => $d['kode'],
-                'kode_sort' => $d['kode_sort'],
-                'deskripsi' => $d['uraian'],
-                'area' => $d['area'],
-                'spesifikasi' => $d['spesifikasi'],
-                'satuan' => $d['satuan'],
-                'volume' => $d['volume'],
-                'harga_satuan' => $d['harga'],
-                'total' => $d['total'],
-                'bobot' => $d['bobot'],
-            ]);
-        }
+        foreach ($headers as $h) $h->save();
     }
 }

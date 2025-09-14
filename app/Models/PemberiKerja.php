@@ -14,6 +14,9 @@ class PemberiKerja extends Model
     protected $fillable = [
         'nama_pemberi_kerja',
         'pic',
+        'jabatan_pic',
+        'nama_direktur',
+        'jabatan_direktur',
         'no_kontak',
         'alamat',
     ];
