@@ -21,8 +21,19 @@ class RabPenawaranHeader extends Model
         'status',
         'area',
         'spesifikasi',
+        'keterangan', // <- tambahkan ini
     ];
 
+    protected $casts = [
+        'tanggal_penawaran'       => 'date',
+        'total_penawaran_bruto'   => 'decimal:2',
+        'discount_percentage'     => 'decimal:2',
+        'discount_amount'         => 'decimal:2',
+        'final_total_penawaran'   => 'decimal:2',
+        'keterangan'              => 'string',
+    ];
+
+    // --- Relasi ---
     public function proyek()
     {
         return $this->belongsTo(Proyek::class);
@@ -30,22 +41,32 @@ class RabPenawaranHeader extends Model
 
     public function sections()
     {
-        return $this->hasMany(RabPenawaranSection::class);
+        // jika punya kolom urutan, bisa ganti ->orderBy('urutan')
+        return $this->hasMany(RabPenawaranSection::class)->orderBy('id');
     }
-    
-        public function items()
+
+    public function items()
     {
-        return $this->hasManyThrough(RabPenawaranItem::class, RabPenawaranSection::class);
+        // hasManyThrough eksplisit agar aman terhadap nama FK:
+        // rab_penawaran_sections: rab_penawaran_header_id
+        // rab_penawaran_items   : rab_penawaran_section_id
+        return $this->hasManyThrough(
+            RabPenawaranItem::class,
+            RabPenawaranSection::class,
+            'rab_penawaran_header_id', // FK di tabel sections yang mengarah ke header
+            'rab_penawaran_section_id',// FK di tabel items yang mengarah ke section
+            'id',                       // PK di tabel headers (model ini)
+            'id'                        // PK di tabel sections
+        );
     }
 
     public function schedules()
-    { 
-        return $this->hasMany(\App\Models\RabSchedule::class, 'penawaran_id'); 
+    {
+        return $this->hasMany(\App\Models\RabSchedule::class, 'penawaran_id');
     }
 
     public function scheduleDetails()
-    { 
-        return $this->hasMany(\App\Models\RabScheduleDetail::class, 'penawaran_id'); 
+    {
+        return $this->hasMany(\App\Models\RabScheduleDetail::class, 'penawaran_id');
     }
-    
 }

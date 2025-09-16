@@ -958,8 +958,6 @@ class RabPenawaranController extends Controller
         return back()->with('success', 'Penawaran disetujui (FINAL).');
     }
 
-
-    
     public function generatePdfMixed(Proyek $proyek, RabPenawaranHeader $penawaran)
     {
         // Pastikan relasi yang dibutuhkan sudah diload
@@ -994,5 +992,20 @@ class RabPenawaranController extends Controller
             ->header('Content-Disposition', 'inline; filename="'.$filename.'"');
     }
     
+    public function updateKeterangan(
+        \Illuminate\Http\Request $request,
+        Proyek $proyek,
+        RabPenawaranHeader $penawaran // <- pastikan route-model binding ke header
+    ) {
+        $data = $request->validate([
+            'keterangan' => ['nullable','string']
+        ]);
+
+        // aman walau tidak pakai $fillable
+        $penawaran->keterangan = $data['keterangan'] ?? null;
+        $penawaran->save();
+
+        return back()->with('success', 'Keterangan / Term of Payment berhasil disimpan.');
+    }
 
 }

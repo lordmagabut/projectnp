@@ -172,4 +172,11 @@ Route::middleware(['auth'])->group(function () {
         ->only(['index','create','store','edit','update']);
     // Jika ingin mengizinkan hapus, ganti baris di atas dengan:
     // ->only(['index','create','store','edit','update','destroy']);
+
+    // routes/web.php
+    Route::put(
+    '/proyek/{proyek}/penawaran/{penawaran}/keterangan',
+    [\App\Http\Controllers\RabPenawaranController::class, 'updateKeterangan']
+    )->name('proyek.penawaran.updateKeterangan');
+
 });

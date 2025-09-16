@@ -172,6 +172,44 @@
       <td style="border:none;"><em>{{ $terbilang }} Rupiah</em></td>
     </tr>
   </table>
+  {{-- =======================
+     KETERANGAN / TOP
+   ======================= --}}
+@php
+  $ketLines = preg_split("/\r\n|\n|\r/", (string)($penawaran->keterangan ?? ''));
+  $hasKet   = collect($ketLines)->contains(fn($l)=>trim($l)!=='');
+@endphp
+
+@if($hasKet)
+  <h3 style="margin:12px 0 6px;">KETERANGAN / TERM OF PAYMENT</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:8%;">NO</th>
+        <th>URAIAN</th>
+      </tr>
+    </thead>
+    <tbody>
+      @foreach($ketLines as $line)
+        @continue(trim($line)==='')
+        <tr>
+          <td class="text-end">{{ $loop->iteration }}</td>
+          <td>{{ $line }}</td>
+        </tr>
+      @endforeach
+    </tbody>
+  </table>
+@else
+  <h3 style="margin:12px 0 6px;">KETERANGAN / TERM OF PAYMENT</h3>
+  <table>
+    <tr>
+      <td style="border:1px solid #ddd; padding:6px;">
+        <em class="text-muted">Belum ada keterangan.</em>
+      </td>
+    </tr>
+  </table>
+@endif
+
 
 </body>
 </html>

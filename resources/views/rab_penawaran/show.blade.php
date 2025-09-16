@@ -178,6 +178,49 @@
       </table>
     </div>
 
+
+  {{-- ================================
+  Keterangan / Term of Payment (pakai modal)
+    ================================= --}}
+    <h5 class="mb-3 text-primary">
+      <i class="fas fa-clipboard-list me-2"></i> Keterangan / Term of Payment
+    </h5>
+
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#keteranganModal">
+        <i class="fas fa-pen-to-square me-1"></i> Kelola Keterangan
+      </button>
+      @if(!empty($penawaran->keterangan))
+        <span class="text-muted">Terakhir disimpan.</span>
+      @endif
+    </div>
+
+    {{-- Pratinjau dari server (isi yang tersimpan) --}}
+    <div class="card mb-4">
+      <div class="card-header bg-light">
+        <strong><i class="fas fa-eye me-2"></i>Pratinjau Keterangan</strong>
+      </div>
+      <div class="card-body pt-2">
+        @php
+          $lines = preg_split("/\r\n|\n|\r/", (string)($penawaran->keterangan ?? ''));
+          $hasAny = collect($lines)->contains(fn($l)=>trim($l)!=='');
+        @endphp
+        @if($hasAny)
+          <ul class="mb-0" id="keteranganPreviewServer">
+            @foreach($lines as $line)
+              @if(trim($line)!=='')
+                <li>{{ $line }}</li>
+              @endif
+            @endforeach
+          </ul>
+        @else
+          <em class="text-muted">Belum ada keterangan. Klik “Kelola Keterangan”.</em>
+        @endif
+      </div>
+    </div>
+
+
+
     {{-- ================================
          Detail per Section & Item
        ================================= --}}
@@ -301,10 +344,6 @@
         <i class="fas fa-edit me-1"></i> Edit
       </a>
 
-      <a target="_blank" href="{{ route('proyek.penawaran.generatePdf', ['proyek' => $proyek->id, 'penawaran' => $penawaran->id]) }}" class="btn btn-outline-secondary btn-sm">
-        <i data-feather="printer" class="me-1"></i> PDF (Standar)
-      </a>
-
       <a target="_blank" class="btn btn-outline-primary btn-sm" href="{{ route('proyek.penawaran.pdf-mixed', [$proyek->id, $penawaran->id]) }}">
         PDF (Ringkasan + Detail Landscape)
       </a>
@@ -329,9 +368,106 @@
     </div>
   </div>
 </div>
+
+{{-- Modal Keterangan --}}
+<div class="modal fade" id="keteranganModal" tabindex="-1" aria-labelledby="keteranganModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form action="{{ route('proyek.penawaran.updateKeterangan', [$proyek->id, $penawaran->id]) }}" method="POST">
+        @csrf
+        @method('PUT')
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="keteranganModalLabel">
+            <i class="fas fa-clipboard-list me-2"></i> Kelola Keterangan / Term of Payment
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">Isi keterangan (satu poin per baris)</label>
+            <textarea id="keteranganTextarea" name="keterangan" rows="8"
+              class="form-control @error('keterangan') is-invalid @enderror"
+              placeholder="Contoh:
+Termin 1: DP 30% setelah SPK
+Termin 2: 40% saat progres 50%
+Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? '') }}</textarea>
+            @error('keterangan')
+              <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
+          </div>
+
+          <div class="input-group mb-3">
+            <input type="text" id="quickLineModal" class="form-control" placeholder="Tambah baris cepat (mis. 'Termin 1: DP 30%')">
+            <button type="button" id="addLineBtnModal" class="btn btn-outline-secondary">
+              <i class="fas fa-plus me-1"></i> Tambah Baris
+            </button>
+          </div>
+
+          <div class="border rounded p-2">
+            <div class="small text-muted mb-2"><i class="fas fa-eye me-1"></i>Pratinjau</div>
+            <ul class="mb-0" id="keteranganPreviewLiveModal"></ul>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save me-1"></i> Simpan Keterangan
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 @endsection
 
 @push('custom-scripts')
+
+<script>
+  (function(){
+    const modalEl   = document.getElementById('keteranganModal');
+    const ta        = document.getElementById('keteranganTextarea');
+    const quick     = document.getElementById('quickLineModal');
+    const addBtn    = document.getElementById('addLineBtnModal');
+    const previewUl = document.getElementById('keteranganPreviewLiveModal');
+
+    function renderPreview() {
+      if(!previewUl || !ta) return;
+      previewUl.innerHTML = '';
+      (ta.value || '').split(/\r?\n/).forEach(line=>{
+        if(line.trim()){
+          const li = document.createElement('li');
+          li.textContent = line.trim();
+          previewUl.appendChild(li);
+        }
+      });
+    }
+
+    if(addBtn && quick && ta){
+      addBtn.addEventListener('click', function(){
+        const val = (quick.value || '').trim();
+        if(!val) return;
+        ta.value = (ta.value.trim() ? (ta.value.replace(/\s+$/,'') + '\n') : '') + val;
+        quick.value = '';
+        ta.focus();
+        renderPreview();
+      });
+    }
+
+    if (modalEl) {
+      modalEl.addEventListener('shown.bs.modal', renderPreview);
+      if (ta) ta.addEventListener('input', renderPreview);
+    }
+  })();
+
+  // existing icons & tooltips
+  if (typeof feather !== 'undefined') { feather.replace(); }
+  [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    .map(function (el) { return new bootstrap.Tooltip(el); });
+</script>
 <script>
   if (typeof feather !== 'undefined') { feather.replace(); }
   [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
