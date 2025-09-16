@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8">
   <style>
-    /* Naikkan margin-top agar ruang untuk header cukup */
     @page { size: A4 portrait; margin: 45mm 12mm 15mm; }
 
     body { font-family:'DejaVu Sans', sans-serif; font-size:10px; line-height:1.4; color:#333; }
@@ -13,11 +12,9 @@
     .text-end{ text-align:right; }
     .currency{ white-space:nowrap; }
 
-    /* Header yang tampil di setiap halaman */
     .pdf-header{
       position: fixed;
-      /* angka negatif “menarik” header ke area margin-atas */
-      top: -37mm;   /* silakan geser ±2–3mm kalau perlu */
+      top: -37mm;
       left: 0; right: 0;
     }
     .pdf-header table{ border-collapse: collapse; width: 100%; }
@@ -25,7 +22,6 @@
     .pdf-header th{ width:22%; text-align:left; background:#f2f2f2; white-space:nowrap; }
     .pdf-header td{ text-align:left; }
 
-    /* Supaya judul tabel (thead) ikut terulang di halaman berikutnya */
     thead { display: table-header-group; }
     tfoot { display: table-row-group; }
     tr { page-break-inside: avoid; }
@@ -44,7 +40,6 @@
     </table>
   </div>
 
-  <!-- Judul halaman (boleh tampil di semua halaman, tapi biasanya hanya relevan di awal) -->
   <h2 style="text-align:center;margin:0 0 16px;">RENCANA ANGGARAN BIAYA (RAB)</h2>
 
   @php
@@ -67,6 +62,8 @@
         return terbilang_id(intval($x/1000000000000))." Triliun ".terbilang_id($x%1000000000000);
       }
     }
+
+    // Grouping & subtotal material/jasa per bagian
     $groups = collect($penawaran->sections)->groupBy(function($s){
       $k=(string)optional($s->rabHeader)->kode; return explode('.',$k)[0] ?? $k;
     });
@@ -98,13 +95,12 @@
           foreach ($sec->items as $it) {
             $v=(float)($it->volume ?? 0);
             $groupMat  += (float)($it->harga_material_penawaran_item ?? 0) * $v;
-            $groupJasa += (float)($it->harga_upah_penawaran_item ?? 0) * $v;
+            $groupJasa += (float)($it->harga_upah_penawaran_item     ?? 0) * $v;
           }
         }
         $grandMat += $groupMat; $grandJasa += $groupJasa;
       @endphp
 
-      <!-- Judul kelompok (tanpa angka) -->
       <tr style="background:#f9fbff;">
         <td class="fw-bold">{{ $parentKode }}</td>
         <td colspan="5" class="fw-bold">{{ strtoupper($parentDesc) }}</td>
@@ -120,7 +116,7 @@
           foreach ($sec->items as $it) {
             $v=(float)($it->volume ?? 0);
             $secMat  += (float)($it->harga_material_penawaran_item ?? 0) * $v;
-            $secJasa += (float)($it->harga_upah_penawaran_item ?? 0) * $v;
+            $secJasa += (float)($it->harga_upah_penawaran_item     ?? 0) * $v;
           }
         @endphp
         <tr>
@@ -141,22 +137,34 @@
     @endforeach
     </tbody>
 
-    @php $grandAll=$grandMat+$grandJasa; @endphp
+    @php
+      // TOTAL, PPN, GRAND TOTAL — semuanya di satu tabel (tanpa PPh)
+      $grandAll   = $grandMat + $grandJasa;
+      $ppnRate    = 11; // %
+      $ppn        = $grandAll * ($ppnRate/100);
+      $grandTotal = $grandAll + $ppn;
+      $rf         = fn($n) => 'Rp '.number_format((float)$n, 0, ',', '.');
+    @endphp
+
     <tfoot>
       <tr class="totals-row" style="background:#eef3ff;">
         <td colspan="4" class="text-end"><strong>TOTAL</strong></td>
         <td class="text-end currency"><strong>{!! rupiah_or_blank($grandMat) !!}</strong></td>
         <td class="text-end currency"><strong>{!! rupiah_or_blank($grandJasa) !!}</strong></td>
       </tr>
+      <tr class="totals-row" style="background:#fff;">
+        <td colspan="4" class="text-end"><strong>PPN ({{ $ppnRate }}%)</strong></td>
+        <td colspan="2" class="text-end currency"><strong>{{ $rf($ppn) }}</strong></td>
+      </tr>
       <tr class="totals-row" style="background:#e6f7ff;">
         <td colspan="4" class="text-end"><strong>GRAND TOTAL</strong></td>
-        <td colspan="2" class="text-end currency"><strong>{!! rupiah_or_blank($grandAll) !!}</strong></td>
+        <td colspan="2" class="text-end currency"><strong>{{ $rf($grandTotal) }}</strong></td>
       </tr>
     </tfoot>
   </table>
 
   @php
-    $terbilang = trim(preg_replace('/\s+/', ' ', terbilang_id($grandAll)));
+    $terbilang = trim(preg_replace('/\s+/', ' ', terbilang_id($grandTotal)));
   @endphp
   <table style="border:none; margin-top:6px;">
     <tr>
@@ -164,5 +172,6 @@
       <td style="border:none;"><em>{{ $terbilang }} Rupiah</em></td>
     </tr>
   </table>
+
 </body>
 </html>

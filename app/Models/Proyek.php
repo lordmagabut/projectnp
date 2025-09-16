@@ -46,5 +46,18 @@ class Proyek extends Model
     {
         return $this->hasMany(RabPenawaranHeader::class);
     }
+    
+       public function taxProfiles()
+    {
+        return $this->hasMany(\App\Models\ProyekTaxProfile::class, 'proyek_id');
+    }
+
+    public function taxProfileAktif()
+    {
+        // hanya 1 baris aktif per proyek (sesuai constraint)
+        return $this->hasOne(\App\Models\ProyekTaxProfile::class, 'proyek_id')
+                    ->where('aktif', 1);
+                    // ->withDefault(); // opsional: biar nggak null di Blade
+    }
 
 }

@@ -130,6 +130,91 @@
                   <th><i data-feather="map-pin" class="me-2 text-muted"></i> Lokasi</th>
                   <td>{{ $proyek->lokasi }}</td>
                 </tr>
+
+                @php
+                  $tax = optional($proyek->taxProfileAktif);
+                  $efFrom = $tax->effective_from ? \Carbon\Carbon::parse($tax->effective_from)->format('d-m-Y') : '—';
+                  $efTo   = $tax->effective_to   ? \Carbon\Carbon::parse($tax->effective_to)->format('d-m-Y')   : '— (berlaku terus)';
+                  $ppnRateStr = rtrim(rtrim(number_format((float)($tax->ppn_rate ?? 0), 3, ',', '.'), '0'), ',');
+                  $pphRateStr = rtrim(rtrim(number_format((float)($tax->pph_rate ?? 0), 3, ',', '.'), '0'), ',');
+                @endphp
+
+                <tr>
+                  <th><i data-feather="percent" class="me-2 text-muted"></i> Pajak – PPN</th>
+                  <td>
+                    @if($proyek->taxProfileAktif)
+                      <span class="badge {{ ($tax->is_taxable??false) ? 'bg-success' : 'bg-secondary' }}">
+                        {{ ($tax->is_taxable??false) ? 'Kena PPN' : 'Tidak Kena PPN' }}
+                      </span>
+                      @if($tax->is_taxable)
+                        <span class="ms-2">Mode: 
+                          <span class="badge bg-outline-primary text-primary border">
+                            {{ strtoupper($tax->ppn_mode ?? 'exclude') }}
+                          </span>
+                        </span>
+                        <span class="ms-2">Tarif: <strong>{{ $ppnRateStr }}%</strong></span>
+                      @endif
+                    @else
+                      <span class="text-muted">Belum diset</span>
+                    @endif
+                  </td>
+                </tr>
+
+                <tr>
+                  <th><i data-feather="scissors" class="me-2 text-muted"></i> Pajak – PPh (Jasa)</th>
+                  <td>
+                    @if($proyek->taxProfileAktif)
+                      <span class="badge {{ ($tax->apply_pph??false) ? 'bg-warning text-dark' : 'bg-secondary' }}">
+                        {{ ($tax->apply_pph??false) ? 'Dipungut' : 'Tidak Dipungut' }}
+                      </span>
+                      @if($tax->apply_pph)
+                        <span class="ms-2">Dasar: 
+                          <span class="badge bg-outline-primary text-primary border">
+                            {{ strtoupper($tax->pph_base ?? 'dpp') }}
+                          </span>
+                        </span>
+                        <span class="ms-2">Tarif: <strong>{{ $pphRateStr }}%</strong></span>
+                        <span class="ms-2 small text-muted">(basis DPP JASA)</span>
+                      @endif
+                    @else
+                      <span class="text-muted">Belum diset</span>
+                    @endif
+                  </td>
+                </tr>
+
+                <tr>
+                  <th><i data-feather="calendar" class="me-2 text-muted"></i> Periode Berlaku Profil</th>
+                  <td>
+                    @if($proyek->taxProfileAktif)
+                      <span>Dari <strong>{{ $efFrom }}</strong> s.d. <strong>{{ $efTo }}</strong></span>
+                    @else
+                      <span class="text-muted">Belum diset</span>
+                    @endif
+                  </td>
+                </tr>
+
+                <tr>
+                  <th><i data-feather="hash" class="me-2 text-muted"></i> Pembulatan</th>
+                  <td>
+                    @if($proyek->taxProfileAktif)
+                      <code>{{ $tax->rounding ?? 'HALF_UP' }}</code>
+                    @else
+                      <span class="text-muted">Belum diset</span>
+                    @endif
+                  </td>
+                </tr>
+
+                <tr>
+                  <th><i data-feather="settings" class="me-2 text-muted"></i> Opsi Tambahan</th>
+                  <td>
+                    @if($proyek->taxProfileAktif && !empty($tax->extra_options))
+                      <pre class="mb-0 small">{{ json_encode($tax->extra_options, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE) }}</pre>
+                    @else
+                      <span class="text-muted">—</span>
+                    @endif
+                  </td>
+                </tr>
+
               </tbody>
             </table>
           </div>

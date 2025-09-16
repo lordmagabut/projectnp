@@ -25,6 +25,8 @@ use App\Http\Controllers\HsdUpahController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\UserController;
+// >>> Tambahan: Profil Pajak Proyek
+use App\Http\Controllers\ProyekTaxProfileController;
 
 // =========================
 // Login (tanpa proteksi)
@@ -33,9 +35,8 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-
 // =========================
-// Routes yang diproteksi
+/* Routes yang diproteksi */
 // =========================
 Route::middleware(['auth'])->group(function () {
 
@@ -50,7 +51,6 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/user/{user}', [UserController::class, 'update'])->name('user.update');
     Route::delete('/user/{id}/delete', [UserController::class, 'destroy'])->name('user.destroy');
 
-    // Roles & Permissions (pastikan TIDAK dobel)
     Route::resource('roles', RoleController::class);
     Route::get('users/{user}/roles', [UserController::class, 'editRoles'])->name('users.editRoles');
     Route::put('users/{user}/roles', [UserController::class, 'updateRoles'])->name('users.updateRoles');
@@ -70,7 +70,8 @@ Route::middleware(['auth'])->group(function () {
     // Kalender & Ringkasan Schedule (di tab Schedule)
     Route::get('/proyek/{proyek}/calendar-events', [ProyekController::class, 'calendarEvents'])->name('proyek.calendar.events');
     Route::get('/proyek/{proyek}/schedule-summary-tree', [ProyekController::class, 'scheduleSummaryTree'])->name('proyek.schedule.summary.tree');
-    // Generate Schedule mingguan dari Proyek (lama)
+
+    // Generate Schedule mingguan dari Proyek (legacy)
     Route::post('/proyek/{id}/generate-schedule', [ProyekController::class, 'generateSchedule'])->name('proyek.generateSchedule');
     Route::delete('/proyek/{id}/rab-reset', [ProyekController::class, 'resetRab'])->name('proyek.resetRab');
 
@@ -102,12 +103,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/rab/import',                     [RabController::class, 'import'])->name('rab.import');
     Route::delete('/rab/reset/{proyek_id}',        [RabController::class, 'reset'])->name('rab.reset');
 
-    // ===== RAB template import =====
-    Route::get('/rab/import/template', [\App\Http\Controllers\RabController::class, 'downloadTemplate'])
-    ->name('rab.template');
-    Route::get('/rab/import/template-readme', [\App\Http\Controllers\RabController::class, 'downloadTemplateReadme'])
-    ->name('rab.template.readme');
-
+    // Template import RAB
+    Route::get('/rab/import/template', [RabController::class, 'downloadTemplate'])->name('rab.template');
+    Route::get('/rab/import/template-readme', [RabController::class, 'downloadTemplateReadme'])->name('rab.template.readme');
 
     // ========== RAB Penawaran ==========
     Route::prefix('proyek/{proyek}/penawaran')->name('proyek.penawaran.')->group(function () {
@@ -146,13 +144,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('proyek/{proyek}/schedule-input',  [ScheduleController::class, 'create'])->name('schedule.create');
     Route::post('proyek/{proyek}/schedule-input', [ScheduleController::class, 'store'])->name('schedule.store');
 
-    // ========== PROGRESS (Clean — tanpa duplikasi) ==========
-    // Skema:
-    // GET  /proyek/{proyek}/progress/input                 : form input
-    // POST /proyek/{proyek}/progress                       : simpan draft
-    // GET  /proyek/{proyek}/progress/{progress}            : detail
-    // POST /proyek/{proyek}/progress/{progress}/finalize   : sahkan (final)
-    // DELETE /proyek/{proyek}/progress/{progress}          : hapus
+    // ========== PROGRESS ==========
     Route::prefix('proyek/{proyek}/progress')->name('proyek.progress.')->group(function () {
         Route::get('input',               [RabProgressController::class, 'create'])->name('create');
         Route::post('/',                  [RabProgressController::class, 'store'])->name('store');
@@ -161,12 +153,9 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('{progress}',       [RabProgressController::class, 'destroy'])->name('destroy');
     });
 
-    
-    Route::get(
-        '/proyek/{proyek}/penawaran/{penawaran}/pdf-mixed',
-        [\App\Http\Controllers\RabPenawaranController::class, 'generatePdfMixed']
-      )->name('proyek.penawaran.pdf-mixed');
-      
+    Route::get('/proyek/{proyek}/penawaran/{penawaran}/pdf-mixed',
+        [RabPenawaranController::class, 'generatePdfMixed']
+    )->name('proyek.penawaran.pdf-mixed');
 
     // ========== Akuntansi & Laporan ==========
     Route::get('/jurnal/detail/{id}', [JurnalController::class, 'showDetail'])->name('jurnal.showDetail');
@@ -176,4 +165,11 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/laporan/neraca',    [LaporanController::class, 'neraca'])->name('laporan.neraca');
     Route::get('/laporan/laba-rugi', [LaporanController::class, 'labaRugi'])->name('laporan.labaRugi');
+
+    // ========== Profil Pajak Proyek ==========
+    Route::resource('proyek-tax-profiles', ProyekTaxProfileController::class)
+        ->parameters(['proyek-tax-profiles' => 'profile'])
+        ->only(['index','create','store','edit','update']);
+    // Jika ingin mengizinkan hapus, ganti baris di atas dengan:
+    // ->only(['index','create','store','edit','update','destroy']);
 });
