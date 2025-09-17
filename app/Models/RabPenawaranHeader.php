@@ -22,6 +22,9 @@ class RabPenawaranHeader extends Model
         'area',
         'spesifikasi',
         'keterangan', // <- tambahkan ini
+        'approval_doc_path',     // legacy (boleh tetap ada)
+        'approval_doc_paths',    // baru → menampung banyak file
+        'approved_at',
     ];
 
     protected $casts = [
@@ -31,6 +34,8 @@ class RabPenawaranHeader extends Model
         'discount_amount'         => 'decimal:2',
         'final_total_penawaran'   => 'decimal:2',
         'keterangan'              => 'string',
+        'approval_doc_paths' => 'array',
+        'approved_at'        => 'datetime',
     ];
 
     // --- Relasi ---

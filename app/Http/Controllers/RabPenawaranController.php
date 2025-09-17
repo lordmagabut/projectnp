@@ -3,6 +3,12 @@
 namespace App\Http\Controllers;
 
 use Yajra\DataTables\Facades\DataTables;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
+use iio\libmergepdf\Merger;
+
 use App\Models\Proyek;
 use App\Models\RabHeader;
 use App\Models\RabDetail;
@@ -13,10 +19,6 @@ use App\Models\RabPenawaranSection;
 use App\Models\RabPenawaranItem;
 use App\Models\RabSchedule;
 use App\Models\RabScheduleDetail;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Barryvdh\DomPDF\Facade\Pdf;
-use iio\libmergepdf\Merger;
 
 class RabPenawaranController extends Controller
 {
@@ -950,12 +952,43 @@ class RabPenawaranController extends Controller
         });
     }
 
-    public function approve(Proyek $proyek, RabPenawaranHeader $penawaran)
+    public function approve(Request $request, $proyekId, $penawaranId)
     {
-        if ($penawaran->proyek_id !== $proyek->id) abort(404);
+        $penawaran = \App\Models\RabPenawaranHeader::where('proyek_id', $proyekId)->findOrFail($penawaranId);
 
-        $penawaran->update(['status' => 'final']);
-        return back()->with('success', 'Penawaran disetujui (FINAL).');
+        $request->validate([
+            'approval_files'   => 'required',
+            'approval_files.*' => 'file|mimes:pdf|max:5120', // 5 MB tiap file
+        ], [
+            'approval_files.required'   => 'Unggah minimal 1 file PDF.',
+            'approval_files.*.mimes'    => 'Semua file harus berformat PDF.',
+            'approval_files.*.max'      => 'Ukuran maksimal setiap file 5 MB.',
+        ]);
+
+        $files = $request->file('approval_files', []);
+        if (!is_array($files) || count($files) < 1) {
+            return back()->withErrors(['approval_files' => 'Unggah minimal 1 file PDF.'])->withInput();
+        }
+
+        $paths = [];
+        foreach ($files as $file) {
+            $paths[] = $file->store('penawaran/approval', 'public');
+        }
+
+        // Backward-compat: jika dulu hanya single path, gabungkan
+        $existing = collect($penawaran->approval_doc_paths ?? []);
+        if ($existing->isEmpty() && !empty($penawaran->approval_doc_path)) {
+            $existing = collect([$penawaran->approval_doc_path]);
+        }
+
+        $penawaran->approval_doc_paths = array_values($existing->merge($paths)->unique()->toArray());
+        $penawaran->approved_at = now();
+        $penawaran->status = 'final';
+        $penawaran->save();
+
+        return redirect()
+            ->route('proyek.penawaran.show', [$penawaran->proyek_id, $penawaran->id])
+            ->with('success', 'Penawaran telah difinalkan dan dokumen berhasil diunggah.');
     }
 
     public function generatePdfMixed(Proyek $proyek, RabPenawaranHeader $penawaran)

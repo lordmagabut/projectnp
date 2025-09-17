@@ -20,6 +20,9 @@
   .row-area td{background:#eef8ff;font-weight:600;font-style:italic}
   .spec{display:block;margin-top:4px;font-size:.8rem;color:#6c757d;white-space:pre-line}
 </style>
+<style>
+  .disabled-btn{ pointer-events:none; opacity:.6; cursor:not-allowed; }
+</style>
 @endpush
 
 @section('content')
@@ -339,7 +342,9 @@
       </div>
     @endforeach
 
-    <div class="mt-4 d-flex flex-wrap gap-2">
+    @php $isFinal = ($penawaran->status === 'final'); @endphp
+
+    <div class="mt-4 d-flex flex-wrap gap-2 align-items-center">
       <a href="{{ route('proyek.penawaran.edit', ['proyek' => $proyek->id, 'penawaran' => $penawaran->id]) }}" class="btn btn-warning" data-bs-toggle="tooltip" title="Edit Penawaran">
         <i class="fas fa-edit me-1"></i> Edit
       </a>
@@ -348,24 +353,37 @@
         PDF (Ringkasan + Detail Landscape)
       </a>
 
-      <form method="POST" action="{{ route('proyek.penawaran.approve', [$proyek->id, $penawaran->id]) }}">
-        @csrf
-        <button class="btn btn-success btn-sm" type="submit">
-          <i class="fas fa-check-circle me-1"></i> Setujui
-        </button>
-      </form>
+      {{-- SETUJUI → buka modal upload PDF --}}
+      <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#approveModal">
+        <i class="fas fa-check-circle me-1"></i> Setujui
+      </button>
 
-      <form method="POST" action="{{ route('proyek.penawaran.snapshot', [$proyek->id, $penawaran->id]) }}">
-        @csrf
-        <button class="btn btn-dark btn-sm" type="submit">
+      {{-- Bobot (hanya aktif jika FINAL) --}}
+      @if($isFinal)
+        <form method="POST" action="{{ route('proyek.penawaran.snapshot', [$proyek->id, $penawaran->id]) }}" class="m-0">
+          @csrf
+          <button class="btn btn-dark btn-sm" type="submit" title="Buat Bobot">
+            <i class="fas fa-balance-scale me-1"></i> Bobot
+          </button>
+        </form>
+      @else
+        <button class="btn btn-dark btn-sm disabled-btn" type="button" data-bs-toggle="tooltip" title="Finalkan penawaran (upload PO/WO/SPK) untuk mengakses Bobot">
           <i class="fas fa-balance-scale me-1"></i> Bobot
         </button>
-      </form>
+      @endif
 
-      <a class="btn btn-outline-primary btn-sm" href="{{ route('rabSchedule.index', $proyek->id) }}">
-        <i class="fas fa-calendar-alt me-1"></i> RAB Schedule
-      </a>
+      {{-- RAB Schedule (hanya aktif jika FINAL) --}}
+      @if($isFinal)
+        <a class="btn btn-outline-primary btn-sm" href="{{ route('rabSchedule.index', $proyek->id) }}">
+          <i class="fas fa-calendar-alt me-1"></i> RAB Schedule
+        </a>
+      @else
+        <a class="btn btn-outline-primary btn-sm disabled-btn" href="javascript:void(0)" data-bs-toggle="tooltip" title="Finalkan penawaran (upload PO/WO/SPK) untuk mengakses Schedule">
+          <i class="fas fa-calendar-alt me-1"></i> RAB Schedule
+        </a>
+      @endif
     </div>
+
   </div>
 </div>
 
@@ -421,6 +439,71 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
     </div>
   </div>
 </div>
+
+{{-- Modal Setujui (Multi PDF) --}}
+<div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="{{ route('proyek.penawaran.approve', [$proyek->id, $penawaran->id]) }}" method="POST" enctype="multipart/form-data">
+        @csrf
+        <div class="modal-header">
+          <h5 class="modal-title" id="approveModalLabel">
+            <i class="fas fa-file-upload me-2"></i> Finalisasi Penawaran
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+
+        <div class="modal-body">
+          <p class="mb-2">
+            Unggah <strong>minimal 1 dokumen</strong> <strong>PO/WO/SPK</strong> berformat <strong>PDF</strong>. Setelah final, Anda bisa membuat <em>Bobot</em> dan <em>RAB Schedule</em>.
+          </p>
+
+          <div class="mb-3">
+            <label class="form-label">Dokumen PO/WO/SPK (PDF) <span class="text-danger">*</span></label>
+            <input type="file"
+                   name="approval_files[]"
+                   class="form-control @error('approval_files') is-invalid @enderror @error('approval_files.*') is-invalid @enderror"
+                   accept="application/pdf"
+                   multiple
+                   required>
+            @error('approval_files')
+              <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
+            @error('approval_files.*')
+              <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
+            <div class="form-text">Pilih satu atau beberapa file (PDF, maks 5 MB per file).</div>
+          </div>
+
+          @php
+            $docs = collect($penawaran->approval_doc_paths ?? [])
+              ->when(empty($penawaran->approval_doc_paths ?? null) && !empty($penawaran->approval_doc_path ?? null),
+                fn($c)=>$c->push($penawaran->approval_doc_path));
+          @endphp
+
+          @if($docs->isNotEmpty())
+            <div class="border rounded p-2">
+              <div class="small text-muted mb-1"><i class="fas fa-paperclip me-1"></i>Dokumen yang tersimpan:</div>
+              <ul class="mb-0">
+                @foreach($docs as $p)
+                  <li><a target="_blank" href="{{ Storage::disk('public')->url($p) }}">Lihat PDF</a></li>
+                @endforeach
+              </ul>
+            </div>
+          @endif
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-check me-1"></i> Unggah & Finalkan
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 
 @endsection
 

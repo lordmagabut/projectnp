@@ -73,12 +73,10 @@
   <table>
     <thead>
       <tr>
-        <th style="width:8%;">NO</th>
-        <th>DESKRIPSI</th>
-        <th style="width:17%;">SUB TOTAL MATERIAL</th>
-        <th style="width:17%;">SUB TOTAL JASA</th>
-        <th style="width:17%;">TOTAL MATERIAL</th>
-        <th style="width:17%;">TOTAL JASA</th>
+        <th style="width:10%;">NO</th>
+        <th>DESKRIPSI</th> {{-- diperlebar karena 2 kolom sub-total dihapus --}}
+        <th style="width:20%;">TOTAL MATERIAL</th>
+        <th style="width:20%;">TOTAL JASA</th>
       </tr>
     </thead>
     <tbody>
@@ -101,11 +99,13 @@
         $grandMat += $groupMat; $grandJasa += $groupJasa;
       @endphp
 
+      {{-- Judul kelompok --}}
       <tr style="background:#f9fbff;">
         <td class="fw-bold">{{ $parentKode }}</td>
-        <td colspan="5" class="fw-bold">{{ strtoupper($parentDesc) }}</td>
+        <td colspan="3" class="fw-bold">{{ strtoupper($parentDesc) }}</td> {{-- COLSPAN 3 karna total kolom = 4 --}}
       </tr>
 
+      {{-- Baris sub-section: pindahkan nilai ke kolom TOTAL, hilangkan kolom SUB TOTAL --}}
       @foreach($sections->sortBy(fn($s)=> optional($s->rabHeader)->kode) as $sec)
         @php
           $kode = optional($sec->rabHeader)->kode ?? '';
@@ -124,13 +124,12 @@
           <td>{{ $desc }}</td>
           <td class="text-end currency">{!! rupiah_or_blank($secMat) !!}</td>
           <td class="text-end currency">{!! rupiah_or_blank($secJasa) !!}</td>
-          <td class="text-end currency"></td>
-          <td class="text-end currency"></td>
         </tr>
       @endforeach
 
+      {{-- Total per kelompok: label span 2 kolom (NO + DESKRIPSI) --}}
       <tr class="totals-row">
-        <td colspan="4" class="text-end"><strong>TOTAL {{ strtoupper($parentDesc) }}</strong></td>
+        <td colspan="2" class="text-end"><strong>TOTAL {{ strtoupper($parentDesc) }}</strong></td>
         <td class="text-end currency"><strong>{!! rupiah_or_blank($groupMat) !!}</strong></td>
         <td class="text-end currency"><strong>{!! rupiah_or_blank($groupJasa) !!}</strong></td>
       </tr>
@@ -138,7 +137,7 @@
     </tbody>
 
     @php
-      // TOTAL, PPN, GRAND TOTAL — semuanya di satu tabel (tanpa PPh)
+      // TOTAL, PPN, GRAND TOTAL — satu tabel (tanpa PPh)
       $grandAll   = $grandMat + $grandJasa;
       $ppnRate    = 11; // %
       $ppn        = $grandAll * ($ppnRate/100);
@@ -148,16 +147,16 @@
 
     <tfoot>
       <tr class="totals-row" style="background:#eef3ff;">
-        <td colspan="4" class="text-end"><strong>TOTAL</strong></td>
+        <td colspan="2" class="text-end"><strong>TOTAL</strong></td>
         <td class="text-end currency"><strong>{!! rupiah_or_blank($grandMat) !!}</strong></td>
         <td class="text-end currency"><strong>{!! rupiah_or_blank($grandJasa) !!}</strong></td>
       </tr>
       <tr class="totals-row" style="background:#fff;">
-        <td colspan="4" class="text-end"><strong>PPN ({{ $ppnRate }}%)</strong></td>
+        <td colspan="2" class="text-end"><strong>PPN ({{ $ppnRate }}%)</strong></td>
         <td colspan="2" class="text-end currency"><strong>{{ $rf($ppn) }}</strong></td>
       </tr>
       <tr class="totals-row" style="background:#e6f7ff;">
-        <td colspan="4" class="text-end"><strong>GRAND TOTAL</strong></td>
+        <td colspan="2" class="text-end"><strong>GRAND TOTAL</strong></td>
         <td colspan="2" class="text-end currency"><strong>{{ $rf($grandTotal) }}</strong></td>
       </tr>
     </tfoot>
@@ -172,44 +171,44 @@
       <td style="border:none;"><em>{{ $terbilang }} Rupiah</em></td>
     </tr>
   </table>
+
   {{-- =======================
      KETERANGAN / TOP
-   ======================= --}}
-@php
-  $ketLines = preg_split("/\r\n|\n|\r/", (string)($penawaran->keterangan ?? ''));
-  $hasKet   = collect($ketLines)->contains(fn($l)=>trim($l)!=='');
-@endphp
+     ======================= --}}
+  @php
+    $ketLines = preg_split("/\r\n|\n|\r/", (string)($penawaran->keterangan ?? ''));
+    $hasKet   = collect($ketLines)->contains(fn($l)=>trim($l)!=='');
+  @endphp
 
-@if($hasKet)
   <h3 style="margin:12px 0 6px;">KETERANGAN / TERM OF PAYMENT</h3>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:8%;">NO</th>
-        <th>URAIAN</th>
-      </tr>
-    </thead>
-    <tbody>
-      @foreach($ketLines as $line)
-        @continue(trim($line)==='')
+
+  @if($hasKet)
+    <table>
+      <thead>
         <tr>
-          <td class="text-end">{{ $loop->iteration }}</td>
-          <td>{{ $line }}</td>
+          <th style="width:10%;">NO</th>
+          <th>URAIAN</th>
         </tr>
-      @endforeach
-    </tbody>
-  </table>
-@else
-  <h3 style="margin:12px 0 6px;">KETERANGAN / TERM OF PAYMENT</h3>
-  <table>
-    <tr>
-      <td style="border:1px solid #ddd; padding:6px;">
-        <em class="text-muted">Belum ada keterangan.</em>
-      </td>
-    </tr>
-  </table>
-@endif
-
+      </thead>
+      <tbody>
+        @foreach($ketLines as $line)
+          @continue(trim($line)==='')
+          <tr>
+            <td class="text-end">{{ $loop->iteration }}</td>
+            <td>{{ $line }}</td>
+          </tr>
+        @endforeach
+      </tbody>
+    </table>
+  @else
+    <table>
+      <tr>
+        <td style="border:1px solid #ddd; padding:6px;">
+          <em class="text-muted">Belum ada keterangan.</em>
+        </td>
+      </tr>
+    </table>
+  @endif
 
 </body>
 </html>
