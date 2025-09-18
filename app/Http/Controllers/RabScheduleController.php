@@ -41,80 +41,88 @@ class RabScheduleController extends Controller
         return view('rab_schedule.index', compact('proyek', 'penawarans', 'hasSnapshots', 'hasSetup'));
     }
     
-    // Halaman EDIT schedule: tampilkan header top-level + bobot + input minggu/durasi
-    public function edit(Proyek $proyek, RabPenawaranHeader $penawaran)
-    {
-        $hasSnapshot = \DB::table('rab_penawaran_weight')
-            ->where('penawaran_id', $penawaran->id)
-            ->exists();
-    
-        // Ambil ITEM (level=item) beserta header LEAF (h), PARENT (p = 1.1), ROOT (g = 1)
-        $items = \DB::table('rab_penawaran_weight as w')
-            ->join('rab_penawaran_items as i','i.id','=','w.rab_penawaran_item_id')
-            ->leftJoin('rab_detail as d','d.id','=','i.rab_detail_id')
-            ->leftJoin('rab_header as h','h.id','=','w.rab_header_id')        // leaf
-            ->leftJoin('rab_header as p','p.id','=','h.parent_id')            // parent (1.1)
-            ->leftJoin('rab_header as g','g.id','=','p.parent_id')            // root (1)
-            ->where('w.penawaran_id', $penawaran->id)
-            ->where('w.level','item')
-            ->groupBy(
-                'i.id','d.kode','i.kode','d.deskripsi','i.deskripsi',
-                'h.id','h.kode','h.deskripsi','h.kode_sort',
-                'p.id','p.kode','p.deskripsi','p.kode_sort',
-                'g.id','g.kode','g.deskripsi','g.kode_sort'
-            )
-            ->orderBy('g.kode_sort')
-            ->orderBy('p.kode_sort')
-            ->orderBy('h.kode_sort')
-            ->orderByRaw('COALESCE(d.kode, i.kode)')
-            ->selectRaw('
-                i.id as item_id,
-                COALESCE(d.kode, i.kode)       as kode,
-                COALESCE(d.deskripsi, i.deskripsi) as deskripsi,
-    
-                h.id   as leaf_id,
-                h.kode as leaf_kode,
-                h.deskripsi as leaf_desc,
-                h.kode_sort as leaf_sort,
-    
-                p.id   as parent_id,
-                p.kode as parent_kode,
-                p.deskripsi as parent_desc,
-                p.kode_sort as parent_sort,
-    
-                g.id   as root_id,
-                g.kode as root_kode,
-                g.deskripsi as root_desc,
-                g.kode_sort as root_sort,
-    
-                ROUND(SUM(w.weight_pct_project),4) as pct
-            ')
-            ->get();
-    
-        // setup yg sudah tersimpan per item
-        $existing = \App\Models\RabSchedule::where('proyek_id',$proyek->id)
-            ->where('penawaran_id',$penawaran->id)
-            ->get()->keyBy('rab_penawaran_item_id');
-    
-        // meta tanggal: 1 baris per (proyek, penawaran)
-        $meta = RabScheduleMeta::firstOrCreate(
-            ['proyek_id' => $proyek->id, 'penawaran_id' => $penawaran->id],
-            [
-                'start_date'  => now()->toDateString(),
-                'end_date'    => now()->addWeeks(4)->toDateString(),
-                'total_weeks' => 5,
-            ]
-        );
+   public function edit(Proyek $proyek, RabPenawaranHeader $penawaran)
+{
+    // Cek sudah ada snapshot bobot atau belum
+    $hasSnapshot = \DB::table('rab_penawaran_weight')
+        ->where('penawaran_id', $penawaran->id)
+        ->exists();
 
-        return view('rab_schedule.edit', [
-            'proyek'        => $proyek,
-            'penawaran'     => $penawaran,
-            'hasSnapshot'   => $hasSnapshot,
-            'items'         => $items,
-            'existingSched' => $existing,
-            'meta'          => $meta,    // <-- kirim ke Blade
-        ]);
-    }
+    // ====== SORT WBS: pakai kode_sort dari rab_detail jika ada; fallback: rakit dari kode ====
+    // Pakai agregat (MAX) agar lolos ONLY_FULL_GROUP_BY
+   // … di atas tetap sama
+
+$codeExpr = "COALESCE(d.kode, i.kode)";
+$itemSortExpr = "COALESCE(
+    NULLIF(MAX(d.kode_sort), ''),
+    CONCAT(
+        LPAD(SUBSTRING_INDEX($codeExpr, '.', 1), 4, '0'), '.',
+        LPAD(SUBSTRING_INDEX(SUBSTRING_INDEX($codeExpr, '.', 2), '.', -1), 4, '0'), '.',
+        LPAD(SUBSTRING_INDEX(SUBSTRING_INDEX($codeExpr, '.', 3), '.', -1), 4, '0'), '.',
+        LPAD(SUBSTRING_INDEX(SUBSTRING_INDEX($codeExpr, '.', 4), '.', -1), 4, '0')
+    )
+)";
+
+$items = DB::table('rab_penawaran_weight as w')
+  ->join('rab_penawaran_items as i','i.id','=','w.rab_penawaran_item_id')
+  ->leftJoin('rab_detail as d','d.id','=','i.rab_detail_id')
+  ->leftJoin('rab_header as h','h.id','=','w.rab_header_id')   // leaf
+  ->leftJoin('rab_header as p','p.id','=','h.parent_id')       // parent
+  ->leftJoin('rab_header as g','g.id','=','p.parent_id')       // root
+  ->where('w.penawaran_id', $penawaran->id)
+  ->where('w.level', 'item')
+  ->groupBy(
+      'i.id','d.kode','i.kode','d.deskripsi','i.deskripsi',
+      'h.id','h.kode','h.deskripsi','h.kode_sort',
+      'p.id','p.kode','p.deskripsi','p.kode_sort',
+      'g.id','g.kode','g.deskripsi','g.kode_sort',
+      'i.area'
+  )
+  ->selectRaw("
+      i.id as item_id,
+      $codeExpr as kode,
+      COALESCE(d.deskripsi, i.deskripsi)   as deskripsi,
+
+      h.id   as leaf_id,   h.kode as leaf_kode,   h.deskripsi as leaf_desc,   h.kode_sort as leaf_sort,
+      p.id   as parent_id, p.kode as parent_kode, p.deskripsi as parent_desc, p.kode_sort as parent_sort,
+      g.id   as root_id,   g.kode as root_kode,   g.deskripsi as root_desc,   g.kode_sort as root_sort,
+
+      $itemSortExpr as item_sort,
+      i.area as area,
+      ROUND(SUM(w.weight_pct_project),4) as pct
+  ")
+  ->orderBy('g.kode_sort')
+  ->orderBy('p.kode_sort')
+  ->orderBy('h.kode_sort')
+  ->orderBy('item_sort')   // ⬅️ 2.1.9 lalu 2.1.10 (tidak loncat)
+  ->get();
+
+  
+    // Setup minggu/durasi yang sudah tersimpan per item
+    $existing = \App\Models\RabSchedule::where('proyek_id', $proyek->id)
+        ->where('penawaran_id', $penawaran->id)
+        ->get()
+        ->keyBy('rab_penawaran_item_id');
+
+    // Meta tanggal (1 baris per proyek+penawaran)
+    $meta = \App\Models\RabScheduleMeta::firstOrCreate(
+        ['proyek_id' => $proyek->id, 'penawaran_id' => $penawaran->id],
+        [
+            'start_date'  => now()->toDateString(),
+            'end_date'    => now()->addWeeks(4)->toDateString(),
+            'total_weeks' => 5,
+        ]
+    );
+
+    return view('rab_schedule.edit', [
+        'proyek'        => $proyek,
+        'penawaran'     => $penawaran,
+        'hasSnapshot'   => $hasSnapshot,
+        'items'         => $items,
+        'existingSched' => $existing,
+        'meta'          => $meta,
+    ]);
+}
 
     // Snapshot bobot dari penawaran (dipanggil dari tombol di penawaran.show)
     public function snapshot(Proyek $proyek, RabPenawaranHeader $penawaran)

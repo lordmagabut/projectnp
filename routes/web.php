@@ -178,5 +178,14 @@ Route::middleware(['auth'])->group(function () {
     '/proyek/{proyek}/penawaran/{penawaran}/keterangan',
     [\App\Http\Controllers\RabPenawaranController::class, 'updateKeterangan']
     )->name('proyek.penawaran.updateKeterangan');
+    
+    Route::get('/proyek/{proyek}/penawaran/{penawaran}/approval/view/{encoded}',
+        [RabPenawaranController::class, 'viewApproval'])
+        ->where('encoded', '.*')
+        ->name('proyek.penawaran.approval.view');
 
+    Route::get('/proyek/{proyek}/penawaran/{penawaran}/approval/download/{encoded}',
+        [RabPenawaranController::class, 'downloadApproval'])
+        ->where('encoded', '.*')
+        ->name('proyek.penawaran.approval.download');
 });

@@ -11,6 +11,8 @@
   .table-secondary { background:#f2f5f9 !important; }
   .nowrap { white-space: nowrap; }
   .small-muted { font-size: .8rem; color:#6c757d; }
+
+  .table-area { background:#fff7e6 !important; } /* header area */
 </style>
 @endpush
 
@@ -91,7 +93,7 @@
         </div>
       </div>
 
-      {{-- Tabel setup per item --}}
+      {{-- Tabel setup (grup: TOP → LEAF → AREA → ITEM) --}}
       <div class="table-responsive">
         <table class="table table-bordered table-sm align-middle">
           <thead class="table-light">
@@ -105,15 +107,21 @@
           </thead>
           <tbody>
           @php
-            // Urutkan rapi lalu grup per header TOP (root jika ada; kalau tidak, pakai parent).
-            $sorted = $items->sortBy(function($r){
-                $topSort  = $r->root_sort ?? $r->parent_sort ?? 0;
-                $leafSort = $r->leaf_sort ?? 0;
-                return sprintf('%08d-%08d-%s', $topSort, $leafSort, $r->kode);
+            // Pastikan urutan global stabil: root_sort → leaf_sort → item_sort (dengan area sebagai key tambahan paling belakang)
+            $itemsOrdered = $items->sortBy(function($r){
+              $rootSort = (int) data_get($r, 'root_sort', data_get($r,'parent_sort',0));
+              $leafSort = (int) data_get($r, 'leaf_sort', 0);
+              $itemSort = (string) data_get($r, 'item_sort', data_get($r,'kode',''));
+              $areaKey  = trim((string) data_get($r, 'area', ''));
+              return sprintf('%08d-%08d-%s-%s', $rootSort, $leafSort, $itemSort, $areaKey);
             });
 
-            $groupsTop = $sorted->groupBy(function($r){
-                return $r->root_id ?: $r->parent_id;
+            // Grup TOP (root jika ada; jika tidak, pakai parent)
+            $groupsTop = $itemsOrdered->groupBy(function($r){
+              return data_get($r, 'root_id', data_get($r, 'parent_id'));
+            })->sortBy(function($grp){
+              $f = $grp->first();
+              return (int) data_get($f,'root_sort', data_get($f,'parent_sort',0));
             });
 
             $rowIdx = 0;
@@ -122,44 +130,87 @@
           @foreach($groupsTop as $topId => $rowsTop)
             @php
               $f       = $rowsTop->first();
-              $topKode = $f->root_id ? $f->root_kode : $f->parent_kode;
-              $topDesc = $f->root_id ? $f->root_desc : $f->parent_desc;
+              $topKode = data_get($f, 'root_id') ? data_get($f, 'root_kode') : data_get($f, 'parent_kode');
+              $topDesc = data_get($f, 'root_id') ? data_get($f, 'root_desc') : data_get($f, 'parent_desc');
             @endphp
 
-            {{-- HEADER LEVEL 1 (contoh: "1 - PEKERJAAN PERSIAPAN") --}}
+            {{-- HEADER LEVEL 1 (TOP) --}}
             <tr class="table-primary">
               <td colspan="5" class="fw-bold">{{ $topKode }} — {{ $topDesc }}</td>
             </tr>
 
-            {{-- HEADER LEVEL 2 (contoh: "1.1 - PEKERJAAN SITE", "1.2 - ...") --}}
-            @foreach($rowsTop->groupBy('leaf_id') as $leafId => $rowsLeaf)
+            @php
+              // Grup LEAF di dalam TOP
+              $leafGroups = $rowsTop->groupBy('leaf_id')->sortBy(function($grp){
+                $lf = $grp->first();
+                return (int) data_get($lf, 'leaf_sort', 0);
+              });
+            @endphp
+
+            @foreach($leafGroups as $leafId => $rowsLeaf)
               @php $leaf = $rowsLeaf->first(); @endphp
+
               @if($leafId)
                 <tr class="table-secondary">
-                  <td colspan="5" class="fw-bold">{{ $leaf->leaf_kode }} — {{ $leaf->leaf_desc }}</td>
+                  <td colspan="5" class="fw-bold">{{ data_get($leaf,'leaf_kode') }} — {{ data_get($leaf,'leaf_desc') }}</td>
                 </tr>
               @endif
 
-              {{-- ITEM LEVEL (editable): contoh 1.1.1, 1.1.2 --}}
-              @foreach($rowsLeaf as $it)
-                @php $sch = $existingSched[$it->item_id] ?? null; @endphp
-                <tr>
-                  <td>{{ $it->kode }}</td>
-                  <td>{{ $it->deskripsi }}</td>
-                  <td class="text-end">{{ number_format($it->pct, 2, ',', '.') }}</td>
-                  <td style="max-width:140px;">
-                    <input type="number" min="1" class="form-control form-control-sm"
-                           name="rows[{{ $rowIdx }}][minggu_ke]"
-                           value="{{ old("rows.$rowIdx.minggu_ke", $sch->minggu_ke ?? 1) }}">
+              @php
+                // Grup AREA di dalam Leaf (urutkan alfabetis; '__NOAREA__' diakhir)
+                $byArea = $rowsLeaf->groupBy(function($r){
+                  $a = trim((string) data_get($r,'area',''));
+                  return $a !== '' ? $a : '__NOAREA__';
+                })->sortKeysUsing(function($a,$b){
+                  // '__NOAREA__' selalu di belakang
+                  if ($a === '__NOAREA__' && $b !== '__NOAREA__') return 1;
+                  if ($b === '__NOAREA__' && $a !== '__NOAREA__') return -1;
+                  return strcmp($a,$b);
+                });
+              @endphp
+
+              @foreach($byArea as $areaName => $rowsArea)
+                @php $areaLabel = $areaName === '__NOAREA__' ? 'Tanpa Area' : $areaName; @endphp
+
+                {{-- HEADER AREA --}}
+                <tr class="table-area">
+                  <td colspan="5" class="fw-bold">
+                    <i class="fas fa-layer-group me-1"></i> AREA: {{ $areaLabel }}
                   </td>
-                  <td style="max-width:140px;">
-                    <input type="number" min="1" class="form-control form-control-sm"
-                           name="rows[{{ $rowIdx }}][durasi]"
-                           value="{{ old("rows.$rowIdx.durasi", $sch->durasi ?? 1) }}">
-                  </td>
-                  <input type="hidden" name="rows[{{ $rowIdx }}][rab_penawaran_item_id]" value="{{ $it->item_id }}">
                 </tr>
-                @php $rowIdx++; @endphp
+
+                @php
+                  // Item dalam Area: urut by item_sort (fallback kode)
+                  $rowsAreaOrdered = $rowsArea->sortBy(function($r){
+                    return (string) data_get($r,'item_sort', data_get($r,'kode',''));
+                  });
+                @endphp
+
+                {{-- ITEM (editable) --}}
+                @foreach($rowsAreaOrdered as $it)
+                  @php
+                    $itemId = data_get($it,'item_id');
+                    $sch    = $existingSched[$itemId] ?? null;
+                    $pct    = (float) data_get($it,'pct',0);
+                  @endphp
+                  <tr>
+                    <td class="nowrap">{{ data_get($it,'kode') }}</td>
+                    <td>{{ data_get($it,'deskripsi') }}</td>
+                    <td class="text-end">{{ number_format($pct, 2, ',', '.') }}</td>
+                    <td style="max-width:140px;">
+                      <input type="number" min="1" class="form-control form-control-sm"
+                             name="rows[{{ $rowIdx }}][minggu_ke]"
+                             value="{{ old("rows.$rowIdx.minggu_ke", data_get($sch,'minggu_ke',1)) }}">
+                    </td>
+                    <td style="max-width:140px;">
+                      <input type="number" min="1" class="form-control form-control-sm"
+                             name="rows[{{ $rowIdx }}][durasi]"
+                             value="{{ old("rows.$rowIdx.durasi", data_get($sch,'durasi',1)) }}">
+                    </td>
+                    <input type="hidden" name="rows[{{ $rowIdx }}][rab_penawaran_item_id]" value="{{ $itemId }}">
+                  </tr>
+                  @php $rowIdx++; @endphp
+                @endforeach
               @endforeach
             @endforeach
           @endforeach

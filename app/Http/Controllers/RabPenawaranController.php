@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use iio\libmergepdf\Merger;
+use Illuminate\Support\Str;
 
 use App\Models\Proyek;
 use App\Models\RabHeader;
@@ -1041,4 +1042,27 @@ class RabPenawaranController extends Controller
         return back()->with('success', 'Keterangan / Term of Payment berhasil disimpan.');
     }
 
+    public function viewApproval(Proyek $proyek, RabPenawaranHeader $penawaran, string $encoded)
+    {
+        $path = base64_decode($encoded, true);
+
+        abort_unless($path && is_string($path), 404);
+        // izinkan hanya folder yang kita tentukan
+        abort_unless(Str::startsWith($path, 'penawaran/approval/'), 403);
+        abort_unless(Storage::disk('public')->exists($path), 404);
+
+        // stream PDF ke browser
+        return Storage::disk('public')->response($path);
+    }
+
+    public function downloadApproval(\App\Models\Proyek $proyek, \App\Models\RabPenawaranHeader $penawaran, string $encoded)
+    {
+        $path = base64_decode($encoded, true);
+        abort_unless($path && is_string($path), 404);
+        abort_unless(Str::startsWith($path, 'penawaran/approval/'), 403);
+        abort_unless(Storage::disk('public')->exists($path), 404);
+
+        // Paksa unduh
+        return Storage::disk('public')->download($path);
+    }
 }

@@ -118,12 +118,19 @@
     </tr>
   @else
     @php
-      $id       = $it->id;
-      $bobot    = (float)($it->bobot ?? ($bobotMap[$id] ?? 0));  // % proyek utk item
-      $targetCum = (float)($plannedToMap[$id] ?? 0);             // target kumulatif s/d minggu N
-      $prevArr  = $prevMap[$id] ?? ['prev_bobot_pct_project'=>0.0,'prev_pct_of_item'=>0.0];
-      $prevPct  = (float)$prevArr['prev_pct_of_item'];           // % terhadap item
-      $prevProj = (float)$prevArr['prev_bobot_pct_project'];     // % terhadap proyek
+      $id        = $it->id;
+      $bobot     = (float)($it->bobot ?? ($bobotMap[$id] ?? 0));   // % proyek utk item
+      $targetCum = (float)($plannedToMap[$id] ?? 0);               // target kumulatif s/d minggu N
+      $prevArr   = $prevMap[$id] ?? ['prev_bobot_pct_project'=>0.0,'prev_pct_of_item'=>0.0];
+      $prevPct   = (float)$prevArr['prev_pct_of_item'];            // % terhadap item (kumulatif < N)
+      $prevProj  = (float)$prevArr['prev_bobot_pct_project'];      // % terhadap proyek (kumulatif < N)
+
+      // Nilai default untuk input: jika tidak ada old(), isi dengan progress s/d minggu lalu
+      $inputDefault = old('details_pct.'.$id);
+      if ($inputDefault === null) {
+          // gunakan titik sebagai desimal karena <input type="number"> lang="en"
+          $inputDefault = number_format($prevPct, 2, '.', '');
+      }
     @endphp
 
     <tr data-row="item"
@@ -143,12 +150,12 @@
       {{-- input progress sekarang (kumulatif % terhadap item) --}}
       <td>
         <input type="number"
-              inputmode="decimal" lang="en"
-              step="0.01" min="0" max="100"
-              class="form-control form-control-sm text-end input-pct"
-              name="details_pct[{{ $id }}]"
-              value="{{ old('details_pct.'.$id) ?? '' }}"
-              placeholder="0.00">
+               inputmode="decimal" lang="en"
+               step="0.01" min="0" max="100"
+               class="form-control form-control-sm text-end input-pct"
+               name="details_pct[{{ $id }}]"
+               value="{{ $inputDefault }}"
+               placeholder="0.00">
 
         {{-- kirim referensi yang dipakai di layar, pastikan titik sebagai desimal --}}
         <input type="hidden" name="bobot_item[{{ $id }}]" value="{{ number_format($bobot,   6, '.', '') }}">
@@ -165,7 +172,7 @@
 @endforelse
         </tbody>
 
-        {{-- FOOTER: total per kolom (target kumulatif, bobot s/d minggu lalu, bobot saat ini, delta bobot) --}}
+        {{-- FOOTER: total per kolom --}}
         <tfoot class="table-light">
           <tr>
             <th colspan="3" class="text-end">TOTAL</th>
@@ -193,26 +200,34 @@
 @push('custom-scripts')
 <script>
 (function(){
-  const fmt = n => (Number(n||0)).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmt  = n => (Number(n||0)).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});
   const deID = s => { if (s==null) return 0; const t=String(s).replace(/\./g,'').replace(',', '.'); const v=parseFloat(t); return isNaN(v)?0:v; };
 
   function recalcRow(tr){
-    const bobot     = parseFloat(tr.dataset.bobot || 0);   // % proyek (item)
-    const prevPct   = parseFloat(tr.dataset.prevpct || 0); // % item
-    const realPrev  = parseFloat(tr.dataset.realprev || 0);// % proyek
+    const bobot    = parseFloat(tr.dataset.bobot    || 0); // % proyek (item)
+    const prevPct  = parseFloat(tr.dataset.prevpct  || 0); // % item s/d minggu lalu
+    const prevProj = parseFloat(tr.dataset.realprev || 0); // % proyek s/d minggu lalu
+    const target   = parseFloat(tr.dataset.target   || 0); // target kumulatif ≤ minggu ini
 
     const inp = tr.querySelector('.input-pct');
-    let pct = parseFloat(inp?.value || 0);
+    let pct  = parseFloat(inp?.value || 0);
     if (isNaN(pct)) pct = 0;
     pct = Math.max(0, Math.min(100, pct)); // clamp 0..100
 
-    const nowBobot   = bobot * pct / 100;       // % proyek
-    const deltaPct   = pct - prevPct;           // % item
-    const deltaBobot = Math.max(0, nowBobot - realPrev); // jangan kurangi progres
+    const nowBobot   = bobot * pct / 100;                 // % proyek (kumulatif saat ini)
+    const deltaPct   = pct - prevPct;                     // % item minggu ini
+    const deltaBobot = Math.max(0, nowBobot - prevProj);  // jangan kurangi progres
 
     tr.querySelector('.now-bobot').textContent   = fmt(nowBobot);
     tr.querySelector('.delta-pct').textContent   = fmt(deltaPct);
     tr.querySelector('.delta-bobot').textContent = fmt(deltaBobot);
+
+    // ===== Conditional formatting =====
+    // 1) Saat load, jika target > prev_bobot → kuning (kita tertinggal).
+    // 2) Saat user ubah nilai, kuning tetap sampai now_bobot >= target.
+    const cellNow = tr.querySelector('.now-bobot'); // ini adalah <td>
+    const needWarn = target > nowBobot;             // warna berdasarkan posisi terbaru
+    cellNow.classList.toggle('cf-warn', needWarn);
   }
 
   function recalcTotal(){
@@ -231,6 +246,7 @@
     const elDP = document.getElementById('tot-delta-pct'); if (elDP) elDP.textContent = fmt(tDP);
   }
 
+  // Inisialisasi (akan otomatis warnai sesuai kondisi awal)
   document.querySelectorAll('#tbl-progress tbody tr[data-row="item"]').forEach(tr=>{
     recalcRow(tr);
     tr.querySelector('.input-pct')?.addEventListener('input', ()=>{ recalcRow(tr); recalcTotal(); });
@@ -238,6 +254,12 @@
   recalcTotal();
 })();
 </script>
+
+
+<style>
+  /* conditional formatting */
+  .cf-warn { background:#fff3cd !important; color:#664d03; }
+</style>
 <style>
   #tbl-progress .table-secondary td{ font-weight:600; }
   #tbl-progress td, #tbl-progress th { vertical-align: middle; }

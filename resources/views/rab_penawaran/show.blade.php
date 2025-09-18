@@ -384,6 +384,49 @@
       @endif
     </div>
 
+    @php
+      $savedDocs = collect($penawaran->approval_doc_paths ?? [])
+          ->when(empty($penawaran->approval_doc_paths ?? null) && !empty($penawaran->approval_doc_path ?? null),
+              fn($c)=>$c->push($penawaran->approval_doc_path))
+          ->filter(fn($p)=>trim((string)$p) !== '');
+    @endphp
+
+    @if($savedDocs->isNotEmpty())
+      <div class="card mt-3 mb-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+          <strong><i class="fas fa-paperclip me-2"></i>Dokumen PO/WO/SPK</strong>
+          <span class="badge bg-primary">{{ $savedDocs->count() }} file</span>
+        </div>
+        <div class="card-body pt-2">
+          <ul class="list-unstyled mb-0">
+            @foreach($savedDocs as $i => $p)
+              @php
+                $name = pathinfo($p, PATHINFO_BASENAME) ?: 'Dokumen #'.($i+1);
+                $encoded = base64_encode($p);
+              @endphp
+              <li class="mb-2 d-flex align-items-center">
+                <i class="fas fa-file-pdf me-2 text-danger"></i>
+                <span class="me-2">{{ $name }}</span>
+
+                {{-- Lihat (inline) --}}
+                <a class="btn btn-sm btn-outline-secondary me-2"
+                  target="_blank"
+                  href="{{ route('proyek.penawaran.approval.view', [$proyek->id, $penawaran->id, 'encoded' => $encoded]) }}">
+                  <i class="fas fa-eye me-1"></i> Lihat
+                </a>
+
+                {{-- Unduh --}}
+                <a class="btn btn-sm btn-outline-primary"
+                  href="{{ route('proyek.penawaran.approval.download', [$proyek->id, $penawaran->id, 'encoded' => $encoded]) }}">
+                  <i class="fas fa-download me-1"></i> Unduh
+                </a>
+              </li>
+            @endforeach
+          </ul>
+        </div>
+      </div>
+    @endif
+
   </div>
 </div>
 
