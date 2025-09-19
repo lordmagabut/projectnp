@@ -342,6 +342,105 @@
       </div>
     @endforeach
 
+    {{-- ================================
+     Filter Item ala Excel
+================================ --}}
+@php
+  // Flatten semua item supaya gampang difilter di sisi klien
+  $flatItems = [];
+  foreach ($penawaran->sections as $sec) {
+    $hdrKode = $sec->rabHeader->kode ?? '';
+    $hdrNama = $sec->rabHeader->deskripsi ?? '';
+    foreach (($sec->items ?? []) as $it) {
+      $vol      = (float)($it->volume ?? 0);
+      $unitMat  = (float)($it->harga_material_penawaran_item ?? 0);
+      $unitJasa = (float)($it->harga_upah_penawaran_item ?? 0);
+      $flatItems[] = [
+        'kode'        => (string)$it->kode,
+        'uraian'      => (string)($it->deskripsi ?? ''),
+        'spesifikasi' => (string)($it->spesifikasi ?? ''),
+        'area'        => (string)($it->area ?? ''),
+        'header_kode' => (string)$hdrKode,
+        'header_nama' => (string)$hdrNama,
+        'volume'      => $vol,
+        'satuan'      => (string)($it->satuan ?? ''),
+        'unit_mat'    => $unitMat,
+        'unit_jasa'   => $unitJasa,
+        'tot_mat'     => $unitMat * $vol,
+        'tot_jasa'    => $unitJasa * $vol,
+      ];
+    }
+  }
+@endphp
+
+<div class="card mb-4 animate__animated animate__fadeInUp">
+  <div class="card-header bg-light d-flex align-items-center justify-content-between">
+    <h5 class="mb-0 text-primary">
+      <i class="fas fa-filter me-2"></i> Pekerjaan Per Item
+    
+    </h5>
+  </div>
+  <div class="card-body">
+    <div class="row g-2 align-items-end mb-3">
+      <div class="col-md-6">
+        <label class="form-label">Ketik kata kunci (contoh: <code>plafond</code>)</label>
+        <input id="excelLikeQuery" type="text" class="form-control" placeholder="Cari di kode, uraian, spesifikasi, atau area…">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Mode Pencarian</label>
+        <select id="excelLikeMode" class="form-select">
+          <option value="any">Mengandung salah satu kata</option>
+          <option value="all" selected>Harus mengandung semua kata</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-4">
+          <input class="form-check-input" type="checkbox" value="1" id="excelLikeUseDiscount" checked>
+          <label class="form-check-label" for="excelLikeUseDiscount">
+            Gunakan diskon global ({{ number_format($discPct,2,',','.') }}%)
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover table-bordered table-sm align-middle" id="tbl-excel-like">
+        <thead class="table-light">
+          <tr>
+            <th style="width:10%">Kode</th>
+            <th>Uraian / Spesifikasi</th>
+            <th style="width:10%">Area</th>
+            <th class="text-end" style="width:10%">Volume</th>
+            <th style="width:8%">Sat</th>
+            <th class="text-end" style="width:12%">Total Material</th>
+            <th class="text-end" style="width:12%">Total Jasa</th>
+            <th class="text-end" style="width:12%">Total (Mat+Jasa)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="8" class="text-center text-muted py-3">Ketik kata kunci untuk menampilkan hasil…</td></tr>
+        </tbody>
+        <tfoot class="table-light">
+          <tr>
+            <td colspan="5" class="text-end fw-semibold">TOTAL HASIL</td>
+            <td class="text-end fw-semibold" id="excelLikeTotMat">Rp 0</td>
+            <td class="text-end fw-semibold" id="excelLikeTotJasa">Rp 0</td>
+            <td class="text-end fw-bold"     id="excelLikeTotAll">Rp 0</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+    <div class="small text-muted mt-2">
+      Tips: pisahkan banyak kata kunci dengan spasi (mis. <code>plafon gypsum</code>). Mode “Semua kata” akan mencari item yang mengandung <em>kedua</em> kata.
+    </div>
+  </div>
+</div>
+
+
     @php $isFinal = ($penawaran->status === 'final'); @endphp
 
     <div class="mt-4 d-flex flex-wrap gap-2 align-items-center">
@@ -551,6 +650,95 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
 @endsection
 
 @push('custom-scripts')
+
+<script>
+(function(){
+  const ALL_ITEMS = @json($flatItems);   // pastikan tiap item hanya punya: kode, uraian, spesifikasi, area, volume, satuan, tot_mat, tot_jasa
+  const DISC_COEF = {{ json_encode($discCoef) }};
+
+  const qEl   = document.getElementById('excelLikeQuery');
+  const modeEl= document.getElementById('excelLikeMode');
+  const discEl= document.getElementById('excelLikeUseDiscount');
+  const tbody = document.querySelector('#tbl-excel-like tbody');
+  const totM  = document.getElementById('excelLikeTotMat');
+  const totJ  = document.getElementById('excelLikeTotJasa');
+  const totA  = document.getElementById('excelLikeTotAll');
+
+  const fmtRp = n => 'Rp ' + (Number(n||0)).toLocaleString('id-ID', {maximumFractionDigits:0});
+  const esc   = s => (s||'').replace(/[&<>"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+  const mark  = (text, tokens) => {
+    if (!tokens.length) return esc(text||'');
+    let out = esc(text||'');
+    tokens.forEach(t=>{
+      if(!t) return;
+      const re = new RegExp('('+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig');
+      out = out.replace(re, '<mark>$1</mark>');
+    });
+    return out;
+  };
+
+  function filterAndRender(){
+    if(!tbody) return;
+
+    const raw = (qEl?.value || '').trim();
+    const tokens = raw.split(/\s+/).filter(Boolean);
+    const mode   = modeEl?.value || 'all';
+    const useDisc= !!discEl?.checked;
+
+    if (!tokens.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Ketik kata kunci untuk menampilkan hasil…</td></tr>';
+      totM.textContent = fmtRp(0); totJ.textContent = fmtRp(0); totA.textContent = fmtRp(0);
+      return;
+    }
+
+    let sumM=0, sumJ=0, sumA=0, rows=[];
+
+    ALL_ITEMS.forEach(it=>{
+      // cari pada: kode, uraian, spesifikasi, area
+      const bucket = [
+        it.kode, it.uraian, it.spesifikasi, it.area
+      ].join(' ').toLowerCase();
+
+      const ok = (mode==='any')
+        ? tokens.some(t=>bucket.includes(t.toLowerCase()))
+        : tokens.every(t=>bucket.includes(t.toLowerCase()));
+      if (!ok) return;
+
+      const coef = useDisc ? DISC_COEF : 1.0;
+      const tMat = (it.tot_mat || 0) * coef;
+      const tJas = (it.tot_jasa || 0) * coef;
+      const tAll = tMat + tJas;
+
+      sumM += tMat; sumJ += tJas; sumA += tAll;
+
+      rows.push(`
+        <tr>
+          <td>${mark(it.kode, tokens)}</td>
+          <td>
+            <div class="fw-semibold">${mark(it.uraian, tokens)}</div>
+            ${it.spesifikasi ? `<div class="text-muted small">${mark(it.spesifikasi, tokens)}</div>` : ``}
+          </td>
+          <td>${mark(it.area, tokens)}</td>
+          <td class="text-end">${(it.volume ?? 0).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+          <td>${esc(it.satuan)}</td>
+          <td class="text-end">${fmtRp(tMat)}</td>
+          <td class="text-end">${fmtRp(tJas)}</td>
+          <td class="text-end fw-semibold">${fmtRp(tAll)}</td>
+        </tr>
+      `);
+    });
+
+    tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="8" class="text-center text-muted py-3">Tidak ada item yang cocok.</td></tr>';
+    totM.textContent = fmtRp(sumM);
+    totJ.textContent = fmtRp(sumJ);
+    totA.textContent = fmtRp(sumA);
+  }
+
+  qEl?.addEventListener('input',  filterAndRender);
+  modeEl?.addEventListener('change', filterAndRender);
+  discEl?.addEventListener('change', filterAndRender);
+})();
+</script>
 
 <script>
   (function(){

@@ -25,8 +25,8 @@ use App\Http\Controllers\HsdUpahController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\UserController;
-// >>> Tambahan: Profil Pajak Proyek
 use App\Http\Controllers\ProyekTaxProfileController;
+use App\Http\Controllers\BappController;
 
 // =========================
 // Login (tanpa proteksi)
@@ -188,4 +188,16 @@ Route::middleware(['auth'])->group(function () {
         [RabPenawaranController::class, 'downloadApproval'])
         ->where('encoded', '.*')
         ->name('proyek.penawaran.approval.download');
+
+
+    Route::prefix('proyek/{proyek}')->group(function () {
+        Route::get('bapp',                [BappController::class,'index'])->name('bapp.index');
+        Route::get('bapp/create',         [BappController::class, 'create'])->name('bapp.create');
+        Route::post('bapp',               [BappController::class,'store'])->name('bapp.store');
+        Route::get('bapp/{bapp}',         [BappController::class, 'show'])->name('bapp.show');
+        Route::get('bapp/{bapp}/pdf',     [BappController::class,'pdf'])->name('bapp.pdf'); // view/download PDF
+        Route::post('bapp/{bapp}/submit', [BappController::class,'submit'])->name('bapp.submit');
+        Route::post('bapp/{bapp}/approve',[BappController::class,'approve'])->name('bapp.approve');
+        Route::delete('bapp/{bapp}',      [BappController::class, 'destroy'])->name('bapp.destroy');
+        });
 });

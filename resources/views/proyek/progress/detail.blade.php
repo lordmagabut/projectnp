@@ -139,6 +139,26 @@
         Untuk menyelesaikan proses, klik tombol <strong>Sahkan</strong> di kanan atas.
       </div>
     @endif
+
+    @php
+      $existingBapp = \App\Models\Bapp::where('proyek_id', $proyek->id)
+        ->where('penawaran_id', $progress->penawaran_id)
+        ->where('minggu_ke', $progress->minggu_ke)
+        ->first();
+    @endphp
+
+    @if($progress->status === 'final' && !$existingBapp)
+      <a class="btn btn-sm btn-outline-primary"
+        href="{{ route('bapp.create', ['proyek' => $proyek->id, 'penawaran_id' => $progress->penawaran_id, 'minggu_ke' => $progress->minggu_ke]) }}">
+        Terbitkan BAPP
+      </a>
+    @elseif($existingBapp)
+      <a class="btn btn-sm btn-primary" href="{{ route('bapp.show', [$proyek->id, $existingBapp->id]) }}">
+        Lihat BAPP
+      </a>
+    @endif
   </div>
 </div>
+
+
 @endsection

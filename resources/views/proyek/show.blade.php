@@ -54,7 +54,15 @@
             <i data-feather="trending-up" class="me-1"></i> Progress
           </a>
         </li>
+        <li class="nav-item flex-grow-1 flex-md-grow-0 text-center" role="presentation">
+          <a class="nav-link" id="bapp-tab" data-bs-toggle="tab" href="#bappContent" role="tab"
+            aria-controls="bappContent" aria-selected="false">
+            <i data-feather="file-text" class="me-1"></i> BAPP
+          </a>
+        </li>
       </ul>
+
+
 
       {{-- ==== Resolve penawaran aktif utk semua tab ==== --}}
       @php
@@ -498,6 +506,154 @@
   </div>
 </div>
 
+
+
+      {{-- =======================
+     Tab BAPP (Index)
+======================= --}}
+@php
+  // pakai penawaran yang sama dengan tab lain
+  $bappPenawaranId = ($selectedId ?? null)
+      ?? request('penawaran_id')
+      ?? optional($finalPenawarans->last())->id;
+
+  // ambil daftar BAPP untuk proyek (dan filter penawaran bila dipilih)
+  $bapps = \App\Models\Bapp::with('penawaran')
+      ->where('proyek_id', $proyek->id)
+      ->when($bappPenawaranId, fn($q)=>$q->where('penawaran_id', $bappPenawaranId))
+      ->orderByDesc('tanggal_bapp')->orderByDesc('id')
+      ->get();
+
+  $fmt = fn($n)=>number_format((float)$n, 2, ',', '.');
+@endphp
+
+<div class="tab-pane fade" id="bappContent" role="tabpanel">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h5 class="mb-0 d-flex align-items-center">
+      <i data-feather="file-text" class="me-2"></i>
+      Daftar BAPP
+    </h5>
+
+    @if($finalPenawarans->isNotEmpty())
+      <form method="GET" action="{{ route('proyek.show', $proyek->id) }}" class="d-flex align-items-center gap-2">
+        <input type="hidden" name="tab" value="bapp">
+        <select name="penawaran_id" class="form-select form-select-sm" onchange="this.form.submit()">
+          @foreach($finalPenawarans as $p)
+            <option value="{{ $p->id }}" {{ (int)$p->id === (int)$bappPenawaranId ? 'selected' : '' }}>
+              {{ $p->nama_penawaran }} ({{ \Carbon\Carbon::parse($p->tanggal_penawaran)->format('d/m/y') }})
+            </option>
+          @endforeach
+        </select>
+        <noscript><button class="btn btn-primary btn-sm">Tampilkan</button></noscript>
+      </form>
+    @endif
+  </div>
+
+  <div class="mb-3">
+    <span class="badge rounded-pill text-bg-light border">
+      <i class="me-1" data-feather="briefcase"></i>
+      Penawaran: {{ optional($finalPenawarans->firstWhere('id',$bappPenawaranId))->nama_penawaran ?? ('#'.$bappPenawaranId) }}
+    </span>
+    <a class="btn btn-sm btn-outline-primary ms-2"
+       href="{{ route('bapp.index', $proyek->id) }}">
+      Kelola di Halaman BAPP
+    </a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover table-bordered table-sm align-middle" id="tbl-bapp">
+      <thead class="table-light">
+        <tr>
+          <th style="width:4%">#</th>
+          <th>Nomor BAPP</th>
+          <th style="width:10%">Tanggal</th>
+          <th style="width:8%">Minggu</th>
+          <th>Penawaran</th>
+          <th class="text-end" style="width:12%">Prog. s/d Lalu (%)</th>
+          <th class="text-end" style="width:12%">Prog. Minggu Ini (%)</th>
+          <th class="text-end" style="width:12%">Prog. Saat Ini (%)</th>
+          <th class="text-center" style="width:10%">Status</th>
+          <th class="text-center" style="width:16%">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        @forelse($bapps as $i => $b)
+          <tr>
+            <td>{{ $i+1 }}</td>
+            <td class="text-nowrap">{{ $b->nomor_bapp }}</td>
+            <td>{{ \Carbon\Carbon::parse($b->tanggal_bapp)->format('d-m-Y') }}</td>
+            <td class="text-nowrap">Minggu ke-{{ $b->minggu_ke }}</td>
+            <td>{{ $b->penawaran?->nama_penawaran ?? '-' }}</td>
+            <td class="text-end">{{ $fmt($b->total_prev_pct) }}</td>
+            <td class="text-end text-info fw-semibold">{{ $fmt($b->total_delta_pct) }}</td>
+            <td class="text-end text-primary fw-semibold">{{ $fmt($b->total_now_pct) }}</td>
+            <td class="text-center">
+              @switch($b->status)
+                @case('draft')     <span class="badge bg-warning text-dark">Draft</span> @break
+                @case('submitted') <span class="badge bg-info text-dark">Submitted</span> @break
+                @case('approved')  <span class="badge bg-success">Approved</span> @break
+                @default           <span class="badge bg-secondary">{{ ucfirst($b->status) }}</span>
+              @endswitch
+            </td>
+            <td class="text-center">
+              <a href="{{ route('bapp.show', [$proyek->id, $b->id]) }}"
+                 class="btn btn-sm btn-outline-teal me-1">
+                <i data-feather="eye" class="me-1"></i> Detail
+              </a>
+              @if($b->file_pdf_path)
+                <a target="_blank" href="{{ route('bapp.pdf', [$proyek->id, $b->id]) }}"
+                   class="btn btn-sm btn-outline-primary me-1">
+                  <i data-feather="download" class="me-1"></i> PDF
+                </a>
+              @endif
+
+              @if($b->status === 'draft')
+                <form method="POST" action="{{ route('bapp.submit', [$proyek->id, $b->id]) }}" class="d-inline">
+                  @csrf
+                  <button class="btn btn-sm btn-primary">
+                    <i data-feather="send" class="me-1"></i> Submit
+                  </button>
+                </form>
+              @elseif($b->status === 'submitted')
+                <form method="POST" action="{{ route('bapp.approve', [$proyek->id, $b->id]) }}" class="d-inline"
+                      onsubmit="return confirm('Setujui BAPP {{ $b->nomor_bapp }}?');">
+                  @csrf
+                  <button class="btn btn-sm btn-success">
+                    <i data-feather="check-circle" class="me-1"></i> Approve
+                  </button>
+                </form>
+              @endif
+
+              {{-- tombol HAPUS: hanya jika belum approved --}}
+              @if($b->status !== 'approved')
+                <form method="POST"
+                      action="{{ route('bapp.destroy', [$proyek->id, $b->id]) }}"
+                      class="d-inline"
+                      onsubmit="return confirm('Hapus BAPP {{ $b->nomor_bapp }}? Tindakan ini tidak dapat dibatalkan.');">
+                  @csrf
+                  @method('DELETE')
+                  {{-- supaya kembali ke halaman & tab yang sama --}}
+                  <input type="hidden" name="redirect_to" value="{{ request()->fullUrl() }}">
+                  <button class="btn btn-sm btn-danger">
+                    <i data-feather="trash-2" class="me-1"></i> Hapus
+                  </button>
+                </form>
+              @endif
+
+            </td>
+          </tr>
+        @empty
+          <tr><td colspan="10" class="text-center text-muted py-3">Belum ada BAPP untuk penawaran ini.</td></tr>
+        @endforelse
+      </tbody>
+    </table>
+  </div>
+
+  <div class="alert alert-secondary mt-3 mb-0 small">
+    Untuk menerbitkan BAPP, buka tab <strong>Progress</strong> &rarr; pilih minggu yang ingin ditagihkan &rarr; klik
+    <em>Terbitkan BAPP</em> pada halaman detail progress.
+  </div>
+</div>
       </div> {{-- End tab-content --}}
     </div> {{-- End card tab panel --}}
   </div> {{-- End card-body --}}
@@ -589,6 +745,21 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     calendar.render();
   }
+    // DataTable untuk daftar BAPP
+  const bappTbl = document.getElementById('tbl-bapp');
+  if (bappTbl && window.jQuery && jQuery.fn.dataTable) {
+    jQuery(bappTbl).DataTable({
+      responsive: true,
+      pageLength: 10,
+      order: [[2, 'desc']], // sort Tanggal desc
+      columnDefs: [
+        { targets: [5,6,7], className: 'text-end' },
+        { targets: [8,9], orderable: false }
+      ],
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/id.json' }
+    });
+  }
+
 
   // ===== Ringkasan Tree (AJAX) =====
   const PENAWARAN_ID = @json($currentPenawaranId ?? null);
