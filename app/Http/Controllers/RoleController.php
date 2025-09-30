@@ -3,84 +3,69 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission; // Kita akan butuh ini untuk mengelola izin yang terkait dengan peran
+use Spatie\Permission\Models\Permission;
 
 class RoleController extends Controller
 {
     public function __construct()
     {
-        // Anda bisa menambahkan middleware di sini untuk melindungi akses ke halaman ini
-        // Misalnya, hanya admin yang bisa mengakses
-        $this->middleware('permission:manage roles'); // Pastikan Anda membuat permission 'manage roles'
+        // Sesuaikan dengan izin yang kamu pakai
+        $this->middleware('permission:manage roles');
     }
 
-    /**
-     * Menampilkan daftar semua peran.
-     */
     public function index()
     {
-        $roles = Role::all();
-        return view('roles.index', compact('roles'));
+        // roles + relasi permissions untuk tampil di tabel
+        $roles = Role::with('permissions')->get();
+
+        // daftar semua permissions untuk checkbox di modal create/edit
+        $permissions = Permission::all();
+
+        return view('roles.index', compact('roles', 'permissions'));
     }
 
-    /**
-     * Menampilkan formulir untuk membuat peran baru.
-     */
-    public function create()
-    {
-        $permissions = Permission::all(); // Ambil semua izin untuk ditampilkan di formulir
-        return view('roles.create', compact('permissions'));
-    }
-
-    /**
-     * Menyimpan peran baru ke database.
-     */
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|unique:roles,name',
-            'permissions' => 'nullable|array',
+        // hidden input "form=create" dari modal akan otomatis ikut ke old() saat gagal
+        $validated = $request->validate([
+            'name'         => 'required|string|max:255|unique:roles,name',
+            'permissions'  => 'nullable|array',
+            'permissions.*'=> 'exists:permissions,name',
         ]);
 
-        $role = Role::create(['name' => $request->name]);
-        $role->syncPermissions($request->permissions); // Berikan izin yang dipilih ke peran
+        $role = Role::create(['name' => $validated['name']]);
 
-        return redirect()->route('roles.index')->with('success', 'Peran berhasil ditambahkan!');
+        if (!empty($validated['permissions'])) {
+            $role->syncPermissions($validated['permissions']);
+        }
+
+        return redirect()->route('roles.index')->with('success', 'Peran berhasil dibuat.');
     }
 
-    /**
-     * Menampilkan formulir untuk mengedit peran yang sudah ada.
-     */
-    public function edit(Role $role) // Menggunakan Route Model Binding
-    {
-        $permissions = Permission::all();
-        $rolePermissions = $role->permissions->pluck('name')->toArray(); // Izin yang sudah dimiliki peran
-        return view('roles.edit', compact('role', 'permissions', 'rolePermissions'));
-    }
-
-    /**
-     * Memperbarui peran di database.
-     */
     public function update(Request $request, Role $role)
     {
-        $request->validate([
-            'name' => 'required|unique:roles,name,' . $role->id,
-            'permissions' => 'nullable|array',
+        // hidden input "form=edit" + "role_id" juga akan ikut saat gagal
+        $validated = $request->validate([
+            'name'         => ['required','string','max:255', Rule::unique('roles','name')->ignore($role->id)],
+            'permissions'  => 'nullable|array',
+            'permissions.*'=> 'exists:permissions,name',
         ]);
 
-        $role->update(['name' => $request->name]);
-        $role->syncPermissions($request->permissions); // Sinkronkan izin
+        $role->name = $validated['name'];
+        $role->save();
 
-        return redirect()->route('roles.index')->with('success', 'Peran berhasil diperbarui!');
+        // sinkron permissions
+        $role->syncPermissions($validated['permissions'] ?? []);
+
+        return redirect()->route('roles.index')->with('success', 'Peran berhasil diperbarui.');
     }
 
-    /**
-     * Menghapus peran dari database.
-     */
     public function destroy(Role $role)
     {
+        // Hapus peran (Spatie akan menghapus pivot role_has_permissions & model_has_roles)
         $role->delete();
-        return redirect()->route('roles.index')->with('success', 'Peran berhasil dihapus!');
+        return redirect()->route('roles.index')->with('success', 'Peran berhasil dihapus.');
     }
 }

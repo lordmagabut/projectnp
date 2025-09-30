@@ -38,9 +38,6 @@ class ProyekController extends Controller
 
     public function create()
     {
-        if (auth()->user()->buat_proyek != 1) {
-            abort(403, 'Anda tidak memiliki izin untuk menambah proyek.');
-        }
         $pemberiKerja = PemberiKerja::all();
         return view('proyek.create', compact('pemberiKerja'));
     }

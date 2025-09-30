@@ -64,7 +64,7 @@
       @endcan
 
       <li class="nav-item nav-category">Master Data</li>
-
+      @can('manage barang')
       <li class="nav-item {{ active_class(['barang/*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#barangMenu" role="button"
           aria-expanded="{{ is_active_route(['barang/*']) }}" aria-controls="barangMenu">
@@ -80,7 +80,8 @@
           </ul>
         </div>
       </li>
- 
+      @endcan
+      @can('manage coa')
       <li class="nav-item {{ active_class(['coa/*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#coaMenu" role="button"
           aria-expanded="{{ is_active_route(['coa/*']) }}" aria-controls="coaMenu">
@@ -96,7 +97,8 @@
           </ul>
         </div>
       </li>
- 
+      @endcan
+      @can('manage supplier') 
       <li class="nav-item {{ active_class(['supplier/*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#supplierMenu" role="button"
           aria-expanded="{{ is_active_route(['supplier/*']) }}" aria-controls="supplierMenu">
@@ -112,7 +114,8 @@
           </ul>
         </div>
       </li>
-
+      @endcan
+      @can('manage pelanggan')
       <li class="nav-item {{ active_class(['pemberiKerja/*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#pemberiKerjaMenu" role="button"
           aria-expanded="{{ is_active_route(['pemberiKerja/*']) }}" aria-controls="pemberiKerjaMenu">
@@ -128,9 +131,8 @@
           </ul>
         </div>
       </li>
-
+      @endcan 
       <li class="nav-item nav-category">Operasional</li>
-
       <li class="nav-item {{ active_class(['proyek/*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#proyekMenu" role="button"
           aria-expanded="{{ is_active_route(['proyek/*']) }}" aria-controls="proyekMenu">
@@ -140,10 +142,12 @@
         </a>
         <div class="collapse {{ show_class(['proyek/*']) }}" id="proyekMenu">
           <ul class="nav sub-menu">
+            @can('manage proyek')
             <li class="nav-item">
               <a href="{{ route('proyek.index') }}"
                 class="nav-link {{ active_class(['proyek']) }}">Daftar Proyek</a>
             </li>
+            @endcan
             @can ('manage ahsp')
             <li class="nav-item">
               <a href="{{ route('ahsp.index') }}"
@@ -261,37 +265,5 @@
         </a>
       </li>
     </ul>
-  </div>
-</nav>
-<nav class="settings-sidebar">
-  <div class="sidebar-body">
-    <a href="#" class="settings-sidebar-toggler">
-      <i data-feather="settings"></i>
-    </a>
-    <h6 class="text-muted mb-2">Sidebar:</h6>
-    <div class="mb-3 pb-3 border-bottom">
-      <div class="form-check form-check-inline">
-        <label class="form-check-label">
-          <input type="radio" class="form-check-input" name="sidebarThemeSettings" id="sidebarLight" value="sidebar-light" checked>
-          Light
-        </label>
-      </div>
-      <div class="form-check form-check-inline">
-        <label class="form-check-label">
-          <input type="radio" class="form-check-input" name="sidebarThemeSettings" id="sidebarDark" value="sidebar-dark">
-          Dark
-        </label>
-      </div>
-    </div>
-    <div class="theme-wrapper">
-      <h6 class="text-muted mb-2">Light Version:</h6>
-      <a class="theme-item active" href="https://www.nobleui.com/laravel/template/demo1/">
-        <img src="{{ url('assets/images/screenshots/light.jpg') }}" alt="light version">
-      </a>
-      <h6 class="text-muted mb-2">Dark Version:</h6>
-      <a class="theme-item" href="https://www.nobleui.com/laravel/template/demo2/">
-        <img src="{{ url('assets/images/screenshots/dark.jpg') }}" alt="light version">
-      </a>
-    </div>
   </div>
 </nav>

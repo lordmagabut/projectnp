@@ -7,11 +7,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class CekAksesProyek
-{   
+{
     public function handle(Request $request, Closure $next)
     {
-        if (!Auth::check() || Auth::user()->akses_proyek != 1) {
-            abort(403, 'Anda tidak memiliki akses ke menu proyek.');
+        // Harus login & punya permission "manage proyek"
+        if (!Auth::check() || !Auth::user()->can('manage proyek')) {
+            abort(403, 'Anda tidak memiliki izin untuk mengelola proyek.');
         }
 
         return $next($request);
