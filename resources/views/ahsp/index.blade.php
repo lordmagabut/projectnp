@@ -86,11 +86,13 @@
         <i class="fas fa-hand-holding-usd me-2"></i> Upah
     </button>
   </li>
+  @can('manage ahsp')
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="ahsp-tab" data-bs-toggle="tab" data-bs-target="#ahspContent" type="button" role="tab" aria-controls="ahspContent" aria-selected="false">
         <i class="fas fa-chart-pie me-2"></i> Analisa (AHSP)
     </button>
   </li>
+  @endcan
 </ul>
 
 <div class="tab-content mt-3">
@@ -215,6 +217,7 @@
   </div>
 
   {{-- Tab AHSP --}}
+  @can('manage ahsp')
   <div class="tab-pane fade animate__animated animate__fadeIn" id="ahspContent" role="tabpanel" aria-labelledby="ahsp-tab">
     <div class="card animate__animated animate__fadeInUp animate__faster">
       <div class="card-body">
@@ -313,6 +316,7 @@
       </div>
     </div>
   </div>
+  @endcan
 </div>
 
 {{-- Modal Konfirmasi Hapus Material --}}

@@ -144,10 +144,12 @@
               <a href="{{ route('proyek.index') }}"
                 class="nav-link {{ active_class(['proyek']) }}">Daftar Proyek</a>
             </li>
+            @can ('manage ahsp')
             <li class="nav-item">
               <a href="{{ route('ahsp.index') }}"
                 class="nav-link {{ active_class(['proyek']) }}">AHSP</a>
             </li>
+            @endcan
           </ul>
         </div>
       </li>
