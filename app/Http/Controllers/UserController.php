@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -17,7 +18,25 @@ class UserController extends Controller
 
     public function index()
     {
-        $users = User::with('roles')->get();
+        $users = User::query()
+            ->with('roles')
+            ->withCount('activityLogs as logs_count')
+            ->addSelect([
+                'last_login_at' => ActivityLog::select('created_at')
+                    ->whereColumn('activity_logs.user_id', 'users.id')
+                    ->where('event', 'login')
+                    ->orderByDesc('created_at')->limit(1),
+                'last_login_ip' => ActivityLog::select('ip_address')
+                    ->whereColumn('activity_logs.user_id', 'users.id')
+                    ->where('event', 'login')
+                    ->orderByDesc('created_at')->limit(1),
+                'last_device' => ActivityLog::select('device_name')
+                    ->whereColumn('activity_logs.user_id', 'users.id')
+                    ->where('event', 'login')
+                    ->orderByDesc('created_at')->limit(1),
+            ])
+            ->get();
+
         return view('user.index', compact('users'));
     }
 
@@ -119,5 +138,31 @@ class UserController extends Controller
 
         $user->delete();
         return redirect()->route('user.index')->with('success', 'Pengguna berhasil dihapus!');
+    }
+
+    public function logs(User $user, Request $request)
+    {
+        // Ambil 50 log terakhir; bisa ditambah pencarian sederhana dari query 'q'
+        $logs = ActivityLog::where('user_id', $user->id)
+            ->when($request->filled('q'), function($q) use ($request) {
+                $term = $request->q;
+                $q->where(function($w) use ($term){
+                    $w->where('event', 'like', "%{$term}%")
+                    ->orWhere('description', 'like', "%{$term}%")
+                    ->orWhere('ip_address', 'like', "%{$term}%")
+                    ->orWhere('device_name', 'like', "%{$term}%");
+                });
+            })
+            ->latest()
+            ->limit(50)
+            ->get();
+
+        $lastLogin = ActivityLog::where('user_id', $user->id)
+            ->where('event', 'login')
+            ->latest()
+            ->first();
+
+        // Kembalikan partial HTML (bukan full layout) untuk dimasukkan ke modal
+        return view('user.partials.logs', compact('user','logs','lastLogin'));
     }
 }

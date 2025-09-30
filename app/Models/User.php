@@ -99,6 +99,12 @@ class User extends Authenticatable
         }
     }
 
+    public function activityLogs()
+    {
+        return $this->hasMany(\App\Models\ActivityLog::class, 'user_id');
+    }
+
+
     /**
      * Helper untuk mendeteksi keberadaan kolom username tanpa bikin query berat.
      * Cache statis per request agar tidak cek berulang.

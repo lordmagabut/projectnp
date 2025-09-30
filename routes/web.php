@@ -51,6 +51,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/user/{user}/edit', [UserController::class, 'edit'])->name('user.edit');
     Route::put('/user/{user}', [UserController::class, 'update'])->name('user.update');
     Route::delete('/user/{id}/delete', [UserController::class, 'destroy'])->name('user.destroy');
+    Route::get('/user/{user}/logs', [UserController::class, 'logs'])->name('user.logs');
 
     Route::resource('roles', RoleController::class);
     Route::get('users/{user}/roles', [UserController::class, 'editRoles'])->name('users.editRoles');
