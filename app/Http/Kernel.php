@@ -71,6 +71,7 @@ class Kernel extends HttpKernel
         'cek_akses_coa' => \App\Http\Middleware\CekAksesCoa::class,
         'cek_akses_po' => \App\Http\Middleware\CekAksesPo::class,
         'cek_akses_jurnal' => \App\Http\Middleware\CekAksesJurnal::class,
+        'activity' => \App\Http\Middleware\ActivityLogMiddleware::class,
      
         'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
         'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,

@@ -27,6 +27,7 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProyekTaxProfileController;
 use App\Http\Controllers\BappController;
+use App\Http\Controllers\ProfileController;
 
 // =========================
 // Login (tanpa proteksi)
@@ -200,4 +201,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('bapp/{bapp}/approve',[BappController::class,'approve'])->name('bapp.approve');
         Route::delete('bapp/{bapp}',      [BappController::class, 'destroy'])->name('bapp.destroy');
         });
+
+    // ========== Profil & Ganti Password ==========
+    Route::get('/general/profile', [\App\Http\Controllers\ProfileController::class,'show'])
+    ->name('profile.show')
+    ->middleware('auth');
 });
