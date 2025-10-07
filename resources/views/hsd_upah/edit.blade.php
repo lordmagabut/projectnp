@@ -4,7 +4,9 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h4 class="card-title">Edit Upah / Tukang</h4>
-        <a href="{{ route('hsd-upah.index') }}" class="btn btn-sm btn-secondary">← Kembali</a>
+        <a href="{{ route('ahsp.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill d-inline-flex align-items-center">
+            <i data-feather="arrow-left" class="me-1"></i> Kembali ke Daftar
+        </a>
     </div>
     <div class="card-body">
         <form action="{{ route('hsd-upah.update', $upah->id) }}" method="POST">
