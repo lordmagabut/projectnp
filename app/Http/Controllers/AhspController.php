@@ -8,6 +8,7 @@ use App\Models\AhspDetail;
 use App\Models\AhspKategori;
 use App\Models\HsdMaterial;
 use App\Models\HsdUpah;
+use App\Models\ActivityLog;           // <-- tambahkan
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -45,22 +46,14 @@ class AhspController extends Controller
 
         DB::beginTransaction();
         try {
-            $total_harga_sebenarnya = 0; // Ini akan menjadi total_harga
+            $total_harga_sebenarnya = 0;
 
-            // Hitung total harga sebenarnya dari komponen (di sisi server untuk keamanan)
             foreach ($request->items as $item) {
-                $harga_satuan = 0;
+                $harga_satuan = $item['tipe'] === 'material'
+                    ? HsdMaterial::findOrFail($item['referensi_id'])->harga_satuan
+                    : HsdUpah::findOrFail($item['referensi_id'])->harga_satuan;
 
-                if ($item['tipe'] === 'material') {
-                    $data = HsdMaterial::findOrFail($item['referensi_id']);
-                    $harga_satuan = $data->harga_satuan;
-                } else {
-                    $data = HsdUpah::findOrFail($item['referensi_id']);
-                    $harga_satuan = $data->harga_satuan;
-                }
-
-                $subtotal = $harga_satuan * $item['koefisien'];
-                $total_harga_sebenarnya += $subtotal;
+                $total_harga_sebenarnya += ($harga_satuan * $item['koefisien']);
             }
 
             $rounded = (int) ceil($total_harga_sebenarnya / 1000) * 1000;
@@ -70,35 +63,46 @@ class AhspController extends Controller
                 'nama_pekerjaan' => $request->nama_pekerjaan,
                 'satuan'         => $request->satuan,
                 'kategori_id'    => $request->kategori_id,
-                'total_harga'    => $total_harga_sebenarnya, // Total sebenarnya
-                'total_harga_pembulatan' => $rounded, // <- hitung di server
+                'total_harga'    => $total_harga_sebenarnya,
+                'total_harga_pembulatan' => $rounded,
                 'is_locked'      => false,
             ]);
 
             foreach ($request->items as $item) {
-                $harga_satuan = 0;
+                $harga_satuan = $item['tipe'] === 'material'
+                    ? HsdMaterial::findOrFail($item['referensi_id'])->harga_satuan
+                    : HsdUpah::findOrFail($item['referensi_id'])->harga_satuan;
 
-                if ($item['tipe'] === 'material') {
-                    $data = HsdMaterial::findOrFail($item['referensi_id']);
-                    $harga_satuan = $data->harga_satuan;
-                } else {
-                    $data = HsdUpah::findOrFail($item['referensi_id']);
-                    $harga_satuan = $data->harga_satuan;
-                }
-
-                $subtotal = $harga_satuan * $item['koefisien'];
-                
                 AhspDetail::create([
                     'ahsp_id'      => $header->id,
                     'tipe'         => $item['tipe'],
                     'referensi_id' => $item['referensi_id'],
                     'koefisien'    => $item['koefisien'],
-                    'harga_satuan' => $harga_satuan, // Harga satuan dari material/upah
-                    'subtotal'     => $subtotal,
+                    'harga_satuan' => $harga_satuan,
+                    'subtotal'     => $harga_satuan * $item['koefisien'],
                 ]);
             }
 
             DB::commit();
+
+            // === LOG: create ===
+            ActivityLog::create([
+                'user_id'     => auth()->id(),
+                'event'       => 'ahsp_create',
+                'description' => sprintf(
+                    'Buat AHSP %s - %s; satuan: %s; kategori_id: %s; items: %d; total: %s; pembulatan: %s',
+                    $header->kode_pekerjaan,
+                    $header->nama_pekerjaan,
+                    $header->satuan,
+                    $header->kategori_id ?? '—',
+                    count($request->items),
+                    number_format($header->total_harga, 0, ',', '.'),
+                    number_format($header->total_harga_pembulatan, 0, ',', '.')
+                ),
+                'ip_address'  => $request->ip(),
+                'user_agent'  => $request->userAgent(),
+            ]);
+
             return redirect()->route('ahsp.index', ['tab' => 'ahsp'])->with('success', 'Data AHSP berhasil disimpan.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -135,7 +139,20 @@ class AhspController extends Controller
             return redirect()->route('ahsp.index')->with('error', 'Data sudah digunakan dan tidak dapat dihapus.');
         }
 
+        $kode = $ahsp->kode_pekerjaan;
+        $nama = $ahsp->nama_pekerjaan;
+
         $ahsp->delete();
+
+        // === LOG: delete ===
+        ActivityLog::create([
+            'user_id'     => auth()->id(),
+            'event'       => 'ahsp_delete',
+            'description' => sprintf('Hapus AHSP %s - %s', $kode, $nama),
+            'ip_address'  => request()->ip(),
+            'user_agent'  => request()->userAgent(),
+        ]);
+
         return redirect()->route('ahsp.index', ['tab' => 'ahsp'])->with('success', 'Data AHSP berhasil dihapus.');
     }
 
@@ -159,20 +176,20 @@ class AhspController extends Controller
             'total_harga_pembulatan' => 'required|numeric|min:0',
         ]);
 
+        // simpan nilai sebelum update untuk log
+        $beforeTotal   = $ahsp->total_harga;
+        $beforeRounded = $ahsp->total_harga_pembulatan;
+        $beforeItems   = $ahsp->details->count();
+
         DB::beginTransaction();
         try {
-            $total_harga_sebenarnya = 0; // Ini akan menjadi total_harga
-            // Hitung total harga sebenarnya dari komponen (di sisi server untuk keamanan)
-            foreach ($request->items as $item) {
-                $harga_satuan = 0;
+            $total_harga_sebenarnya = 0;
 
-                if ($item['tipe'] === 'material') {
-                    $data = \App\Models\HsdMaterial::findOrFail($item['referensi_id']);
-                    $harga_satuan = $data->harga_satuan;
-                } else {
-                    $data = \App\Models\HsdUpah::findOrFail($item['referensi_id']);
-                    $harga_satuan = $data->harga_satuan;
-                }
+            foreach ($request->items as $item) {
+                $harga_satuan = $item['tipe'] === 'material'
+                    ? HsdMaterial::findOrFail($item['referensi_id'])->harga_satuan
+                    : HsdUpah::findOrFail($item['referensi_id'])->harga_satuan;
+
                 $total_harga_sebenarnya += ($harga_satuan * $item['koefisien']);
             }
 
@@ -183,36 +200,53 @@ class AhspController extends Controller
                 'nama_pekerjaan' => $request->nama_pekerjaan,
                 'satuan'         => $request->satuan,
                 'kategori_id'    => $request->kategori_id,
-                'total_harga'    => $total_harga_sebenarnya, // Total sebenarnya
-                'total_harga_pembulatan' =>$rounded, // <- hitung di server
+                'total_harga'    => $total_harga_sebenarnya,
+                'total_harga_pembulatan' => $rounded,
             ]);
 
-            $ahsp->details()->delete(); // hapus semua detail lama
+            // reset detail
+            $ahsp->details()->delete();
 
             foreach ($request->items as $item) {
-                $harga_satuan = 0;
+                $harga_satuan = $item['tipe'] === 'material'
+                    ? HsdMaterial::findOrFail($item['referensi_id'])->harga_satuan
+                    : HsdUpah::findOrFail($item['referensi_id'])->harga_satuan;
 
-                if ($item['tipe'] === 'material') {
-                    $data = \App\Models\HsdMaterial::findOrFail($item['referensi_id']);
-                    $harga_satuan = $data->harga_satuan;
-                } else {
-                    $data = \App\Models\HsdUpah::findOrFail($item['referensi_id']);
-                    $harga_satuan = $data->harga_satuan;
-                }
-
-                $subtotal = $harga_satuan * $item['koefisien'];
-                
                 AhspDetail::create([
                     'ahsp_id'      => $ahsp->id,
                     'tipe'         => $item['tipe'],
                     'referensi_id' => $item['referensi_id'],
                     'koefisien'    => $item['koefisien'],
                     'harga_satuan' => $harga_satuan,
-                    'subtotal'     => $subtotal,
+                    'subtotal'     => $harga_satuan * $item['koefisien'],
                 ]);
             }
 
             DB::commit();
+
+            // refresh & logging
+            $ahsp->refresh();
+            $afterItems = $ahsp->details()->count();
+
+            // === LOG: update ===
+            ActivityLog::create([
+                'user_id'     => auth()->id(),
+                'event'       => 'ahsp_update',
+                'description' => sprintf(
+                    'Update AHSP %s - %s; total: %s → %s; pembulatan: %s → %s; items: %d → %d',
+                    $ahsp->kode_pekerjaan,
+                    $ahsp->nama_pekerjaan,
+                    number_format($beforeTotal, 0, ',', '.'),
+                    number_format($ahsp->total_harga, 0, ',', '.'),
+                    number_format($beforeRounded, 0, ',', '.'),
+                    number_format($ahsp->total_harga_pembulatan, 0, ',', '.'),
+                    $beforeItems,
+                    $afterItems
+                ),
+                'ip_address'  => $request->ip(),
+                'user_agent'  => $request->userAgent(),
+            ]);
+
             return redirect()->route('ahsp.index', ['tab' => 'ahsp'])->with('success', 'Data AHSP berhasil diperbarui.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -223,50 +257,53 @@ class AhspController extends Controller
     public function duplicate($id)
     {
         $originalAhsp = AhspHeader::with('details')->find($id);
-    
+
         if (!$originalAhsp) {
             return redirect()->back()->with('error', 'AHSP yang ingin diduplikasi tidak ditemukan.');
         }
-    
-        DB::beginTransaction(); // Mulai transaksi
+
+        DB::beginTransaction();
         try {
-            // Duplikasi AhspHeader
             $newAhsp = $originalAhsp->replicate();
-            // Buat kode unik baru yang lebih kuat, misalnya dengan Str::random
             $newAhsp->kode_pekerjaan = $originalAhsp->kode_pekerjaan . '_copy_' . Str::random(4);
             $newAhsp->nama_pekerjaan = $originalAhsp->nama_pekerjaan . ' (Salinan)';
-            $newAhsp->is_locked = false; // Salinan harus dalam status tidak terkunci
+            $newAhsp->is_locked = false;
             $newAhsp->save();
-    
-            // Duplikasi AhspDetail
+
             foreach ($originalAhsp->details as $detail) {
                 $newDetail = $detail->replicate();
-                $newDetail->ahsp_id = $newAhsp->id; // Hubungkan ke AhspHeader yang baru
+                $newDetail->ahsp_id = $newAhsp->id;
                 $newDetail->save();
             }
-    
-            DB::commit(); // Selesaikan transaksi jika berhasil
+
+            DB::commit();
+
+            // === LOG: duplicate ===
+            ActivityLog::create([
+                'user_id'     => auth()->id(),
+                'event'       => 'ahsp_duplicate',
+                'description' => sprintf(
+                    'Duplikasi AHSP %s → %s (%s)',
+                    $originalAhsp->kode_pekerjaan,
+                    $newAhsp->kode_pekerjaan,
+                    $newAhsp->nama_pekerjaan
+                ),
+                'ip_address'  => request()->ip(),
+                'user_agent'  => request()->userAgent(),
+            ]);
+
             return redirect()->route('ahsp.index')->with('success', 'AHSP berhasil diduplikasi menjadi: ' . $newAhsp->nama_pekerjaan);
-    
         } catch (\Exception $e) {
-            DB::rollBack(); // Batalkan transaksi jika terjadi kesalahan
+            DB::rollBack();
             return redirect()->back()->with('error', 'Gagal menduplikasi AHSP: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Metode untuk mencari AHSP berdasarkan query dan kategori_id.
-     * Digunakan oleh Select2 AJAX di RabInput Livewire component.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    // App\Http\Controllers\AhspController.php
-
+    // AJAX Select2
     public function search(Request $request)
     {
-        $q = \App\Models\AhspHeader::query();
-    
+        $q = AhspHeader::query();
+
         if ($request->filled('search')) {
             $term = '%'.$request->search.'%';
             $q->where(function ($w) use ($term) {
@@ -274,13 +311,13 @@ class AhspController extends Controller
                   ->orWhere('nama_pekerjaan', 'like', $term);
             });
         }
-    
-        if ($request->filled('id'))        $q->where('id', $request->id);
+
+        if ($request->filled('id'))          $q->where('id', $request->id);
         if ($request->filled('kategori_id')) $q->where('kategori_id', $request->kategori_id);
-    
+
         $rows = $q->orderBy('kode_pekerjaan')->limit(50)
           ->get(['id','kode_pekerjaan','nama_pekerjaan','satuan','total_harga','total_harga_pembulatan']);
-    
+
         return response()->json([
             'results' => $rows->map(function ($a) {
                 $rounded = (int) ($a->total_harga_pembulatan ?? ceil(($a->total_harga ?? 0)/1000)*1000);
@@ -293,6 +330,4 @@ class AhspController extends Controller
             }),
         ]);
     }
-    
-
 }
