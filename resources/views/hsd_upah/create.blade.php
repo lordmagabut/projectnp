@@ -35,7 +35,9 @@
             </div>
 
             <button type="submit" class="btn btn-primary">Simpan</button>
-            <a href="{{ route('hsd-upah.index') }}" class="btn btn-secondary">Kembali</a>
+                            <a href="{{ route('ahsp.index') }}" class="btn btn-secondary">
+                    <i class="fas fa-times-circle me-1"></i> Batal
+                </a>
         </form>
     </div>
 </div>
