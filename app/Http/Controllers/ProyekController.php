@@ -20,7 +20,8 @@ use App\Models\RabScheduleDetail;
 use App\Models\RabProgress;
 use App\Models\RabScheduleMeta;
 use App\Models\RabPenawaranItem;
-use App\Models\ProyekTaxProfile; // <<< Tambahan
+use App\Models\ProyekTaxProfile;
+use App\Models\RabProgressDetail;
 
 use App\Services\ProyekService;
 use App\Helpers\FileUploadHelper;
@@ -47,29 +48,22 @@ class ProyekController extends Controller
     ========================= */
     public function store(Request $request)
     {
-        // Validasi field proyek (existing via service)
         $validated = ProyekService::validateRequest($request);
 
-        // Upload file SPK (opsional) – siapkan sebelum transaksi
         if ($request->hasFile('file_spk')) {
             $validated['file_spk'] = FileUploadHelper::upload($request->file('file_spk'), 'spk');
         }
 
-        // Validasi & normalisasi payload pajak (namespace tax[...])
         $taxInput = $this->validateTaxPayload($request->input('tax', []));
         $taxData  = $this->normalizeTax($taxInput);
-        // default aktif = true (sesuai blade create yang set hidden 1)
         $taxData['aktif'] = $taxData['aktif'] ?? true;
 
         DB::transaction(function () use ($validated, $taxData) {
-            // 1) Buat proyek
             $proyek = Proyek::create($validated);
 
-            // 2) Buat profil pajak aktif untuk proyek tsb
             if (!empty($taxData)) {
-                // pastikan hanya 1 aktif per proyek
                 ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->update(['aktif' => 0]);
-                $taxData['proyek_id'] = $proyek->id;
+                $taxData['proyek_id']  = $proyek->id;
                 $taxData['created_by'] = auth()->id();
                 $taxData['updated_by'] = auth()->id();
                 ProyekTaxProfile::create($taxData);
@@ -87,7 +81,7 @@ class ProyekController extends Controller
         if (auth()->user()->edit_proyek != 1) {
             abort(403, 'Anda tidak memiliki izin untuk edit proyek.');
         }
-        $proyek = Proyek::with('taxProfileAktif')->findOrFail($id); // <<< eager load profil pajak aktif
+        $proyek = Proyek::with('taxProfileAktif')->findOrFail($id);
         $pemberiKerja = PemberiKerja::all();
         return view('proyek.edit', compact('proyek', 'pemberiKerja'));
     }
@@ -97,9 +91,7 @@ class ProyekController extends Controller
     ========================= */
     public function update(Request $request, $id)
     {
-        $proyek = Proyek::findOrFail($id);
-
-        // Validasi & hitung existing behavior
+        $proyek  = Proyek::findOrFail($id);
         $validated = ProyekService::validateUpdateRequest($request);
         $hitung    = ProyekService::hitungKontrak($proyek, $request);
 
@@ -108,24 +100,20 @@ class ProyekController extends Controller
             'nilai_kontrak' => $hitung['nilai_kontrak'],
         ]);
 
-        // Validasi & normalisasi pajak
         $taxInput = $this->validateTaxPayload($request->input('tax', []));
         $taxData  = $this->normalizeTax($taxInput);
         if (!array_key_exists('aktif', $taxData)) {
-            $taxData['aktif'] = true; // dari form kita selalu kirim aktif=1
+            $taxData['aktif'] = true;
         }
 
         DB::transaction(function () use ($proyek, $request, $data, $taxData) {
-            // 1) Update proyek
             $proyek->update($data);
 
-            // 1a) Status otomatis
             $proyek->status = ($request->tanggal_mulai && $request->tanggal_selesai && $proyek->status === 'perencanaan')
                 ? 'berjalan'
                 : ($request->status ?? $proyek->status);
             $proyek->save();
 
-            // 1b) File SPK (opsional)
             if ($request->hasFile('file_spk')) {
                 if ($proyek->file_spk && Storage::exists('public/' . $proyek->file_spk)) {
                     Storage::delete('public/' . $proyek->file_spk);
@@ -135,10 +123,7 @@ class ProyekController extends Controller
                 $proyek->save();
             }
 
-            // 2) Upsert profil pajak aktif
             if (!empty($taxData)) {
-                // Jika ingin versi baru setiap kali ubah kebijakan, nonaktifkan yang lama dan create baru.
-                // Jika ingin overwrite yang aktif, bisa update langsung. Di sini kita pilih UPDATE jika ada, else CREATE.
                 $active = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
                 $taxData['updated_by'] = auth()->id();
 
@@ -146,7 +131,7 @@ class ProyekController extends Controller
                     $active->update($taxData);
                 } else {
                     ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->update(['aktif' => 0]);
-                    $taxData['proyek_id'] = $proyek->id;
+                    $taxData['proyek_id']  = $proyek->id;
                     $taxData['created_by'] = auth()->id();
                     ProyekTaxProfile::create($taxData);
                 }
@@ -173,22 +158,17 @@ class ProyekController extends Controller
     }
 
     /* =========================
-       SHOW (existing)
+       SHOW
     ========================= */
     public function show($id)
     {
         $proyek = Proyek::with(['pemberiKerja'])->findOrFail($id);
 
-        // Sinkron nilai penawaran (existing behavior)
         \App\Helpers\ProyekHelper::updateNilaiPenawaran($proyek->id);
 
-        // RAB proyek (existing)
         $headers    = RabHeader::where('proyek_id', $id)->with(['rabDetails', 'schedule'])->get();
         $grandTotal = $headers->flatMap->rabDetails->sum('total');
 
-        /* ============================
-        Penawaran FINAL & pilihan
-        ============================ */
         $finalPenawarans = RabPenawaranHeader::where('proyek_id', $id)
             ->where('status', 'final')
             ->orderBy('tanggal_penawaran')
@@ -196,9 +176,7 @@ class ProyekController extends Controller
 
         $selectedId = (int) request('penawaran_id', optional($finalPenawarans->last())->id);
 
-        /* ============================
-        Kurva-S (PLANNED) dari detail
-        ============================ */
+        // Kurva-S: Planned (dari schedule detail)
         $scheduleDetailQ = RabScheduleDetail::where('proyek_id', $id)
             ->when($selectedId, fn ($q) => $q->where('penawaran_id', $selectedId));
 
@@ -230,67 +208,124 @@ class ProyekController extends Controller
             }
         }
 
-        /* ============================
+       /* ============================
         PROGRESS (tabel ringkasan)
         ============================ */
-        $progressRaw = RabProgress::with(['details'])
-            ->where('proyek_id', $id)
-            ->when($selectedId, fn ($q) => $q->where('penawaran_id', $selectedId))
-            ->orderBy('minggu_ke')
-            ->get();
+        $progressRaw = RabProgress::where('proyek_id', $id)
+        ->when($selectedId, fn ($q) => $q->where('penawaran_id', $selectedId))
+        ->orderBy('minggu_ke')
+        ->orderBy('id') // jaga konsistensi urutan
+        ->get();
 
-        $progressSummary      = [];
-        $progressSebelumnya   = 0.0;
+        $pdTable = (new \App\Models\RabProgressDetail)->getTable();
+        $valCol  = \Schema::hasColumn($pdTable, 'bobot_minggu_ini')
+                ? 'bobot_minggu_ini'
+                : (\Schema::hasColumn($pdTable, 'bobot') ? 'bobot' : null);
 
+        /**
+        * 1) Hitung total final per minggu (hanya status final/approved)
+        *    -> ini yang dijadikan “dasar akumulasi sebelumnya”.
+        */
+        $finalWeekly = $valCol
+        ? \DB::table($pdTable.' as d')
+            ->join('rab_progress as p', 'p.id', '=', 'd.rab_progress_id')
+            ->where('p.proyek_id', $id)
+            ->when($selectedId, fn ($q) => $q->where('p.penawaran_id', $selectedId))
+            ->whereIn('p.status', ['final','approved'])
+            ->groupBy('p.minggu_ke')
+            ->pluck(\DB::raw("SUM(d.$valCol) as s"), 'p.minggu_ke')
+            ->toArray()
+        : [];
+
+        /**
+        * 2) Siapkan akumulasi “sebelum minggu X”
+        *    -> sum(finalWeekly[w]) untuk semua w < X.
+        */
+        $weeksSorted = array_keys($finalWeekly);
+        sort($weeksSorted, SORT_NUMERIC);
+        $cumBefore = []; // minggu => akumulasi s/d < minggu tsb
+        $running   = 0.0;
+        $lastW     = 0;
+        foreach ($weeksSorted as $w) {
+        // isi gap minggu yang kosong
+        for ($i = $lastW + 1; $i < $w; $i++) {
+            if ($i > 0) $cumBefore[$i] = $running;
+        }
+        // sebelum minggu w masih ‘running’ lama
+        if ($w > 0) $cumBefore[$w] = $running;
+        // tambahkan kontribusi minggu w (final saja)
+        $running += (float) $finalWeekly[$w];
+        $lastW = $w;
+        }
+        // extend untuk minggu setelah max
+        for ($i = $lastW + 1; $i <= 10000; $i++) { // batas aman
+        $cumBefore[$i] = $running;
+        if ($i - $lastW > 2000) break; // hindari loop panjang
+        }
+
+        /**
+        * 3) Susun ringkasan per baris.
+        *    - progress_sebelumnya = akumulasi FINAL s/d minggu < N
+        *    - pertumbuhan         = total detail pada progress ini (status apapun)
+        *    - progress_saat_ini   = progress_sebelumnya + pertumbuhan (hanya untuk tampilan baris ini)
+        */
+        $progressSummary = [];
         foreach ($progressRaw as $row) {
-            $bobotMingguIni = (float) $row->details->sum('bobot_minggu_ini');
+        $mingguN = (int) $row->minggu_ke;
 
-            $progressSummary[] = [
-                'id'                  => $row->id,
-                'minggu_ke'           => (int) $row->minggu_ke,
-                'tanggal'             => $row->tanggal,
-                'progress_sebelumnya' => round($progressSebelumnya, 2),
-                'pertumbuhan'         => round($bobotMingguIni, 2),
-                'progress_saat_ini'   => round($progressSebelumnya + $bobotMingguIni, 2),
-                'status'              => $row->status,
-            ];
+        $prev = $cumBefore[$mingguN] ?? 0.0;
 
-            $progressSebelumnya += $bobotMingguIni;
+        $deltaThis = $valCol
+            ? (float) \DB::table($pdTable)->where('rab_progress_id', $row->id)->sum($valCol)
+            : 0.0;
+
+        $progressSummary[] = [
+            'id'                  => $row->id,
+            'minggu_ke'           => $mingguN,
+            'tanggal'             => $row->tanggal,
+            'progress_sebelumnya' => round($prev, 2),
+            'pertumbuhan'         => round($deltaThis, 2),
+            'progress_saat_ini'   => round($prev + $deltaThis, 2),
+            'status'              => $row->status,
+        ];
         }
 
         /* ============================
         Kurva-S REALISASI (FINAL saja)
         ============================ */
-        if (!empty($minggu)) {
-            $finalWeekly = [];
-            foreach ($progressRaw as $row) {
-                if ($row->status !== 'final') continue;
-                $val = (float) $row->details->sum('bobot_minggu_ini');
-                $week = (int) $row->minggu_ke;
-                $finalWeekly[$week] = ($finalWeekly[$week] ?? 0.0) + $val;
-            }
+        $realisasi = [];
+        if (!empty($minggu) && $valCol) {
+        // kelompokkan per minggu untuk progress berstatus final
+        $finalWeekly = \DB::table($pdTable . ' as d')
+            ->join('rab_progress as p', 'p.id', '=', 'd.rab_progress_id')
+            ->where('p.proyek_id', $id)
+            ->when($selectedId, fn ($q) => $q->where('p.penawaran_id', $selectedId))
+            ->where('p.status', 'final')
+            ->groupBy('p.minggu_ke')
+            ->pluck(\DB::raw("SUM(d.$valCol) as s"), 'p.minggu_ke')
+            ->toArray();
 
-            $cumFinal = 0.0;
-            foreach ($minggu as $w) {
-                if (isset($finalWeekly[$w])) {
-                    $cumFinal   += (float) $finalWeekly[$w];
-                    $realisasi[] = round($cumFinal, 2);
-                } else {
-                    $realisasi[] = null;
-                }
+        $cum = 0.0;
+        foreach ($minggu as $w) {
+            if (isset($finalWeekly[$w])) {
+                $cum       += (float) $finalWeekly[$w];
+                $realisasi[] = round($cum, 2);
+            } else {
+                $realisasi[] = null; // tampilkan gap pada minggu tanpa data final
             }
         }
+        }
 
-        /* ============================
-        META jadwal penawaran terpilih
-        ============================ */
+        // ============================
+        // META jadwal penawaran terpilih
+        // ============================
         $selectedMeta = $selectedId
             ? RabScheduleMeta::where('proyek_id', $id)->where('penawaran_id', $selectedId)->first()
             : null;
 
-        /* ============================
-        EVENT KALENDER per item (RabSchedule)
-        ============================ */
+        // ============================
+        // EVENT KALENDER per item (RabSchedule)
+        // ============================
         $calendarEvents = [];
         $calendarRows   = [];
 
@@ -688,7 +723,7 @@ class ProyekController extends Controller
             'effective_from' => ['nullable','date'],
             'effective_to'   => ['nullable','date','after_or_equal:effective_from'],
             'aktif'          => ['nullable','boolean'],
-            'extra_options'  => ['nullable','string'], // JSON string opsional
+            'extra_options'  => ['nullable','string'],
         ]);
         return $v->validate();
     }
@@ -707,7 +742,6 @@ class ProyekController extends Controller
             $data['pph_rate'] = 0;
         }
 
-        // Parse JSON extra_options → array|null
         if (isset($data['extra_options'])) {
             $json = trim((string)$data['extra_options']);
             if ($json === '') {
@@ -717,7 +751,6 @@ class ProyekController extends Controller
                     $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
                     $data['extra_options'] = is_array($decoded) ? $decoded : null;
                 } catch (\Throwable $e) {
-                    // Jika JSON tidak valid, kosongkan saja (atau bisa lempar validation error jika diinginkan)
                     $data['extra_options'] = null;
                 }
             }
@@ -793,5 +826,41 @@ class ProyekController extends Controller
         }
 
         return [];
+    }
+
+    /* ============================================================
+       ======= Helper baru: prev kumulatif FINAL/APPROVED =========
+       ============================================================ */
+    /**
+     * buildPrevBeforeMap:
+     *  prevBefore[$week] = total % proyek dari progress berstatus final/approved
+     *  kumulatif s/d (week-1).
+     */
+    private function buildPrevBeforeMap(int $proyekId, ?int $penawaranId): array
+    {
+        $pTbl  = (new \App\Models\RabProgress)->getTable();        // rab_progress
+        $pdTbl = (new \App\Models\RabProgressDetail)->getTable();  // rab_progress_detail
+
+        $sumByWeek = \DB::table("$pdTbl as pd")
+            ->join("$pTbl as p", 'p.id', '=', 'pd.rab_progress_id')
+            ->where('p.proyek_id', $proyekId)
+            ->when($penawaranId, fn($q)=>$q->where('p.penawaran_id', $penawaranId))
+            ->whereIn('p.status', ['final','approved'])
+            ->groupBy('p.minggu_ke')
+            ->orderBy('p.minggu_ke')
+            ->pluck(\DB::raw('SUM(pd.bobot_minggu_ini)'), 'p.minggu_ke')
+            ->map(fn($v)=>(float)$v)
+            ->toArray();
+
+        if (empty($sumByWeek)) return [];
+
+        $maxWeek = (int)max(array_keys($sumByWeek));
+        $prevBefore = [];
+        $running = 0.0;
+        for ($w=1; $w <= $maxWeek+1; $w++) {
+            $prevBefore[$w] = $running;
+            $running += $sumByWeek[$w] ?? 0.0;
+        }
+        return $prevBefore;
     }
 }

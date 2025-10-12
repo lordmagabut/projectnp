@@ -60,6 +60,13 @@
             <i data-feather="file-text" class="me-1"></i> BAPP
           </a>
         </li>
+        <li class="nav-item flex-grow-1 flex-md-grow-0 text-center" role="presentation">
+          <a class="nav-link" id="sertifikat-tab" data-bs-toggle="tab" href="#sertifikatContent" role="tab"
+            aria-controls="sertifikatContent" aria-selected="false">
+            <i data-feather="award" class="me-1"></i> Sertifikat Pembayaran
+          </a>
+        </li>
+
       </ul>
 
 
@@ -69,6 +76,12 @@
         $currentPenawaranId =
             (isset($selectedId) && $selectedId) ? $selectedId :
             (request('penawaran_id') ?: optional($finalPenawarans->last())->id);
+
+        /** VARIABEL KHUSUS TAB SCHEDULE
+        *  Agar tidak ketimpa re-definisi $currentPenawaranId di Tab Progress,
+        *  kita “bekukan” nilai buat dipakai di JS Schedule.
+        */
+        $schedulePenawaranId = $currentPenawaranId;
       @endphp
 
       {{-- Tab Content --}}
@@ -470,11 +483,12 @@
             <td class="text-end text-info fw-bold">{{ number_format($item['pertumbuhan'], 2, ',', '.') }}%</td>
             <td class="text-end text-primary fw-bold">{{ number_format($item['progress_saat_ini'], 2, ',', '.') }}%</td>
             <td class="text-center">
-              @if($item['status'] == 'final')
-                <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Final</span>
-              @else
-                <span class="badge bg-warning text-dark"><i class="fas fa-hourglass-half me-1"></i> Draft</span>
-              @endif
+              @switch($item['status'])
+                @case('final')     <span class="badge bg-warning text-dark">Final</span> @break
+                @case('approved')  <span class="badge bg-success">Disetujui</span> @break
+                @case('revised')   <span class="badge bg-secondary">Direvisi</span> @break
+                @default           <span class="badge bg-secondary">{{ ucfirst($item['status']) }}</span>
+              @endswitch
             </td>
             <td class="text-center">
               <a
@@ -640,6 +654,12 @@
                 </form>
               @endif
 
+              @if($b->status === 'approved')
+                <a class="btn btn-sm btn-success" href="{{ route('sertifikat.create') }}?bapp_id={{ $b->id }}">
+                  Buat Sertifikat Pembayaran
+                </a>
+              @endif
+
             </td>
           </tr>
         @empty
@@ -654,6 +674,101 @@
     <em>Terbitkan BAPP</em> pada halaman detail progress.
   </div>
 </div>
+{{-- =======================
+     Tab Sertifikat Pembayaran (Index)
+======================= --}}
+@php
+  // gunakan penawaran yang sama dengan tab BAPP
+  $sertifikatPenawaranId = ($selectedId ?? null)
+      ?? request('penawaran_id')
+      ?? optional($finalPenawarans->last())->id;
+
+  // ambil daftar sertifikat untuk proyek ini (join via bapps)
+  $sertifikats = \App\Models\SertifikatPembayaran::query()
+      ->with(['bapp.penawaran'])
+      ->whereHas('bapp', function($q) use ($proyek, $sertifikatPenawaranId){
+          $q->where('proyek_id', $proyek->id)
+            ->when($sertifikatPenawaranId, fn($qq)=>$qq->where('penawaran_id', $sertifikatPenawaranId));
+      })
+      ->orderByDesc('tanggal')->orderByDesc('id')
+      ->get();
+
+  $rp = fn($n)=>'Rp '.number_format((float)$n, 0, ',', '.');
+@endphp
+
+<div class="tab-pane fade" id="sertifikatContent" role="tabpanel">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h5 class="mb-0 d-flex align-items-center">
+      <i data-feather="award" class="me-2"></i>
+      Daftar Sertifikat Pembayaran
+    </h5>
+
+    @if($finalPenawarans->isNotEmpty())
+      <form method="GET" action="{{ route('proyek.show', $proyek->id) }}" class="d-flex align-items-center gap-2">
+        <input type="hidden" name="tab" value="sertifikat">
+        <select name="penawaran_id" class="form-select form-select-sm" onchange="this.form.submit()">
+          @foreach($finalPenawarans as $p)
+            <option value="{{ $p->id }}" {{ (int)$p->id === (int)$sertifikatPenawaranId ? 'selected' : '' }}>
+              {{ $p->nama_penawaran }} ({{ \Carbon\Carbon::parse($p->tanggal_penawaran)->format('d/m/y') }})
+            </option>
+          @endforeach
+        </select>
+        <noscript><button class="btn btn-primary btn-sm">Tampilkan</button></noscript>
+      </form>
+    @endif
+  </div>
+
+  <div class="mb-3">
+    <span class="badge rounded-pill text-bg-light border">
+      <i class="me-1" data-feather="briefcase"></i>
+      Penawaran:
+      {{ optional($finalPenawarans->firstWhere('id',$sertifikatPenawaranId))->nama_penawaran ?? ('#'.$sertifikatPenawaranId) }}
+    </span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover table-bordered table-sm align-middle" id="tbl-sertifikat">
+      <thead class="table-light">
+        <tr>
+          <th style="width:4%">#</th>
+          <th>No. Sertifikat</th>
+          <th style="width:11%">Tanggal</th>
+          <th style="width:10%">Termin</th>
+          <th>No. BAPP</th>
+          <th class="text-end" style="width:14%">WO Material</th>
+          <th class="text-end" style="width:14%">WO Upah</th>
+          <th class="text-end" style="width:14%">Tagihan (Bruto+PPN)</th>
+          <th class="text-center" style="width:16%">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        @forelse($sertifikats as $i => $s)
+          <tr>
+            <td>{{ $i+1 }}</td>
+            <td class="text-nowrap">{{ $s->nomor }}</td>
+            <td>{{ \Carbon\Carbon::parse($s->tanggal)->format('d-m-Y') }}</td>
+            <td class="text-nowrap">Ke-{{ $s->termin_ke }}</td>
+            <td class="text-nowrap">{{ $s->bapp?->nomor_bapp ?? '-' }}</td>
+            <td class="text-end">{{ $rp($s->nilai_wo_material) }}</td>
+            <td class="text-end">{{ $rp($s->nilai_wo_jasa) }}</td>
+            <td class="text-end fw-semibold text-primary">{{ $rp($s->total_tagihan) }}</td>
+            <td class="text-center">
+              <a href="{{ route('sertifikat.show', $s->id) }}" class="btn btn-sm btn-outline-teal me-1">
+                <i data-feather="eye" class="me-1"></i> Detail
+              </a>
+              <a href="{{ route('sertifikat.cetak', $s->id) }}" class="btn btn-sm btn-outline-primary">
+                <i data-feather="download" class="me-1"></i> PDF
+              </a>
+            </td>
+          </tr>
+        @empty
+          <tr><td colspan="9" class="text-center text-muted py-3">Belum ada sertifikat untuk penawaran ini.</td></tr>
+        @endforelse
+      </tbody>
+    </table>
+  </div>
+</div>
+
       </div> {{-- End tab-content --}}
     </div> {{-- End card tab panel --}}
   </div> {{-- End card-body --}}
@@ -719,9 +834,14 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Kalender
+ 
+  // === FullCalendar: render hanya saat tab Schedule terlihat ===
+  let calendar;               // instance disimpan di sini
   const calEl = document.getElementById('scheduleCalendar');
-  if (calEl) {
-    const calendar = new FullCalendar.Calendar(calEl, {
+
+  function buildCalendar() {
+    if (!calEl || calendar) return; // sudah dibuat
+    calendar = new FullCalendar.Calendar(calEl, {
       height: 650,
       initialView: 'dayGridMonth',
       headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
@@ -733,7 +853,7 @@ document.addEventListener('DOMContentLoaded', function () {
       initialDate: '{{ $selectedMeta ? \Carbon\Carbon::parse($selectedMeta->start_date)->toDateString() : now()->toDateString() }}',
       events: @json($calendarEvents),
       eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
-      eventDidMount: function(info){
+      eventDidMount(info){
         const startStr = info.event.start ? info.event.start.toLocaleDateString('id-ID') : '-';
         let endStr = '-';
         if (info.event.end) {
@@ -745,25 +865,40 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     calendar.render();
   }
-    // DataTable untuk daftar BAPP
-  const bappTbl = document.getElementById('tbl-bapp');
-  if (bappTbl && window.jQuery && jQuery.fn.dataTable) {
-    jQuery(bappTbl).DataTable({
-      responsive: true,
-      pageLength: 10,
-      order: [[2, 'desc']], // sort Tanggal desc
-      columnDefs: [
-        { targets: [5,6,7], className: 'text-end' },
-        { targets: [8,9], orderable: false }
-      ],
-      language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/id.json' }
+
+  // render saat tab Schedule pertama kali dibuka
+  document.querySelector('a#sch-tab')?.addEventListener('shown.bs.tab', () => {
+    // beri 1 frame supaya tab benar-benar visible dahulu
+    requestAnimationFrame(() => {
+      if (!calendar) buildCalendar(); else calendar.updateSize();
     });
-  }
+  });
 
+  // jika halaman langsung dibuka dengan ?tab=sch, tunggu sampai tab di-show lalu render
+  (function renderIfScheduleActiveOnLoad() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('tab') === 'sch') {
+      // tab akan di-show oleh script "keepTabFromQuery" milik kamu
+      // sebagai jaga-jaga, jalankan setelah event loop berikutnya
+      setTimeout(() => {
+        if (document.getElementById('schContent')?.classList.contains('active')) {
+          buildCalendar();
+        }
+      }, 0);
+    }
+  })();
 
-  // ===== Ringkasan Tree (AJAX) =====
-  const PENAWARAN_ID = @json($currentPenawaranId ?? null);
-  const treeTbody   = document.querySelector('#tree-summary tbody');
+  // bila ukuran container berubah (resize), pastikan kalender menyesuaikan
+  window.addEventListener('resize', () => { if (calendar) calendar.updateSize(); });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  /* ... kode lain kamu tetap ... */
+
+  // ===== Ringkasan Tree (AJAX) - FIXED =====
+  const PENAWARAN_ID = @json($schedulePenawaranId ?? null);
+  const treeTbody    = document.querySelector('#tree-summary tbody');
 
   function toggleIcon(el, open){ if(el) el.textContent = open ? '▼' : '▶'; }
   function collapse(branchKey){
@@ -782,6 +917,7 @@ document.addEventListener('DOMContentLoaded', function () {
     rows.forEach(r => r.style.display = '');
   }
 
+  // Toggle expand/collapse
   treeTbody?.addEventListener('click', (e) => {
     const caret = e.target.closest('.caret');
     if (!caret || caret.classList.contains('disabled')) return;
@@ -792,18 +928,63 @@ document.addEventListener('DOMContentLoaded', function () {
     else      { toggleIcon(caret, true);  expand(key);   }
   });
 
+  // Renderer untuk respon JSON
+  function renderRowsFromJson(payload){
+    const rows = (payload?.items || []);
+    if (!rows.length) {
+      treeTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Belum ada data.</td></tr>';
+      return;
+    }
+    const fmtDate = (s) => {
+      if (!s) return '—';
+      const d = new Date(s);
+      return isNaN(d) ? s : d.toLocaleDateString('id-ID');
+    };
+
+    const html = rows.map(r => {
+      const caret = r.has_children ? '<span class="caret">▶</span>' : '<span class="caret disabled">•</span>';
+      return `
+        <tr data-key="${r.key}" data-parent="${r.parent_key || ''}" class="level-${r.level||1}">
+          <td class="tree-cell">${caret}<span class="wbs">${r.kode||''}</span> ${r.uraian||''}</td>
+          <td class="text-end">${r.minggu_mulai ?? ''}</td>
+          <td class="text-end">${r.durasi_minggu ?? ''}</td>
+          <td>${fmtDate(r.tgl_mulai)}</td>
+          <td>${fmtDate(r.tgl_selesai)}</td>
+        </tr>`;
+    }).join('');
+    treeTbody.innerHTML = html;
+  }
+
   async function loadTreeBody(){
     if (!treeTbody) return;
 
-    const endpoint = @json(route('proyek.schedule.summary.tree', $proyek->id));
-    const url = new URL(endpoint, window.location.origin);
-    if (PENAWARAN_ID) url.searchParams.set('penawaran_id', PENAWARAN_ID);
+    // Pakai route() langsung tanpa new URL (menghindari URL double-host)
+    let url = @json(route('proyek.schedule.summary.tree', ['proyek' => $proyek->id]));
+    if (PENAWARAN_ID) {
+      url += (url.includes('?') ? '&' : '?') + 'penawaran_id=' + encodeURIComponent(PENAWARAN_ID);
+    }
 
     try {
-      const res  = await fetch(url.toString(), { headers: { 'X-Requested-With':'XMLHttpRequest' }});
-      const html = await res.text();
-      if (!res.ok) { console.error('Tree HTTP', res.status, html); throw new Error('HTTP '+res.status); }
-      treeTbody.innerHTML = html;
+      const res  = await fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' }});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      // Coba baca sebagai teks, lalu deteksi apakah JSON
+      const text = await res.text();
+      const isJson = (res.headers.get('content-type') || '').includes('application/json')
+                  || (text.trim().startsWith('{') && text.trim().endsWith('}'));
+
+      if (isJson) {
+        try {
+          const data = JSON.parse(text);
+          renderRowsFromJson(data);
+        } catch (e) {
+          console.error('Parse JSON gagal, isi:', text);
+          treeTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Format data tidak valid.</td></tr>';
+        }
+      } else {
+        // Server kirim partial <tr>…</tr>
+        treeTbody.innerHTML = text || '<tr><td colspan="5" class="text-center text-muted py-3">Belum ada data.</td></tr>';
+      }
     } catch (err) {
       console.error('Gagal load tree:', err);
       treeTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Gagal memuat ringkasan.</td></tr>';
@@ -811,6 +992,21 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   loadTreeBody();
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const t1 = document.getElementById('tbl-sertifikat');
+  if (t1 && window.jQuery) {
+    $(t1).DataTable({
+      paging: true,
+      searching: true,
+      responsive: true,
+      order: [[2,'desc']], // sort by tanggal
+      language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/id.json' }
+    });
+  }
 });
 </script>
 

@@ -23,58 +23,77 @@ class BappController extends Controller
 
     // Pre-fill dari minggu & penawaran terpilih → tampilkan preview sebelum simpan
     public function create(Proyek $proyek, Request $r)
-    {
-        $penawaranId = (int) $r->query('penawaran_id');
-        $mingguKe    = (int) $r->query('minggu_ke', 1);
+{
+    $penawaranId = (int) $r->query('penawaran_id');
+    $mingguKe    = (int) $r->query('minggu_ke', 1);
 
-        // progress header minggu ini (jika ada) → untuk delta minggu N
-        $progress = RabProgress::where('proyek_id', $proyek->id)
-            ->when($penawaranId, fn($q)=>$q->where('penawaran_id', $penawaranId))
-            ->where('minggu_ke', $mingguKe)
-            ->latest('id')
-            ->first();
+    $progress = RabProgress::where('proyek_id', $proyek->id)
+        ->when($penawaranId, fn($q)=>$q->where('penawaran_id', $penawaranId))
+        ->where('minggu_ke', $mingguKe)
+        ->latest('id')
+        ->first();
 
-        // dataset
-        [$items,$Wi,$prevProj,$deltaProj,$prevItem,$deltaItem] =
-            $this->dataset($proyek->id, $penawaranId, $mingguKe, $progress);
+    // dataset: [items, Wi, prevProj(%proyek< N), deltaProj(%proyek N), prevItem(%item< N), deltaItem(%item N)]
+    [$items,$Wi,$prevProj,$deltaProj,$prevItem,$deltaItem] =
+        $this->dataset($proyek->id, $penawaranId, $mingguKe, $progress);
 
-        // rakit baris preview
-        $rows = $items->map(function($it) use ($Wi,$prevProj,$deltaProj,$prevItem,$deltaItem){
-            $id    = $it->id;
-            $Wi_i  = (float)($Wi[$id] ?? 0);
-            $pPrev = (float)($prevProj[$id] ?? 0);
-            $pDel  = (float)($deltaProj[$id] ?? 0);
-            return (object)[
-                'id'              => $id,
-                'kode'            => $it->kode,
-                'uraian'          => $it->uraian,
-                'bobot_item'      => $Wi_i,
-                'prev_pct'        => $pPrev,                  // % proyek kumulatif < N
-                'delta_pct'       => $pDel,                   // % proyek minggu N
-                'now_pct'         => round($pPrev + $pDel, 4),
+    // === Rakit baris: berikan nama kolom yang DIPAKAI blade detail ===
+    $rows = $items->map(function($it) use ($Wi,$prevProj,$deltaProj,$prevItem,$deltaItem){
+        $id    = $it->id;
+        $Wi_i  = (float)($Wi[$id] ?? 0);
+        $bPrev = (float)($prevProj[$id] ?? 0);            // % proyek kumulatif < N
+        $bDel  = (float)($deltaProj[$id] ?? 0);           // % proyek minggu N
+        $bNow  = round($bPrev + $bDel, 4);
 
-                // opsional untuk display (versi % terhadap item)
-                'prev_item_pct'   => (float)($prevItem[$id]  ?? 0),
-                'delta_item_pct'  => (float)($deltaItem[$id] ?? 0),
-                'now_item_pct'    => round(($prevItem[$id] ?? 0) + ($deltaItem[$id] ?? 0), 4),
-            ];
-        })->filter(fn($r)=>$r->bobot_item>0 || $r->prev_pct>0 || $r->delta_pct>0);
+        $pPrev = (float)($prevItem[$id]  ?? 0);           // % item kumulatif < N
+        $pDel  = (float)($deltaItem[$id] ?? 0);           // % item minggu N
+        $pNow  = round($pPrev + $pDel, 4);
 
-        $totPrev  = round($rows->sum('prev_pct'),  4);
-        $totDelta = round($rows->sum('delta_pct'), 4);
-        $totNow   = round($rows->sum('now_pct'),   4);
+        return (object)[
+            'id'     => $id,
+            'kode'   => $it->kode,
+            'uraian' => $it->uraian,
 
-        return view('bapp.create', [
-            'proyek'     => $proyek,
-            'penawaran'  => $penawaranId ? RabPenawaranHeader::find($penawaranId) : null,
-            'progress'   => $progress,
-            'mingguKe'   => $mingguKe,
-            'rows'       => $rows,
-            'totPrev'    => $totPrev,
-            'totDelta'   => $totDelta,
-            'totNow'     => $totNow,
-        ]);
-    }
+            // === Nama yang dipakai Blade DETAIL/BAPP (sinkron) ===
+            'Wi'        => $Wi_i,      // bobot item (% proyek)
+            'bPrev'     => $bPrev,     // bobot s/d minggu lalu
+            'bDelta'    => $bDel,      // Δ bobot minggu ini
+            'bNow'      => $bNow,      // bobot saat ini
+            'pPrevItem' => $pPrev,     // progress s/d minggu lalu (% item)
+            'pDeltaItem'=> $pDel,      // progress minggu ini (% item)
+            'pNowItem'  => $pNow,      // progress saat ini (% item)
+
+            // === Nama lama (jika ada view lain yang masih memakainya) ===
+            'bobot_item'     => $Wi_i,
+            'prev_pct'       => $bPrev,
+            'delta_pct'      => $bDel,
+            'now_pct'        => $bNow,
+            'prev_item_pct'  => $pPrev,
+            'delta_item_pct' => $pDel,
+            'now_item_pct'   => $pNow,
+        ];
+    })
+    // baris yang benar-benar kosong boleh disembunyikan
+    ->filter(fn($r)=>($r->Wi??0)>0 || ($r->bPrev??0)>0 || ($r->bDelta??0)>0)
+    ->values();
+
+    // === Total yang dibutuhkan footer (HANYA kolom bobot) ===
+    $totPrev  = round($rows->sum('bPrev'),  4);
+    $totDelta = round($rows->sum('bDelta'), 4);
+    $totNow   = round($rows->sum('bNow'),   4);
+
+    return view('bapp.create', [
+        'proyek'     => $proyek,
+        'penawaran'  => $penawaranId ? RabPenawaranHeader::find($penawaranId) : null,
+        'progress'   => $progress,
+        'mingguKe'   => $mingguKe,
+        'rows'       => $rows,
+        'totPrev'    => $totPrev,
+        'totDelta'   => $totDelta,
+        'totNow'     => $totNow,
+    ]);
+}
+
 
     // Simpan + terbit PDF
     public function store(Proyek $proyek, Request $r)
@@ -164,7 +183,7 @@ class BappController extends Controller
             $pdf = PDF::loadView('bapp.pdf', [
                 'bapp'     => $bapp->fresh('details','proyek','penawaran'),
                 'proyek'   => $proyek,
-            ])->setPaper('a4','portrait');
+            ])->setPaper('a4','landscape');
 
             Storage::disk('public')->put($path, $pdf->output());
             $bapp->update(['file_pdf_path' => $path]);

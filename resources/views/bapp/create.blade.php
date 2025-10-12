@@ -30,6 +30,7 @@
         </div>
       @endif
 
+      {{-- Header form --}}
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Nomor BAPP</label>
@@ -73,40 +74,88 @@
         </div>
       </div>
 
+      @php
+        // Formatter
+        $fmt    = fn($n)=>number_format((float)$n, 2, ',', '.');              // angka/bobot
+        $fmtPct = fn($n)=>number_format((float)$n, 2, ',', '.').' %';         // persen
+        // Total kolom bobot
+        $totWi    = collect($rows)->sum('Wi');
+        $totPrev  = collect($rows)->sum('bPrev');
+        $totDelta = collect($rows)->sum('bDelta');
+        $totNow   = collect($rows)->sum('bNow');
+      @endphp
+
+      {{-- Tabel ringkasan baris (sinkron dgn detail progress) --}}
       <div class="table-responsive">
         <table class="table table-bordered table-sm align-middle">
           <thead class="table-light">
             <tr>
-              <th style="width:10%">Kode</th>
-              <th>Uraian Pekerjaan</th>
-              <th class="text-end" style="width:10%">Bobot (%)</th>
-              <th class="text-end" style="width:12%">Prog. s/d Minggu Lalu (%)</th>
-              <th class="text-end" style="width:12%">Prog. Minggu Ini (%)</th>
-              <th class="text-end" style="width:12%">Prog. Saat Ini (%)</th>
+              <th style="width:10%">KODE</th>
+              <th>URAIAN PEKERJAAN</th>
+
+              {{-- BOBOT = % proyek (tanpa tanda %) --}}
+              <th class="text-end" style="width:10%">BOBOT ITEM</th>
+              <th class="text-end" style="width:12%">BOBOT S/D MINGGU LALU</th>
+              <th class="text-end" style="width:12%">Δ BOBOT MINGGU INI</th>
+              <th class="text-end" style="width:12%">BOBOT SAAT INI</th>
+
+              {{-- PROGRESS = % terhadap item (dengan tanda %) --}}
+              <th class="text-end" style="width:12%">PROG. S/D MINGGU LALU</th>
+              <th class="text-end" style="width:12%">PROG. MINGGU INI</th>
+              <th class="text-end" style="width:12%">PROG. SAAT INI</th>
             </tr>
           </thead>
+
           <tbody>
             @forelse($rows as $r)
+              @php
+                // BOBOT (angka) – kiriman dari controller: Wi, bPrev, bDelta, bNow
+                $Wi     = (float)($r->Wi     ?? 0);
+                $bPrev  = (float)($r->bPrev  ?? 0);
+                $bDelta = (float)($r->bDelta ?? 0);
+                $bNow   = (float)($r->bNow   ?? 0);
+
+                // PROGRESS (persen terhadap item) – kiriman controller: pPrevItem, pDeltaItem, pNowItem
+                // fallback aman bila belum dikirim: hitung dari bobot/Wi.
+                $pPrevItem  = isset($r->pPrevItem)  ? (float)$r->pPrevItem  : ($Wi > 0 ? $bPrev  / $Wi * 100 : 0);
+                $pDeltaItem = isset($r->pDeltaItem) ? (float)$r->pDeltaItem : ($Wi > 0 ? $bDelta / $Wi * 100 : 0);
+                $pNowItem   = isset($r->pNowItem)   ? (float)$r->pNowItem   : ($Wi > 0 ? $bNow   / $Wi * 100 : 0);
+              @endphp
+
               <tr>
                 <td class="text-nowrap">{{ $r->kode }}</td>
                 <td>{{ $r->uraian }}</td>
-                <td class="text-end">{{ number_format((float)$r->bobot_item, 2, ',', '.') }}</td>
-                <td class="text-end">{{ number_format((float)$r->prev_pct,   2, ',', '.') }}</td>
-                <td class="text-end">{{ number_format((float)$r->delta_pct,  2, ',', '.') }}</td>
-                <td class="text-end">{{ number_format((float)$r->now_pct,    2, ',', '.') }}</td>
+
+                {{-- BOBOT = desimal (tanpa %) --}}
+                <td class="text-end">{{ $fmt($Wi) }}</td>
+                <td class="text-end">{{ $fmt($bPrev) }}</td>
+                <td class="text-end">{{ $fmt($bDelta) }}</td>
+                <td class="text-end">{{ $fmt($bNow) }}</td>
+
+                {{-- PROGRESS = persen --}}
+                <td class="text-end">{{ $fmtPct($pPrevItem) }}</td>
+                <td class="text-end">{{ $fmtPct($pDeltaItem) }}</td>
+                <td class="text-end">{{ $fmtPct($pNowItem) }}</td>
               </tr>
             @empty
               <tr>
-                <td colspan="6" class="text-center text-muted py-3">Tidak ada baris untuk ditampilkan.</td>
+                <td colspan="9" class="text-center text-muted py-3">Tidak ada baris untuk ditampilkan.</td>
               </tr>
             @endforelse
           </tbody>
+
           <tfoot class="table-light">
             <tr>
-              <th colspan="3" class="text-end">TOTAL</th>
-              <th class="text-end">{{ number_format((float)$totPrev,  2, ',', '.') }}</th>
-              <th class="text-end">{{ number_format((float)$totDelta, 2, ',', '.') }}</th>
-              <th class="text-end">{{ number_format((float)$totNow,   2, ',', '.') }}</th>
+              <th colspan="2" class="text-end">TOTAL</th>
+              {{-- Jumlahkan hanya BOBOT --}}
+              <th class="text-end">{{ $fmt($totWi) }}</th>
+              <th class="text-end">{{ $fmt($totPrev) }}</th>
+              <th class="text-end">{{ $fmt($totDelta) }}</th>
+              <th class="text-end">{{ $fmt($totNow) }}</th>
+              {{-- Progress tidak dijumlahkan --}}
+              <th></th>
+              <th></th>
+              <th></th>
             </tr>
           </tfoot>
         </table>

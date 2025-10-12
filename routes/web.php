@@ -28,6 +28,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProyekTaxProfileController;
 use App\Http\Controllers\BappController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SertifikatPembayaranController;
 
 // =========================
 // Login (tanpa proteksi)
@@ -148,11 +149,27 @@ Route::middleware(['auth'])->group(function () {
 
     // ========== PROGRESS ==========
     Route::prefix('proyek/{proyek}/progress')->name('proyek.progress.')->group(function () {
-        Route::get('input',               [RabProgressController::class, 'create'])->name('create');
-        Route::post('/',                  [RabProgressController::class, 'store'])->name('store');
-        Route::get('{progress}',          [RabProgressController::class, 'detail'])->name('detail');
-        Route::post('{progress}/finalize',[RabProgressController::class, 'finalize'])->name('finalize');
-        Route::delete('{progress}',       [RabProgressController::class, 'destroy'])->name('destroy');
+        Route::get('input',                [RabProgressController::class, 'create'])->name('create');
+        Route::post('/',                   [RabProgressController::class, 'store'])->name('store');
+        Route::get('{progress}',           [RabProgressController::class, 'detail'])->name('detail');
+        Route::get('{progress}/edit',      [RabProgressController::class, 'edit'])->name('edit');      // ← baru
+        Route::post('{progress}/save',     [RabProgressController::class, 'saveDraft'])->name('save'); // ← baru
+        Route::post('{progress}/finalize', [RabProgressController::class, 'finalize'])->name('finalize');
+        Route::delete('{progress}',        [RabProgressController::class, 'destroy'])->name('destroy');
+        Route::post('{progress}/revisi',   [RabProgressController::class, 'revisi'])->name('revisi');  // perbaiki name
+    });    
+
+    Route::prefix('sertifikat')->name('sertifikat.')->group(function () {
+        Route::get('/',            [SertifikatPembayaranController::class,'index'])->name('index');
+        Route::get('/create',      [SertifikatPembayaranController::class,'create'])->name('create');
+        Route::post('/',           [SertifikatPembayaranController::class,'store'])->name('store');
+        Route::get('/{id}',        [SertifikatPembayaranController::class,'show'])->name('show');
+        Route::get('/{id}/cetak',  [SertifikatPembayaranController::class,'cetak'])->name('cetak'); // PDF portrait
+        Route::resource('sertifikat', SertifikatPembayaranController::class);
+        Route::get('sertifikat/{id}/pdf', [SertifikatPembayaranController::class, 'generatePdf'])
+    ->name('sertifikat.pdf');
+
+
     });
 
     Route::get('/proyek/{proyek}/penawaran/{penawaran}/pdf-mixed',
@@ -175,7 +192,6 @@ Route::middleware(['auth'])->group(function () {
     // Jika ingin mengizinkan hapus, ganti baris di atas dengan:
     // ->only(['index','create','store','edit','update','destroy']);
 
-    // routes/web.php
     Route::put(
     '/proyek/{proyek}/penawaran/{penawaran}/keterangan',
     [\App\Http\Controllers\RabPenawaranController::class, 'updateKeterangan']

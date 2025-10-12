@@ -2,9 +2,12 @@
 
 @section('content')
 @php
-  $fmt = fn($n) => number_format((float)$n, 2, ',', '.');
-  // make sure relations are available (lazy is fine, but this avoids N+1)
-  $bapp->loadMissing('details', 'penawaran');
+  $fmt = fn($n)=>number_format((float)$n, 2, ',', '.');
+  $bapp->loadMissing('details','penawaran');
+  $totWi = $bapp->details->sum('bobot_item');
+  $totPrev = $bapp->details->sum('prev_pct');
+  $totDelta = $bapp->details->sum('delta_pct');
+  $totNow = $bapp->details->sum('now_pct');
 @endphp
 
 <div class="card shadow-sm animate__animated animate__fadeIn">
@@ -23,7 +26,7 @@
     </h5>
 
     <div class="d-flex gap-2">
-      <a href="{{ route('bapp.index', $proyek->id) }}" class="btn btn-light">
+    <a href="{{ route('proyek.show', $proyek->id) }}?tab=bapp" class="btn btn-light">
         <i data-feather="arrow-left" class="me-1"></i>Kembali
       </a>
 
@@ -62,17 +65,22 @@
       <div class="col-12"><strong>Catatan:</strong> {{ $bapp->notes ?: '-' }}</div>
     </div>
 
-    {{-- Tabel detail --}}
+    {{-- Tabel detail (sinkron dengan Create) --}}
     <div class="table-responsive">
       <table class="table table-bordered table-sm align-middle">
         <thead class="table-light text-center">
           <tr>
             <th style="width:12%">KODE</th>
             <th>URAIAN</th>
-            <th class="text-end" style="width:12%">BOBOT ITEM (%)</th>
-            <th class="text-end" style="width:12%">PROG. S/D MINGGU LALU (%)</th>
-            <th class="text-end" style="width:12%">PROG. MINGGU INI (%)</th>
-            <th class="text-end" style="width:12%">PROG. SAAT INI (%)</th>
+            {{-- Bobot = % proyek (tanpa “%”) --}}
+            <th class="text-end" style="width:10%">BOBOT ITEM</th>
+            <th class="text-end" style="width:12%">BOBOT S/D MINGGU LALU</th>
+            <th class="text-end" style="width:12%">Δ BOBOT MINGGU INI</th>
+            <th class="text-end" style="width:12%">BOBOT SAAT INI</th>
+            {{-- Progress = % terhadap item (dengan “%”) --}}
+            <th class="text-end" style="width:12%">PROG. S/D MINGGU LALU</th>
+            <th class="text-end" style="width:12%">PROG. MINGGU INI</th>
+            <th class="text-end" style="width:12%">PROG. SAAT INI</th>
           </tr>
         </thead>
         <tbody>
@@ -80,22 +88,32 @@
           <tr>
             <td class="text-nowrap">{{ $d->kode }}</td>
             <td>{{ $d->uraian }}</td>
+
+            {{-- Bobot (angka/desimal) --}}
             <td class="text-end">{{ $fmt($d->bobot_item) }}</td>
             <td class="text-end">{{ $fmt($d->prev_pct) }}</td>
             <td class="text-end">{{ $fmt($d->delta_pct) }}</td>
             <td class="text-end">{{ $fmt($d->now_pct) }}</td>
+
+            {{-- Progress (% terhadap item) --}}
+            <td class="text-end">{{ $fmt($d->prev_item_pct) }} %</td>
+            <td class="text-end">{{ $fmt($d->delta_item_pct) }} %</td>
+            <td class="text-end">{{ $fmt($d->now_item_pct) }} %</td>
           </tr>
         @empty
-          <tr><td colspan="6" class="text-center text-muted py-3">Tidak ada detail.</td></tr>
+          <tr><td colspan="9" class="text-center text-muted py-3">Tidak ada detail.</td></tr>
         @endforelse
         </tbody>
+
+        {{-- Footer: jumlahkan hanya kolom bobot --}}
         <tfoot class="table-light fw-semibold">
           <tr>
             <td colspan="2" class="text-end">TOTAL</td>
-            <td></td>
-            <td class="text-end">{{ $fmt($bapp->total_prev_pct) }}</td>
-            <td class="text-end">{{ $fmt($bapp->total_delta_pct) }}</td>
-            <td class="text-end">{{ $fmt($bapp->total_now_pct) }}</td>
+            <td class="text-end">{{ $fmt($totWi) }}</td>
+            <td class="text-end">{{ $fmt($totPrev) }}</td>
+            <td class="text-end">{{ $fmt($totDelta) }}</td>
+            <td class="text-end">{{ $fmt($totNow) }}</td>
+            <td></td><td></td><td></td>
           </tr>
         </tfoot>
       </table>

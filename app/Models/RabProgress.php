@@ -41,4 +41,37 @@ class RabProgress extends Model
     {
         return $this->belongsTo(\App\Models\RabPenawaranHeader::class, 'penawaran_id');
     }
+    
+    // Relasi revisi
+    public function revisiDari()
+    {
+        // anak menyimpan revisi_dari_id yang menunjuk ke "this"
+        return $this->belongsTo(self::class, 'revisi_dari_id');
+    }
+
+    public function revisiKe()
+    {
+        // cari satu child yang punya revisi_dari_id = this->id
+        return $this->hasOne(self::class, 'revisi_dari_id', 'id');
+    }
+
+    public function getVersiTerbaru(): self
+    {
+        $latest = $this->loadMissing('revisiKe')->revisiKe ?: $this;
+        while ($latest->relationLoaded('revisiKe') ? $latest->revisiKe : $latest->load('revisiKe')->revisiKe) {
+            $latest = $latest->revisiKe;
+        }
+        return $latest;
+    }
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'draft'    => 'Draft',
+            'final'    => 'Final',
+            'approved' => 'Disetujui',
+            'revised'  => 'Direvisi',
+            default    => ucfirst($this->status ?? '-'),
+        };
+    }
 }
