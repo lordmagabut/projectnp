@@ -725,22 +725,39 @@
       {{ optional($finalPenawarans->firstWhere('id',$sertifikatPenawaranId))->nama_penawaran ?? ('#'.$sertifikatPenawaranId) }}
     </span>
   </div>
+    @php
+    $tax = optional($proyek->taxProfileAktif);
+    $pphBase = strtoupper($tax->pph_base ?? 'DPP');
+    $pphRate = is_null($tax->pph_rate) ? null : rtrim(rtrim(number_format((float)$tax->pph_rate,3,',','.'),'0'),',').'%';
+  @endphp
+
+  <div class="mb-2">
+    <span class="badge rounded-pill text-bg-light border me-2">
+      Basis PPh: <strong class="ms-1">{{ $pphBase }}</strong>
+    </span>
+    <span class="badge rounded-pill text-bg-light border">
+      Tarif PPh: <strong class="ms-1">{{ $pphRate ?? '—' }}</strong>
+    </span>
+  </div>
 
   <div class="table-responsive">
     <table class="table table-hover table-bordered table-sm align-middle" id="tbl-sertifikat">
-      <thead class="table-light">
-        <tr>
-          <th style="width:4%">#</th>
-          <th>No. Sertifikat</th>
-          <th style="width:11%">Tanggal</th>
-          <th style="width:10%">Termin</th>
-          <th>No. BAPP</th>
-          <th class="text-end" style="width:14%">WO Material</th>
-          <th class="text-end" style="width:14%">WO Upah</th>
-          <th class="text-end" style="width:14%">Tagihan (Bruto+PPN)</th>
-          <th class="text-center" style="width:16%">Aksi</th>
-        </tr>
-      </thead>
+    <thead class="table-light">
+      <tr>
+        <th style="width:4%">#</th>
+        <th>No. Sertifikat</th>
+        <th style="width:11%">Tanggal</th>
+        <th style="width:10%">Termin</th>
+        <th>No. BAPP</th>
+        <th class="text-end" style="width:12%">WO Material</th>
+        <th class="text-end" style="width:12%">WO Upah</th>
+        <th class="text-end" style="width:12%">DPP Material</th>  {{-- baru --}}
+        <th class="text-end" style="width:12%">DPP Jasa</th>      {{-- baru --}}
+        <th class="text-end" style="width:14%">Tagihan (Bruto+PPN)</th>
+        <th class="text-center" style="width:16%">Aksi</th>
+      </tr>
+    </thead>
+
       <tbody>
         @forelse($sertifikats as $i => $s)
           <tr>
@@ -751,6 +768,8 @@
             <td class="text-nowrap">{{ $s->bapp?->nomor_bapp ?? '-' }}</td>
             <td class="text-end">{{ $rp($s->nilai_wo_material) }}</td>
             <td class="text-end">{{ $rp($s->nilai_wo_jasa) }}</td>
+            <td class="text-end">{{ $rp($s->dpp_material) }}</td>
+            <td class="text-end">{{ $rp($s->dpp_jasa) }}</td>
             <td class="text-end fw-semibold text-primary">{{ $rp($s->total_tagihan) }}</td>
             <td class="text-center">
               <a href="{{ route('sertifikat.show', $s->id) }}" class="btn btn-sm btn-outline-teal me-1">

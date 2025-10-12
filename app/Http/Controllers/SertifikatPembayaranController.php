@@ -90,31 +90,30 @@ class SertifikatPembayaranController extends Controller
         return sprintf('%s%03d', $prefix, $seq);
     }
 
-    public function store(Request $r)
+    public function store(\Illuminate\Http\Request $request)
     {
-        $data = $r->validate([
-            'bapp_id' => 'required|exists:bapps,id',
-            'tanggal' => 'required|date',
-            'termin_ke' => 'required|integer|min:1',
-            'persen_progress' => 'required|numeric|min:0',
-
-            'nilai_wo_material' => 'required|numeric|min:0',
-            'nilai_wo_jasa'     => 'required|numeric|min:0',
-
-            'uang_muka_persen'  => 'required|numeric|min:0',
-            'pemotongan_um_persen' => 'required|numeric|min:0',
-            'retensi_persen'    => 'required|numeric|min:0',
-            'ppn_persen'        => 'required|numeric|min:0',
-
+        $data = $request->validate([
+            'bapp_id'               => 'required|exists:bapps,id',
+            'tanggal'               => 'required|date',
+            'termin_ke'             => 'required|integer|min:1',
+            'persen_progress'       => 'required|numeric|min:0',
+            'nilai_wo_material'     => 'required|numeric|min:0',
+            'nilai_wo_jasa'         => 'required|numeric|min:0',
+            'uang_muka_persen'      => 'required|numeric|min:0',
+            'pemotongan_um_persen'  => 'required|numeric|min:0',
+            'retensi_persen'        => 'required|numeric|min:0',
+            'ppn_persen'            => 'required|numeric|min:0',
+            // pihak terkait (opsional)
             'pemberi_tugas_nama'        => 'nullable|string',
-            'pemberi_tugas_perusahaan'  => 'nullable|string',
             'pemberi_tugas_jabatan'     => 'nullable|string',
+            'pemberi_tugas_perusahaan'  => 'nullable|string',
             'penerima_tugas_nama'       => 'nullable|string',
-            'penerima_tugas_perusahaan' => 'nullable|string',
             'penerima_tugas_jabatan'    => 'nullable|string',
+            'penerima_tugas_perusahaan' => 'nullable|string',
         ]);
 
-        $nilai_wo_total    = $data['nilai_wo_material'] + $data['nilai_wo_jasa'];
+        // --- Hitungan dasar
+        $nilai_wo_total    = round($data['nilai_wo_material'] + $data['nilai_wo_jasa'], 2);
         $uang_muka_nilai   = round($nilai_wo_total * ($data['uang_muka_persen']/100), 2);
         $pot_um_nilai      = round($uang_muka_nilai * ($data['pemotongan_um_persen']/100), 2);
         $sisa_uang_muka    = $uang_muka_nilai - $pot_um_nilai;
@@ -123,11 +122,35 @@ class SertifikatPembayaranController extends Controller
         $retensi_nilai     = round($nilai_progress_rp * ($data['retensi_persen']/100), 2);
 
         $total_dibayar     = $nilai_progress_rp - $pot_um_nilai - $retensi_nilai;
-        $ppn_nilai         = round($total_dibayar * ($data['ppn_persen']/100), 2);
-        $total_tagihan     = $total_dibayar + $ppn_nilai;
+
+        // --- Split proporsional utk DPP (acuan PPh)
+        $propM = $nilai_wo_total > 0 ? ($data['nilai_wo_material'] / $nilai_wo_total) : 0;
+        $propJ = $nilai_wo_total > 0 ? ($data['nilai_wo_jasa']     / $nilai_wo_total) : 0;
+
+        $progress_M = round($data['nilai_wo_material'] * ($data['persen_progress']/100), 2);
+        $progress_J = round($data['nilai_wo_jasa']     * ($data['persen_progress']/100), 2);
+
+        $pot_um_M   = round($pot_um_nilai * $propM, 2);
+        $pot_um_J   = round($pot_um_nilai * $propJ, 2);
+
+        $retensi_M  = round($retensi_nilai * $propM, 2);
+        $retensi_J  = round($retensi_nilai * $propJ, 2);
+
+        $dpp_material = max(0, round($progress_M - $pot_um_M - $retensi_M, 2));
+        $dpp_jasa     = max(0, round($progress_J - $pot_um_J - $retensi_J, 2));
+
+        // Sesuaikan delta pembulatan agar pas dengan total_dibayar
+        $sumDpp = round($dpp_material + $dpp_jasa, 2);
+        if ($sumDpp !== round($total_dibayar, 2)) {
+            $delta = round($total_dibayar - $sumDpp, 2);
+            if ($dpp_jasa >= $dpp_material) $dpp_jasa += $delta; else $dpp_material += $delta;
+        }
+
+        $ppn_nilai     = round($total_dibayar * ($data['ppn_persen']/100), 2);
+        $total_tagihan = $total_dibayar + $ppn_nilai;
 
         $payload = array_merge($data, [
-            'nomor'               => $this->generateNomor(),
+            'nomor'               => $this->generateNomor(),  // metode pembuat nomor milikmu
             'nilai_wo_total'      => $nilai_wo_total,
             'uang_muka_nilai'     => $uang_muka_nilai,
             'pemotongan_um_nilai' => $pot_um_nilai,
@@ -135,17 +158,19 @@ class SertifikatPembayaranController extends Controller
             'nilai_progress_rp'   => $nilai_progress_rp,
             'retensi_nilai'       => $retensi_nilai,
             'total_dibayar'       => $total_dibayar,
+            'dpp_material'        => $dpp_material,   // <-- DISIMPAN
+            'dpp_jasa'            => $dpp_jasa,       // <-- DISIMPAN
             'ppn_nilai'           => $ppn_nilai,
             'total_tagihan'       => $total_tagihan,
             'terbilang'           => $this->terbilangRupiah($total_tagihan).' Rupiah',
             'dibuat_oleh_id'      => auth()->id(),
         ]);
 
-        $sp = DB::transaction(fn()=> SertifikatPembayaran::create($payload));
+        $sp = \App\Models\SertifikatPembayaran::create($payload);
 
-        return redirect()->route('sertifikat.show', $sp->id)
-            ->with('success','Sertifikat pembayaran berhasil dibuat.');
+        return redirect()->route('sertifikat.show', $sp->id)->with('success','Sertifikat tersimpan.');
     }
+
 
     public function show($id)
     {

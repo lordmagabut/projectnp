@@ -104,12 +104,22 @@
             <td class="right">Rp. {{ $fmt($sp->ppn_nilai) }} (+)</td>
           </tr>
           <tr>
+            <td>- DPP Material (acuan PPh)</td>
+            <td class="right">Rp. {{ $fmt($sp->dpp_material) }}</td>
+          </tr>
+          <tr>
+            <td>- DPP Jasa (acuan PPh)</td>
+            <td class="right">Rp. {{ $fmt($sp->dpp_jasa) }}</td>
+          </tr>
+          <tr>
             <td class="bold">Total Tagihan Saat Ini</td>
             <td class="right bold">Rp. {{ $fmt($sp->total_tagihan) }}</td>
           </tr>
         </table>
       </td>
     </tr>
+
+
   </table>
 
   <p><span class="bold">Terbilang:</span> {{ $sp->terbilang }}</p>
