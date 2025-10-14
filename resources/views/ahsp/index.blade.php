@@ -585,15 +585,29 @@
         if(v===null || v===undefined || v==='') return fallback;
         return String(v);
     }
-    function fmtDate(s){
-        // terima: created_at / tanggal efektif; fallback ke raw
-        if(!s) return '-';
-        try{
-            const d = new Date(s);
-            if (isNaN(d.getTime())) return s;
-            return d.toLocaleString('id-ID', { dateStyle:'medium', timeStyle:'short' });
-        }catch(e){ return s; }
+    function fmtDate(raw) {
+    if (!raw) return '-';
+    // dukung "YYYY-MM-DD HH:MM:SS" atau "YYYY-MM-DDTHH:MM:SS(.ms)(Z)?"
+    // 1) kalau ada spasi, anggap lokal dan split manual
+    let s = String(raw).trim();
+
+    // Normalisasi: ganti 'T' dengan spasi, buang suffix zona ('Z' / '+hh:mm')
+    s = s.replace('T', ' ').replace(/([.]\d+)?([zZ]|[+\-]\d{2}:?\d{2})$/, '');
+
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ ](\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (!m) {
+        // fallback: tampilkan mentah kalau format tak dikenali
+        return raw;
     }
+    const [_, Y, MM, DD, hh, mm, ss] = m;
+    const bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    const blnIdx = Math.max(0, Math.min(11, parseInt(MM,10)-1));
+    const jam = String(hh).padStart(2,'0');
+    const menit = String(mm).padStart(2,'0');
+
+    return `${parseInt(DD,10)} ${bulan[blnIdx]} ${Y}, ${jam}.${menit}`;
+    }
+
 
     $(document).ready(function () {
         // Inisialisasi tabel Material secara langsung
