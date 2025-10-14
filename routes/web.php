@@ -99,6 +99,9 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('ahsp', AhspController::class);
     Route::resource('hsd-material', HsdMaterialController::class);
     Route::resource('hsd-upah',     HsdUpahController::class);
+    Route::get('/hsd-material/{id}/history', [HsdMaterialController::class, 'history']);
+    Route::get('/hsd-upah/{id}/history', [HsdUpahController::class, 'history']);
+
 
     // RAB umum
     Route::get('/rab/{proyek_id}',                 [RabController::class, 'index'])->name('rab.index');

@@ -69,6 +69,14 @@
         margin-right: 10px;
         font-size: 1.25rem;
     }
+
+    /* Style khusus modal history */
+    .modal .table th, .modal .table td {
+        vertical-align: middle;
+    }
+    .spinner-wrap{
+        display:flex;align-items:center;justify-content:center;min-height:160px
+    }
 </style>
 @endpush
 
@@ -142,8 +150,23 @@
                   <a href="{{ route('hsd-material.edit', $material->id) }}" class="btn btn-sm btn-outline-primary rounded">
                       <i class="fas fa-edit"></i> Edit
                   </a>
-                  {{-- Tombol Hapus dengan Modal Konfirmasi --}}
-                  <button type="button" class="btn btn-sm btn-outline-danger rounded" data-bs-toggle="modal" data-bs-target="#deleteMaterialModal" data-id="{{ $material->id }}" data-name="{{ $material->nama }}">
+
+                  {{-- Tombol History Material --}}
+                  <button type="button"
+                          class="btn btn-sm btn-outline-info rounded btn-history-material"
+                          data-bs-toggle="modal"
+                          data-bs-target="#historyMaterialModal"
+                          data-id="{{ $material->id }}"
+                          data-name="{{ $material->nama }}">
+                      <i class="fas fa-clock-rotate-left"></i> Riwayat
+                  </button>
+
+                  {{-- Tombol Hapus --}}
+                  <button type="button" class="btn btn-sm btn-outline-danger rounded"
+                          data-bs-toggle="modal"
+                          data-bs-target="#deleteMaterialModal"
+                          data-id="{{ $material->id }}"
+                          data-name="{{ $material->nama }}">
                       <i class="fas fa-trash-alt"></i> Hapus
                   </button>
                 </td>
@@ -202,8 +225,23 @@
                   <a href="{{ route('hsd-upah.edit', $upah->id) }}" class="btn btn-sm btn-outline-primary rounded">
                       <i class="fas fa-edit"></i> Edit
                   </a>
-                  {{-- Tombol Hapus dengan Modal Konfirmasi --}}
-                  <button type="button" class="btn btn-sm btn-outline-danger rounded" data-bs-toggle="modal" data-bs-target="#deleteUpahModal" data-id="{{ $upah->id }}" data-name="{{ $upah->jenis_pekerja }}">
+
+                  {{-- Tombol History Upah --}}
+                  <button type="button"
+                          class="btn btn-sm btn-outline-info rounded btn-history-upah"
+                          data-bs-toggle="modal"
+                          data-bs-target="#historyUpahModal"
+                          data-id="{{ $upah->id }}"
+                          data-name="{{ $upah->jenis_pekerja }}">
+                      <i class="fas fa-clock-rotate-left"></i> Riwayat
+                  </button>
+
+                  {{-- Tombol Hapus --}}
+                  <button type="button" class="btn btn-sm btn-outline-danger rounded"
+                          data-bs-toggle="modal"
+                          data-bs-target="#deleteUpahModal"
+                          data-id="{{ $upah->id }}"
+                          data-name="{{ $upah->jenis_pekerja }}">
                       <i class="fas fa-trash-alt"></i> Hapus
                   </button>
                 </td>
@@ -248,7 +286,7 @@
                 <th class="text-nowrap">Kategori</th>
                 <th class="text-nowrap">Satuan</th>
                 <th class="text-end text-nowrap">Total Harga</th>
-                <th class="text-end text-nowrap">Total Pembulatan</th> {{-- Tambahkan kolom ini --}}
+                <th class="text-end text-nowrap">Total Pembulatan</th>
                 <th class="text-center text-nowrap">Status</th>
                 <th class="text-center text-nowrap">Aksi</th>
               </tr>
@@ -261,7 +299,7 @@
                 <td>{{ $a->kategori->nama ?? '-' }}</td>
                 <td>{{ $a->satuan }}</td>
                 <td class="text-end">Rp {{ number_format($a->total_harga, 0, ',', '.') }}</td>
-                <td class="text-end">Rp {{ number_format($a->total_harga_pembulatan ?? 0, 0, ',', '.') }}</td> {{-- Tampilkan total pembulatan --}}
+                <td class="text-end">Rp {{ number_format($a->total_harga_pembulatan ?? 0, 0, ',', '.') }}</td>
                 <td class="text-center">
                   @if($a->is_locked)
                     <span class="badge bg-danger rounded-pill py-2 px-3">Terkunci <i class="fas fa-lock ms-1"></i></span>
@@ -270,41 +308,41 @@
                   @endif
                 </td>
                 <td class="text-center">
-                <div class="dropdown">
+                  <div class="dropdown">
                     <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    Aksi
+                      Aksi
                     </button>
                     <ul class="dropdown-menu">
-                    <li>
-                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#duplicateAhspModal" data-id="{{ $a->id }}" data-name="{{ $a->nama_pekerjaan }}">
-                        <i class="fas fa-copy me-1"></i> Duplikat
-                    </button>
-                    </li>
-                    <li>
+                      <li>
+                        <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#duplicateAhspModal" data-id="{{ $a->id }}" data-name="{{ $a->nama_pekerjaan }}">
+                            <i class="fas fa-copy me-1"></i> Duplikat
+                        </button>
+                      </li>
+                      <li>
                         <a href="{{ route('ahsp.show', $a->id) }}" class="dropdown-item">
-                        <i class="fas fa-eye me-1"></i> Lihat
+                          <i class="fas fa-eye me-1"></i> Lihat
                         </a>
-                    </li>
-                    @if(!$a->is_locked)
+                      </li>
+                      @if(!$a->is_locked)
                         <li>
-                        <a href="{{ route('ahsp.edit', $a->id) }}" class="dropdown-item">
+                          <a href="{{ route('ahsp.edit', $a->id) }}" class="dropdown-item">
                             <i class="fas fa-edit me-1"></i> Edit
-                        </a>
+                          </a>
                         </li>
                         <li>
-                        <button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteAhspModal" data-id="{{ $a->id }}" data-name="{{ $a->nama_pekerjaan }}">
+                          <button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteAhspModal" data-id="{{ $a->id }}" data-name="{{ $a->nama_pekerjaan }}">
                             <i class="fas fa-trash-alt me-1"></i> Hapus
-                        </button>
+                          </button>
                         </li>
-                    @else
+                      @else
                         <li>
-                        <button class="dropdown-item text-muted" disabled>
+                          <button class="dropdown-item text-muted" disabled>
                             <i class="fas fa-lock me-1"></i> Terkunci
-                        </button>
+                          </button>
                         </li>
-                    @endif
+                      @endif
                     </ul>
-                </div>
+                  </div>
                 </td>
               </tr>
               @empty
@@ -414,6 +452,118 @@
     </div>
 </div>
 
+{{-- ======================== MODAL HISTORY MATERIAL ======================== --}}
+<div class="modal fade" id="historyMaterialModal" tabindex="-1" aria-labelledby="historyMaterialModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content rounded-lg shadow-lg">
+      <div class="modal-header bg-info text-white rounded-top">
+        <h5 class="modal-title" id="historyMaterialModalLabel">
+          <i class="fas fa-clock-rotate-left me-2"></i> Riwayat Perubahan Material
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="p-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div>
+              <div class="fw-semibold">Material:</div>
+              <div class="text-primary" id="historyMaterialName">-</div>
+            </div>
+            <div class="text-muted small">Sumber: <code>hsd_material_history</code></div>
+          </div>
+          <div id="matHistoryLoading" class="spinner-wrap">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+            <span class="ms-2">Memuat riwayat...</span>
+          </div>
+          <div class="table-responsive d-none" id="matHistoryWrap">
+            <table class="table table-striped table-hover align-middle">
+              <thead>
+                <tr>
+                  <th class="text-nowrap">Tanggal</th>
+                  <th class="text-nowrap text-end">Harga Lama</th>
+                  <th class="text-nowrap text-end">Harga Baru</th>
+                  <th class="text-nowrap">Satuan</th>
+                  <th class="text-nowrap">Keterangan</th>
+                  <th class="text-nowrap">Diubah Oleh</th>
+                </tr>
+              </thead>
+              <tbody id="matHistoryBody">
+                {{-- rows via JS --}}
+              </tbody>
+            </table>
+          </div>
+          <div class="p-3 d-none" id="matHistoryEmpty">
+            <div class="alert alert-secondary mb-0"><i class="fas fa-info-circle me-2"></i>Tidak ada data riwayat.</div>
+          </div>
+          <div class="p-3 d-none" id="matHistoryError">
+            <div class="alert alert-danger mb-0"><i class="fas fa-triangle-exclamation me-2"></i>Gagal memuat data.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <small class="text-muted">Menampilkan 50 riwayat terakhir (jika tersedia)</small>
+        <button type="button" class="btn btn-secondary rounded" data-bs-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- ======================== MODAL HISTORY UPAH ======================== --}}
+<div class="modal fade" id="historyUpahModal" tabindex="-1" aria-labelledby="historyUpahModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content rounded-lg shadow-lg">
+      <div class="modal-header bg-info text-white rounded-top">
+        <h5 class="modal-title" id="historyUpahModalLabel">
+          <i class="fas fa-clock-rotate-left me-2"></i> Riwayat Perubahan Upah
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="p-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div>
+              <div class="fw-semibold">Jenis Pekerja:</div>
+              <div class="text-primary" id="historyUpahName">-</div>
+            </div>
+            <div class="text-muted small">Sumber: <code>hsd_upah_history</code></div>
+          </div>
+          <div id="upahHistoryLoading" class="spinner-wrap">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+            <span class="ms-2">Memuat riwayat...</span>
+          </div>
+          <div class="table-responsive d-none" id="upahHistoryWrap">
+            <table class="table table-striped table-hover align-middle">
+              <thead>
+                <tr>
+                  <th class="text-nowrap">Tanggal</th>
+                  <th class="text-nowrap text-end">Harga Lama</th>
+                  <th class="text-nowrap text-end">Harga Baru</th>
+                  <th class="text-nowrap">Satuan</th>
+                  <th class="text-nowrap">Keterangan</th>
+                  <th class="text-nowrap">Diubah Oleh</th>
+                </tr>
+              </thead>
+              <tbody id="upahHistoryBody">
+                {{-- rows via JS --}}
+              </tbody>
+            </table>
+          </div>
+          <div class="p-3 d-none" id="upahHistoryEmpty">
+            <div class="alert alert-secondary mb-0"><i class="fas fa-info-circle me-2"></i>Tidak ada data riwayat.</div>
+          </div>
+          <div class="p-3 d-none" id="upahHistoryError">
+            <div class="alert alert-danger mb-0"><i class="fas fa-triangle-exclamation me-2"></i>Gagal memuat data.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <small class="text-muted">Menampilkan 50 riwayat terakhir (jika tersedia)</small>
+        <button type="button" class="btn btn-secondary rounded" data-bs-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @endsection
 
 @push('custom-scripts')
@@ -426,6 +576,25 @@
 <script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
 
 <script>
+    // Util format rupiah
+    function formatRupiah(n){
+        const v = Number(n||0);
+        return 'Rp ' + v.toLocaleString('id-ID');
+    }
+    function safeText(v, fallback='-'){
+        if(v===null || v===undefined || v==='') return fallback;
+        return String(v);
+    }
+    function fmtDate(s){
+        // terima: created_at / tanggal efektif; fallback ke raw
+        if(!s) return '-';
+        try{
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return s;
+            return d.toLocaleString('id-ID', { dateStyle:'medium', timeStyle:'short' });
+        }catch(e){ return s; }
+    }
+
     $(document).ready(function () {
         // Inisialisasi tabel Material secara langsung
         let tableMaterial = $('#tableMaterial').DataTable({ responsive: true });
@@ -506,6 +675,129 @@
             modal.find('#duplicateAhspName').text(ahspName);
             modal.find('#duplicateAhspForm').attr('action', `/ahsp/${ahspId}/duplicate`); // Sesuaikan dengan route Anda
         });
+
+        // ===================== HISTORY MATERIAL =====================
+        const historyMaterialModal = document.getElementById('historyMaterialModal');
+        historyMaterialModal.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            const id = btn.getAttribute('data-id');
+            const name = btn.getAttribute('data-name') || '-';
+
+            $('#historyMaterialName').text(name);
+
+            // reset state
+            $('#matHistoryLoading').removeClass('d-none');
+            $('#matHistoryWrap').addClass('d-none');
+            $('#matHistoryEmpty').addClass('d-none');
+            $('#matHistoryError').addClass('d-none');
+            $('#matHistoryBody').empty();
+
+            // fetch
+            $.ajax({
+                url: `/hsd-material/${id}/history`,
+                method: 'GET',
+                dataType: 'json'
+            })
+            .done(function(res){
+                const rows = Array.isArray(res) ? res : (res.data || []);
+                if(!rows || rows.length === 0){
+                    $('#matHistoryEmpty').removeClass('d-none');
+                }else{
+                    const html = rows.map(r=>{
+                        // r contoh key yang didukung:
+                        // created_at / updated_at / tanggal
+                        // old_price / new_price / harga_lama / harga_baru / harga
+                        // satuan
+                        // note / keterangan / sumber
+                        // user_name / changed_by
+                        const tanggal = fmtDate(r.tanggal || r.created_at || r.updated_at);
+                        const hargaLama = r.harga_lama ?? r.old_price ?? null;
+                        const hargaBaru = r.harga_baru ?? r.new_price ?? r.harga ?? null;
+                        const satuan   = r.satuan || '-';
+                        const ket      = safeText(r.keterangan ?? r.note ?? r.sumber, '-');
+                        const user     = safeText(r.user_name ?? r.changed_by, '-');
+
+                        return `
+                          <tr>
+                            <td>${tanggal}</td>
+                            <td class="text-end">${hargaLama !== null ? formatRupiah(hargaLama) : '-'}</td>
+                            <td class="text-end">${hargaBaru !== null ? formatRupiah(hargaBaru) : '-'}</td>
+                            <td>${safeText(satuan,'-')}</td>
+                            <td>${ket}</td>
+                            <td>${user}</td>
+                          </tr>
+                        `;
+                    }).join('');
+                    $('#matHistoryBody').html(html);
+                    $('#matHistoryWrap').removeClass('d-none');
+                }
+            })
+            .fail(function(){
+                $('#matHistoryError').removeClass('d-none');
+            })
+            .always(function(){
+                $('#matHistoryLoading').addClass('d-none');
+            });
+        });
+
+        // ===================== HISTORY UPAH =====================
+        const historyUpahModal = document.getElementById('historyUpahModal');
+        historyUpahModal.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
+            const id = btn.getAttribute('data-id');
+            const name = btn.getAttribute('data-name') || '-';
+
+            $('#historyUpahName').text(name);
+
+            // reset state
+            $('#upahHistoryLoading').removeClass('d-none');
+            $('#upahHistoryWrap').addClass('d-none');
+            $('#upahHistoryEmpty').addClass('d-none');
+            $('#upahHistoryError').addClass('d-none');
+            $('#upahHistoryBody').empty();
+
+            // fetch
+            $.ajax({
+                url: `/hsd-upah/${id}/history`,
+                method: 'GET',
+                dataType: 'json'
+            })
+            .done(function(res){
+                const rows = Array.isArray(res) ? res : (res.data || []);
+                if(!rows || rows.length === 0){
+                    $('#upahHistoryEmpty').removeClass('d-none');
+                }else{
+                    const html = rows.map(r=>{
+                        const tanggal = fmtDate(r.tanggal || r.created_at || r.updated_at);
+                        const hargaLama = r.harga_lama ?? r.old_price ?? null;
+                        const hargaBaru = r.harga_baru ?? r.new_price ?? r.harga ?? null;
+                        const satuan   = r.satuan || '-';
+                        const ket      = safeText(r.keterangan ?? r.note ?? r.sumber, '-');
+                        const user     = safeText(r.user_name ?? r.changed_by, '-');
+
+                        return `
+                          <tr>
+                            <td>${tanggal}</td>
+                            <td class="text-end">${hargaLama !== null ? formatRupiah(hargaLama) : '-'}</td>
+                            <td class="text-end">${hargaBaru !== null ? formatRupiah(hargaBaru) : '-'}</td>
+                            <td>${safeText(satuan,'-')}</td>
+                            <td>${ket}</td>
+                            <td>${user}</td>
+                          </tr>
+                        `;
+                    }).join('');
+                    $('#upahHistoryBody').html(html);
+                    $('#upahHistoryWrap').removeClass('d-none');
+                }
+            })
+            .fail(function(){
+                $('#upahHistoryError').removeClass('d-none');
+            })
+            .always(function(){
+                $('#upahHistoryLoading').addClass('d-none');
+            });
+        });
+
     });
 </script>
 @endpush
