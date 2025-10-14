@@ -109,11 +109,11 @@
       <div class="brand">
         {{-- Ganti logo sesuai aset Anda --}}
         <img src="{{ asset('assets/images/logo.png') }}" alt="Logo" onerror="this.style.display='none'">
-        <span class="brand-name">Project Monitoring System</span>
+        <span class="brand-name">ARTISTA GROUP</span>
       </div>
 
       <div class="auth-header">
-        <h1 class="auth-title">SELAMAT DATANG</h1>
+        <h1 class="auth-title">Project Monitoring System</h1>
         <p class="auth-subtitle">Silakan masuk ke akun Anda</p>
       </div>
 
@@ -185,9 +185,9 @@
         <div class="divider"><span>atau</span></div>
 
         {{-- Tombol SSO/OAuth contoh (nonaktifkan jika tidak dipakai) --}}
-        {{-- <a href="{{ route('oauth.google.redirect') }}" class="btn btn-outline-secondary w-100" style="border-radius:10px">
+        <a href="" class="btn btn-outline-secondary w-100" style="border-radius:10px">
           <i class="fab fa-google me-2"></i> Masuk dengan Google
-        </a> --}}
+        </a> 
       </form>
     </div>
 
@@ -196,7 +196,9 @@
     </div>
   </div>
 </div>
+@endsection
 
+@push('custom-scripts')
 {{-- Toggle password --}}
 <script>
   function togglePassword(){
@@ -211,4 +213,4 @@
     }
   }
 </script>
-@endsection
+@endpush
