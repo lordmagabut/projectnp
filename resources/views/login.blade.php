@@ -14,7 +14,7 @@
           </div>
           <div class="col-md-8 ps-md-0">
             <div class="auth-form-wrapper px-4 py-5">
-              <h5 class="text-muted fw-normal mb-4">Wilujeng Sumping</h5>
+              <h5 class="text-muted fw-normal mb-4">Nanda Ganteng</h5>
 
               {{-- Tampilkan Pesan Error --}}
               @if(session('error'))

@@ -2,101 +2,44 @@
 
 @push('plugin-styles')
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-{{-- Font Awesome untuk ikon --}}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-{{-- Animate.css untuk animasi (opsional) --}}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
 <style>
-    /* Kustomisasi tambahan untuk tampilan */
-    .card {
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        border: none;
-    }
-    .card-header {
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #e9ecef;
-        border-top-left-radius: 12px;
-        border-top-right-radius: 12px;
-        padding: 1.25rem 1.5rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .form-label {
-        font-weight: 600;
-        color: #495057;
-    }
-    .form-control, .form-select {
-        border-radius: 8px;
-        border: 1px solid #ced4da;
-        padding: 0.75rem 1rem;
-    }
-    .form-control:focus, .form-select:focus {
-        border-color: #80bdff;
-        box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25);
-    }
-    .btn {
-        border-radius: 8px;
-        padding: 0.75rem 1.25rem;
-        font-weight: 600;
-        transition: all 0.2s ease-in-out;
-    }
-    .btn-primary {
-        background-color: #007bff;
-        border-color: #007bff;
-    }
-    .btn-primary:hover {
-        background-color: #0056b3;
-        border-color: #0056b3;
-    }
-    .btn-secondary {
-        background-color: #6c757d;
-        border-color: #6c757d;
-    }
-    .btn-secondary:hover {
-        background-color: #5a6268;
-        border-color: #545b62;
-    }
-    .btn-success {
-        background-color: #28a745;
-        border-color: #28a745;
-    }
-    .btn-success:hover {
-        background-color: #218838;
-        border-color: #1e7e34;
-    }
-    .alert {
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        padding: 1rem 1.25rem;
-        margin-bottom: 1.5rem;
-    }
-    .alert .fa-solid {
-        margin-right: 10px;
-        font-size: 1.25rem;
-    }
-    .table thead th {
-        background-color: #e9ecef;
-        color: #495057;
-        font-weight: 600;
-        border-bottom: 2px solid #dee2e6;
-    }
-    .table tbody tr:hover {
-        background-color: #f2f2f2;
-    }
+    .card{border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);border:none}
+    .card-header{background:#f8f9fa;border-bottom:1px solid #e9ecef;border-top-left-radius:12px;border-top-right-radius:12px;padding:1.25rem 1.5rem;display:flex;justify-content:space-between;align-items:center}
+    .form-label{font-weight:600;color:#495057}
+    .form-control,.form-select{border-radius:8px;border:1px solid #ced4da;padding:.75rem 1rem}
+    .form-control:focus,.form-select:focus{border-color:#80bdff;box-shadow:0 0 0 .25rem rgba(0,123,255,.25)}
+    .btn{border-radius:8px;padding:.75rem 1.25rem;font-weight:600;transition:all .2s}
+    .btn-primary{background:#007bff;border-color:#007bff}
+    .btn-primary:hover{background:#0056b3;border-color:#0056b3}
+    .btn-secondary{background:#6c757d;border-color:#6c757d}
+    .btn-secondary:hover{background:#5a6268;border-color:#545b62}
+    .btn-success{background:#28a745;border-color:#28a745}
+    .btn-success:hover{background:#218838;border-color:#1e7e34}
+    .alert{border-radius:8px;display:flex;align-items:center;padding:1rem 1.25rem;margin-bottom:1.5rem}
+    .alert .fa-solid{margin-right:10px;font-size:1.25rem}
+    .table thead th{background:#e9ecef;color:#495057;font-weight:600;border-bottom:2px solid #dee2e6}
+    .table tbody tr:hover{background:#f2f2f2}
 </style>
 @endpush
 
 @section('content')
 <div class="card animate__animated animate__fadeInDown">
     <div class="card-header">
-        <h4 class="card-title mb-0"><i class="fas fa-calculator me-2"></i> Edit Analisa Harga Satuan Pekerjaan</h4>
+        <div class="d-flex align-items-center gap-2">
+            <h4 class="card-title mb-0"><i class="fas fa-calculator me-2"></i> Edit Analisa Harga Satuan Pekerjaan</h4>
+            {{-- BADGE STATUS --}}
+            @php $isDraft = strtolower($ahsp->status ?? 'draft') === 'draft'; @endphp
+            <span class="badge {{ $isDraft ? 'bg-warning text-dark' : 'bg-success' }} rounded-pill">
+                Status: {{ strtoupper($ahsp->status ?? 'draft') }}
+            </span>
+        </div>
         <a href="{{ route('ahsp.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
             <i class="fas fa-arrow-left me-1"></i> Kembali ke Daftar
         </a>
     </div>
+
     <div class="card-body">
         @if(session('success'))
             <div class="alert alert-success alert-dismissible fade show animate__animated animate__fadeIn" role="alert">
@@ -111,7 +54,17 @@
             </div>
         @endif
 
-        <form action="{{ route('ahsp.update', $ahsp->id) }}" method="POST" id="ahsp-form">
+        {{-- INFO: Kalkulasi Ulang hanya saat DRAFT --}}
+        <div class="alert {{ $isDraft ? 'alert-info' : 'alert-secondary' }} animate__animated animate__fadeIn mb-4">
+            <i class="fa-solid fa-info-circle"></i>
+            @if($isDraft)
+                Mode <strong>Draft</strong>: Anda dapat menekan <em>Kalkulasi Ulang</em> untuk menarik harga terbaru Material/Upah, menghitung ulang subtotal & total. Klik <strong>Perbarui Analisa</strong> untuk menyimpan.
+            @else
+                AHSP tidak dalam status <strong>Draft</strong>. Tombol <em>Kalkulasi Ulang</em> dinonaktifkan.
+            @endif
+        </div>
+
+        <form action="{{ route('ahsp.update', $ahsp->id) }}" method="POST" id="ahsp-form" data-is-draft="{{ $isDraft ? '1' : '0' }}">
             @csrf
             @method('PUT')
 
@@ -144,9 +97,17 @@
             </div>
 
             <hr class="my-4">
-            <h6><i class="fas fa-list-alt me-2"></i> Komponen Material / Upah</h6>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h6 class="m-0"><i class="fas fa-list-alt me-2"></i> Komponen Material / Upah</h6>
 
-            <div class="table-responsive">
+                {{-- TOMBOL KALKULASI ULANG (aktif hanya draft) --}}
+                <button type="button" id="btn-recalc" class="btn btn-sm {{ $isDraft ? 'btn-warning' : 'btn-outline-secondary' }} rounded-pill"
+                        {{ $isDraft ? '' : 'disabled' }}>
+                    <i class="fas fa-rotate me-1"></i> Kalkulasi Ulang (Draft)
+                </button>
+            </div>
+
+            <div class="table-responsive mt-3">
                 <table class="table table-bordered" id="item-table">
                     <thead>
                         <tr>
@@ -171,15 +132,12 @@
                             <td>
                                 <select name="items[{{ $i }}][referensi_id]" class="form-select item-dropdown">
                                     @php
-                                        $list = collect();
-                                        if ($d->tipe == 'material') {
-                                            $list = $materials;
-                                        } elseif ($d->tipe == 'upah') {
-                                            $list = $upahs;
-                                        }
+                                        $list = $d->tipe === 'material' ? $materials : $upahs;
                                     @endphp
                                     @foreach($list as $item)
-                                        <option value="{{ $item->id }}" data-harga="{{ $item->harga_satuan }}" data-satuan="{{ $item->satuan }}"
+                                        <option value="{{ $item->id }}"
+                                            data-harga="{{ $item->harga_satuan }}"
+        data-satuan="{{ $item->satuan }}"
                                             {{ $item->id == $d->referensi_id ? 'selected' : '' }}>
                                             {{ $item->nama ?? $item->jenis_pekerja }}
                                         </option>
@@ -192,7 +150,7 @@
                                     if ($d->tipe === 'material') {
                                         $foundItem = $materials->firstWhere('id', $d->referensi_id);
                                         $currentSatuan = $foundItem->satuan ?? '-';
-                                    } elseif ($d->tipe === 'upah') {
+                                    } else {
                                         $foundItem = $upahs->firstWhere('id', $d->referensi_id);
                                         $currentSatuan = $foundItem->satuan ?? '-';
                                     }
@@ -203,16 +161,23 @@
                                 <input type="number" name="items[{{ $i }}][koefisien]" class="form-control koefisien-input"
                                     step="0.0001" value="{{ old('items.'.$i.'.koefisien', $d->koefisien) }}">
                             </td>
-                            <td class="harga-satuan text-end">Rp {{ number_format(old('items.'.$i.'.harga_satuan', $d->harga_satuan), 0, ',', '.') }}</td>
-                            <td class="subtotal text-end">Rp {{ number_format(old('items.'.$i.'.subtotal', $d->subtotal), 0, ',', '.') }}</td>
+                            <td class="harga-satuan text-end">
+                                Rp {{ number_format(old('items.'.$i.'.harga_satuan', $d->harga_satuan), 0, ',', '.') }}
+                            </td>
+                            <td class="subtotal text-end">
+                                Rp {{ number_format(old('items.'.$i.'.subtotal', $d->subtotal), 0, ',', '.') }}
+                            </td>
                             <td class="text-center">
                                 <button type="button" class="btn btn-sm btn-danger rounded" onclick="removeRow(this)">
                                     <i class="fas fa-trash-alt"></i>
                                 </button>
                             </td>
-                            {{-- Input hidden untuk menyimpan harga_satuan dan subtotal jika diperlukan di backend --}}
-                            <input type="hidden" name="items[{{ $i }}][harga_satuan_detail]" value="{{ old('items.'.$i.'.harga_satuan_detail', $d->harga_satuan) }}">
-                            <input type="hidden" name="items[{{ $i }}][subtotal_detail]" value="{{ old('items.'.$i.'.subtotal_detail', $d->subtotal) }}">
+
+                            {{-- Hidden inputs untuk commit ke backend --}}
+                            <input type="hidden" name="items[{{ $i }}][harga_satuan_detail]"
+                                   value="{{ old('items.'.$i.'.harga_satuan_detail', $d->harga_satuan) }}">
+                            <input type="hidden" name="items[{{ $i }}][subtotal_detail]"
+                                   value="{{ old('items.'.$i.'.subtotal_detail', $d->subtotal) }}">
                         </tr>
                         @endforeach
                     </tbody>
@@ -227,17 +192,21 @@
                 <div class="col-md-6">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <strong>Total Harga Sebenarnya:</strong>
-                        <span id="total-harga-sebenarnya" class="fw-bold fs-5">Rp {{ number_format($ahsp->total_harga ?? 0, 0, ',', '.') }}</span>
+                        <span id="total-harga-sebenarnya" class="fw-bold fs-5">
+                            Rp {{ number_format($ahsp->total_harga ?? 0, 0, ',', '.') }}
+                        </span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <strong>Total Harga Pembulatan:</strong>
-                        <span id="total-harga-pembulatan" class="fw-bold fs-5 text-primary">Rp {{ number_format($ahsp->total_harga_pembulatan ?? 0, 0, ',', '.') }}</span>
+                        <span id="total-harga-pembulatan" class="fw-bold fs-5 text-primary">
+                            Rp {{ number_format($ahsp->total_harga_pembulatan ?? 0, 0, ',', '.') }}
+                        </span>
                     </div>
                 </div>
             </div>
 
-            {{-- Input Hidden untuk menyimpan total pembulatan --}}
-            <input type="hidden" name="total_harga_pembulatan" id="hidden-total-harga-pembulatan" value="{{ old('total_harga_pembulatan', $ahsp->total_harga_pembulatan) }}">
+            <input type="hidden" name="total_harga_pembulatan" id="hidden-total-harga-pembulatan"
+                   value="{{ old('total_harga_pembulatan', $ahsp->total_harga_pembulatan) }}">
 
             <div class="d-flex justify-content-end mt-4">
                 <button type="submit" class="btn btn-primary me-2">
@@ -255,20 +224,18 @@
 @push('custom-scripts')
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-
 <script>
     const materials = @json($materials);
-    const upahs = @json($upahs);
+    const upahs     = @json($upahs);
 
-    window.formatRupiah = function(value) {
-        return 'Rp ' + Number(value).toLocaleString('id-ID');
-    }
+    // Buat peta cepat id->data untuk recalc
+    const materialMap = Object.fromEntries((materials || []).map(m => [String(m.id), m]));
+    const upahMap     = Object.fromEntries((upahs || []).map(u => [String(u.id), u]));
 
-    window.roundUpToNearestThousand = function(value) {
-        return Math.ceil(value / 1000) * 1000;
-    }
+    window.formatRupiah = function(value){ return 'Rp ' + Number(value||0).toLocaleString('id-ID'); }
+    window.roundUpToNearestThousand = function(value){ return Math.ceil((value||0) / 1000) * 1000; }
 
-    window.initSelect2 = function(container) {
+    window.initSelect2 = function(container){
         $(container).find('.item-dropdown').select2({
             placeholder: 'Pilih item',
             allowClear: true,
@@ -277,7 +244,7 @@
         });
     }
 
-    window.addItemRow = function() {
+    window.addItemRow = function(){
         const tbody = document.getElementById('item-body');
         const rowIndex = tbody.children.length;
         const row = document.createElement('tr');
@@ -291,7 +258,7 @@
             </td>
             <td>
                 <select name="items[${rowIndex}][referensi_id]" class="form-select item-dropdown">
-                    ${materials.map(m => `<option value="${m.id}" data-harga="${m.harga_satuan}" data-satuan="${m.satuan}">${m.nama}</option>`).join('')}
+                    ${(materials||[]).map(m => `<option value="${m.id}" data-harga="${m.harga_satuan}" data-satuan="${m.satuan}">${m.nama}</option>`).join('')}
                 </select>
             </td>
             <td class="satuan text-center">-</td>
@@ -305,95 +272,127 @@
                     <i class="fas fa-trash-alt"></i>
                 </button>
             </td>
+            <input type="hidden" name="items[${rowIndex}][harga_satuan_detail]" value="0">
+            <input type="hidden" name="items[${rowIndex}][subtotal_detail]" value="0">
         `;
 
         tbody.appendChild(row);
-        feather.replace();
+        feather.replace?.();
         window.initSelect2(row);
         window.updateSubtotal(row.querySelector('.koefisien-input'));
     }
 
-    $(document).ready(function() {
+    $(document).ready(function(){
         const itemTableBody = $('#item-body');
 
-        // Inisialisasi Select2 untuk baris yang sudah ada saat DOM siap
-        itemTableBody.find('.item-dropdown').each(function() {
-            window.initSelect2($(this).closest('tr'));
-        });
+        // init select2 existing rows
+        itemTableBody.find('.item-dropdown').each(function(){ window.initSelect2($(this).closest('tr')); });
 
-        // Event listener untuk perubahan dropdown Tipe (Material/Upah)
-        itemTableBody.on('change', '.tipe-select', function() {
-            const select = this;
-            const row = $(select).closest('tr');
+        // change tipe -> refresh options
+        itemTableBody.on('change', '.tipe-select', function(){
+            const row = $(this).closest('tr');
             const itemDropdown = row.find('.item-dropdown');
-            const tipe = select.value;
+            const tipe = this.value;
 
-            const options = (tipe === 'material' ? materials : upahs)
-                .map(item => `<option value="${item.id}" data-harga="${item.harga_satuan}" data-satuan="${item.satuan}">${item.nama || item.jenis_pekerja}</option>`)
-                .join('');
+            const list = (tipe === 'material' ? materials : upahs) || [];
+            const options = list.map(item => `<option value="${item.id}" data-harga="${item.harga_satuan}" data-satuan="${item.satuan}">${item.nama || item.jenis_pekerja}</option>`).join('');
 
-            if (itemDropdown.data('select2')) {
-                itemDropdown.select2('destroy');
-            }
+            if (itemDropdown.data('select2')) itemDropdown.select2('destroy');
             itemDropdown.html(options);
             window.initSelect2(row);
             window.updateSubtotal(row.find('.koefisien-input')[0]);
         });
 
-        // Event listener untuk perubahan dropdown Item (Material/Upah)
-        itemTableBody.on('change', '.item-dropdown', function() {
-            const select = this;
-            const row = $(select).closest('tr');
-            const selected = select.selectedOptions[0];
+        // change item -> update harga/satuan/subtotal
+        itemTableBody.on('change', '.item-dropdown', function(){
+            const row = $(this).closest('tr');
+            const selected = this.selectedOptions[0];
             const harga = parseFloat(selected?.dataset?.harga || 0);
             const satuan = selected?.dataset?.satuan || '-';
 
             row.find('.satuan').text(satuan);
             row.find('.harga-satuan').text(window.formatRupiah(harga));
-
             window.updateSubtotal(row.find('.koefisien-input')[0]);
         });
 
-        // Event listener untuk perubahan input Koefisien
-        itemTableBody.on('input', '.koefisien-input', function() {
-            window.updateSubtotal(this);
-        });
+        // input koef -> calc subtotal
+        itemTableBody.on('input', '.koefisien-input', function(){ window.updateSubtotal(this); });
 
-        // Panggil updateTotalHarga() saat DOM siap untuk menginisialisasi total
+        // first init totals
         window.updateTotalHarga();
+
+        // ====== KALKULASI ULANG (hanya draft) ======
+        $('#btn-recalc').on('click', function(){
+            const isDraft = $('#ahsp-form').data('is-draft') === 1 || $('#ahsp-form').data('is-draft') === '1';
+            if(!isDraft) return;
+
+            // loop rows: tarik harga terbaru by referensi_id dan tipe
+            $('#item-body tr').each(function(){
+                const row = $(this);
+                const tipe = row.find('.tipe-select').val();
+                const sel = row.find('.item-dropdown')[0];
+                const referensiId = sel?.value ? String(sel.value) : null;
+                if(!referensiId) return;
+
+                let latest = null;
+                if(tipe === 'material') latest = materialMap[referensiId] || null;
+                else latest = upahMap[referensiId] || null;
+
+                const koefInput = row.find('.koefisien-input')[0];
+                const koef = parseFloat(koefInput?.value || 0);
+
+                const hargaBaru = parseFloat(latest?.harga_satuan || 0);
+                const satuanBaru = latest?.satuan || '-';
+                const subtotalBaru = hargaBaru * koef;
+
+                // tampilkan
+                row.find('.satuan').text(satuanBaru);
+                row.find('.harga-satuan').text(window.formatRupiah(hargaBaru));
+                row.find('.subtotal').text(window.formatRupiah(subtotalBaru));
+
+                // update hidden fields agar tersimpan saat submit
+                row.find('input[name$="[harga_satuan_detail]"]').val(hargaBaru);
+                row.find('input[name$="[subtotal_detail]"]').val(subtotalBaru);
+            });
+
+            window.updateTotalHarga();
+        });
     });
 
-    window.updateSubtotal = function(input) {
+    window.updateSubtotal = function(input){
         const row = $(input).closest('tr');
-        const selected = row.find('.item-dropdown')[0].selectedOptions[0];
+        const selected = row.find('.item-dropdown')[0]?.selectedOptions?.[0];
         const harga = parseFloat(selected?.dataset?.harga || 0);
         const satuan = selected?.dataset?.satuan || '-';
-        const koef = parseFloat(input.value || 0);
+        const koef  = parseFloat(input.value || 0);
         const subtotal = harga * koef;
 
         row.find('.satuan').text(satuan);
         row.find('.harga-satuan').text(window.formatRupiah(harga));
         row.find('.subtotal').text(window.formatRupiah(subtotal));
+
+        // sinkronkan hidden fields
+        row.find('input[name$="[harga_satuan_detail]"]').val(harga);
+        row.find('input[name$="[subtotal_detail]"]').val(subtotal);
+
         window.updateTotalHarga();
     }
 
-    window.updateTotalHarga = function() {
+    window.updateTotalHarga = function(){
         let totalSebenarnya = 0;
         document.querySelectorAll('#item-body tr').forEach(row => {
-            const subtotalText = row.querySelector('.subtotal').innerText;
-            const subtotalValue = parseFloat(subtotalText.replace('Rp ', '').replace(/\./g, '').replace(/,/g, '.') || 0);
-            totalSebenarnya += subtotalValue;
+            const txt = row.querySelector('.subtotal')?.innerText || 'Rp 0';
+            const val = parseFloat(txt.replace('Rp ','').replace(/\./g,'').replace(/,/g,'.')) || 0;
+            totalSebenarnya += val;
         });
-
         const totalPembulatan = window.roundUpToNearestThousand(totalSebenarnya);
 
-        document.getElementById('total-harga-sebenarnya').innerText = window.formatRupiah(totalSebenarnya);
-        document.getElementById('total-harga-pembulatan').innerText = window.formatRupiah(totalPembulatan);
-
+        document.getElementById('total-harga-sebenarnya').innerText  = window.formatRupiah(totalSebenarnya);
+        document.getElementById('total-harga-pembulatan').innerText  = window.formatRupiah(totalPembulatan);
         document.getElementById('hidden-total-harga-pembulatan').value = totalPembulatan;
     }
 
-    window.removeRow = function(button) {
+    window.removeRow = function(button){
         $(button).closest('tr').remove();
         window.updateTotalHarga();
     }
