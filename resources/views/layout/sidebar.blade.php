@@ -191,7 +191,36 @@
             </li>
           </ul>
         </div>
-      </li>     
+      </li>   
+      
+      <li class="nav-item nav-category">AKUNTING</li>
+      {{-- ===== Laporan ===== --}}
+      <li class="nav-item {{ active_class(['laporan/*', 'laporan/jurnal*', 'laporan/laba-rugi*', 'laporan/neraca*', 'laporan/buku-besar*']) }}">
+        <a class="nav-link" data-bs-toggle="collapse" href="#laporanMenu" role="button"
+          aria-expanded="{{ is_active_route(['laporan/*','laporan/jurnal*','laporan/laba-rugi*','laporan/neraca*','laporan/buku-besar*']) }}"
+          aria-controls="laporanMenu">
+          <i class="link-icon" data-feather="bar-chart-2"></i>
+          <span class="link-title">Laporan</span>
+          <i class="link-arrow" data-feather="chevron-down"></i>
+        </a>
+        <div class="collapse {{ show_class(['laporan/*','laporan/jurnal*','laporan/laba-rugi*','laporan/neraca*','laporan/buku-besar*']) }}" id="laporanMenu">
+          <ul class="nav sub-menu">
+            <li class="nav-item">
+              <a href="{{ url('/jurnal') }}" class="nav-link {{ active_class(['laporan/jurnal*']) }}">Jurnal</a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url('/laporan/laba-rugi') }}" class="nav-link {{ active_class(['laporan/laba-rugi*']) }}">Laba Rugi</a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url('/laporan/neraca') }}" class="nav-link {{ active_class(['laporan/neraca*']) }}">Neraca</a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url('/buku-besar') }}" class="nav-link {{ active_class(['laporan/buku-besar*']) }}">Buku Besar</a>
+            </li>
+          </ul>
+        </div>
+      </li>
+
     </ul>
   </div>
 </nav>

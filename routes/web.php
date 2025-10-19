@@ -180,9 +180,12 @@ Route::middleware(['auth'])->group(function () {
     )->name('proyek.penawaran.pdf-mixed');
 
     // ========== Akuntansi & Laporan ==========
-    Route::get('/jurnal/detail/{id}', [JurnalController::class, 'showDetail'])->name('jurnal.showDetail');
-    Route::resource('jurnal', JurnalController::class)->middleware('cek_akses_jurnal');
+    Route::get('/jurnal', [\App\Http\Controllers\JurnalController::class, 'index'])->name('jurnal.index');
 
+    Route::get('/jurnal/detail/{id}', [JurnalController::class, 'showDetail'])->name('jurnal.showDetail');
+
+    Route::get('/jurnal/create', [JurnalController::class, 'create'])->name('jurnal.create');
+    Route::post('/jurnal',        [JurnalController::class, 'store'])->name('jurnal.store');
     Route::get('/buku-besar', [\App\Http\Controllers\BukuBesarController::class, 'index'])->name('buku-besar.index');
 
     Route::get('/laporan/neraca',    [LaporanController::class, 'neraca'])->name('laporan.neraca');
