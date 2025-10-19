@@ -9,7 +9,6 @@ class Coa extends Model
 {
     use NodeTrait;
 
-    // ✅ Tambahkan baris ini:
     protected $table = 'coa';
 
     protected $fillable = [
@@ -24,8 +23,7 @@ class Coa extends Model
     {
         return $this->hasMany(self::class, 'parent_id')->orderBy('_lft');
     }
-    public function perusahaan()
-    {
-        return $this->belongsTo(Perusahaan::class, 'id_perusahaan');
-    }
+
+    // Single-company: relasi perusahaan tidak diperlukan
+    // public function perusahaan() { ... } // DIHAPUS
 }

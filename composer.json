@@ -43,19 +43,18 @@
     },
     "autoload": {
         "psr-4": {
-            "App\\": "app/"
+          "App\\": "app/",
+          "Database\\Factories\\": "database/factories/",
+          "Database\\Seeders\\": "database/seeders/"
         },
-        "classmap": [
-            "database/seeders",
-            "database/factories"
-        ],
         "files": [
-            "app/helpers.php",
-            "app/Helpers/AuditHelper.php",
-            "app/Helpers/GlHelper.php",
-            "app/Helpers/ProyekHelper.php"
+          "app/helpers.php",
+          "app/Helpers/AuditHelper.php",
+          "app/Helpers/GlHelper.php",
+          "app/Helpers/ProyekHelper.php"
         ]
-    },
+      }
+      ,
     "autoload-dev": {
         "psr-4": {
             "Tests\\": "tests/"
