@@ -96,10 +96,11 @@
 
     /* ================== TANDA TANGAN ================== */
     .sign { width:100%; }
-    .sign td { width:50%; vertical-align:top; }
-    .who { font-weight:700; margin-bottom: 4px; text-align:center; }
-    .org { text-align:center; font-size: 11px; color: #555; }
+    .sign td { width:50%; vertical-align:top; text-align:center; } /* <= fix: pastikan center di kolom */
+    .who { font-weight:700; margin-bottom: 4px; }
+    .org { font-size: 11px; color: #555; }
     .spacer { height: 70px; } /* ruang TT basah */
+    .sig-line { display:inline-block; border-bottom:1px solid #333; padding:0 10px; font-weight:700; }
   </style>
 </head>
 <body>
@@ -278,28 +279,8 @@
     Demikian sertifikat pembayaran ini dibuat dengan sesungguhnya untuk digunakan sebagaimana mestinya.
   </p>
 
-  <table class="sign">
-    <tr>
-      <td>
-        <div class="org">{{ $sp->pemberi_tugas_perusahaan }}</div>
-        <div class="who">Dibuat Oleh (Pihak Pertama)</div>
-        <div class="spacer"></div>
-        <div class="center fw-bold" style="border-bottom: 1px solid #333; display: inline-block; padding: 0 10px;">
-          {{ $sp->pemberi_tugas_nama }}
-        </div>
-        <div class="center" style="font-size: 11px;">{{ $sp->pemberi_tugas_jabatan }}</div>
-      </td>
-      <td>
-        <div class="org">{{ $sp->penerima_tugas_perusahaan }}</div>
-        <div class="who">Diterima Oleh (Pihak Kedua)</div>
-        <div class="spacer"></div>
-        <div class="center fw-bold" style="border-bottom: 1px solid #333; display: inline-block; padding: 0 10px;">
-          {{ $sp->penerima_tugas_nama }}
-        </div>
-        <div class="center" style="font-size: 11px;">{{ $sp->penerima_tugas_jabatan }}</div>
-      </td>
-    </tr>
-  </table>
+  <!-- (opsional) jika ingin blok tanda tangan di halaman 1, aktifkan bagian di bawah -->
+
 </div>
 
 <!-- ================= HALAMAN 2 (semua angka = PERIODE INI / DELTA) ================= -->
@@ -394,19 +375,15 @@
         <div class="who">Dibuat Oleh</div>
         <div class="org">{{ $sp->pemberi_tugas_perusahaan }}</div>
         <div class="spacer"></div>
-        <div class="center fw-bold" style="border-bottom: 1px solid #333; display: inline-block; padding: 0 10px;">
-          {{ $sp->pemberi_tugas_nama }}
-        </div>
-        <div class="center" style="font-size: 11px;">{{ $sp->pemberi_tugas_jabatan }}</div>
+        <span class="sig-line">{{ $sp->pemberi_tugas_nama }}</span>
+        <div class="org" style="margin-top:4px;">{{ $sp->pemberi_tugas_jabatan }}</div>
       </td>
       <td>
         <div class="who">Diterima Oleh</div>
         <div class="org">{{ $sp->penerima_tugas_perusahaan }}</div>
         <div class="spacer"></div>
-        <div class="center fw-bold" style="border-bottom: 1px solid #333; display: inline-block; padding: 0 10px;">
-          {{ $sp->penerima_tugas_nama }}
-        </div>
-        <div class="center" style="font-size: 11px;">{{ $sp->penerima_tugas_jabatan }}</div>
+        <span class="sig-line">{{ $sp->penerima_tugas_nama }}</span>
+        <div class="org" style="margin-top:4px;">{{ $sp->penerima_tugas_jabatan }}</div>
       </td>
     </tr>
   </table>

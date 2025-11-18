@@ -71,13 +71,13 @@
                                             Aksi
                                         </button>
                                         <ul class="dropdown-menu shadow" aria-labelledby="aksiDropdown{{ $proyek->id }}">
-                                            @if(auth()->user()->akses_proyek == 1)
+                                            @can('manage proyek')
                                                 <li>
                                                     <a href="{{ route('proyek.show', $proyek->id) }}" class="dropdown-item d-flex align-items-center">
                                                         <i data-feather="eye" class="me-2 text-info"></i> Detail
                                                     </a>
                                                 </li>
-                                            @endif
+                                            @endcan
 
                                             @if(auth()->user()->hapus_proyek == 1)
                                                 <li><hr class="dropdown-divider"></li>

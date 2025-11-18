@@ -185,6 +185,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/jurnal/detail/{id}', [JurnalController::class, 'showDetail'])->name('jurnal.showDetail');
 
     Route::get('/jurnal/create', [JurnalController::class, 'create'])->name('jurnal.create');
+    Route::get('/jurnal/edit', [JurnalController::class, 'edit'])->name('jurnal.edit');
+    Route::get('/jurnal/destroy', [JurnalController::class, 'destroy'])->name('jurnal.destroy');
     Route::post('/jurnal',        [JurnalController::class, 'store'])->name('jurnal.store');
     Route::get('/buku-besar', [\App\Http\Controllers\BukuBesarController::class, 'index'])->name('buku-besar.index');
 
