@@ -24,6 +24,7 @@ class Proyek extends Model
         'status',
         'lokasi',
         'file_spk',
+        'file_gambar_kerja',
         'jenis_proyek'     
     ];
 

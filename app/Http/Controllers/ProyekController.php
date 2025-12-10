@@ -86,60 +86,87 @@ class ProyekController extends Controller
         return view('proyek.edit', compact('proyek', 'pemberiKerja'));
     }
 
-    /* =========================
-       UPDATE (with Tax Profile)
-    ========================= */
-    public function update(Request $request, $id)
-    {
-        $proyek  = Proyek::findOrFail($id);
-        $validated = ProyekService::validateUpdateRequest($request);
-        $hitung    = ProyekService::hitungKontrak($proyek, $request);
+   /* =========================
+    UPDATE (with Tax Profile)
+========================= */
+public function update(Request $request, $id)
+{
+    $proyek = Proyek::findOrFail($id);
 
-        $data = array_merge($validated, [
-            'diskon_rab'    => $hitung['diskon_rab'],
-            'nilai_kontrak' => $hitung['nilai_kontrak'],
-        ]);
+    // 1. Validasi Input (perlu diperbarui di ProyekService::validateUpdateRequest)
+    // Asumsi ProyekService::validateUpdateRequest sudah diperbarui untuk menerima 'file_gambar_kerja'
+    $validated = ProyekService::validateUpdateRequest($request);
+    $hitung = ProyekService::hitungKontrak($proyek, $request);
 
-        $taxInput = $this->validateTaxPayload($request->input('tax', []));
-        $taxData  = $this->normalizeTax($taxInput);
-        if (!array_key_exists('aktif', $taxData)) {
-            $taxData['aktif'] = true;
+    $data = array_merge($validated, [
+        'diskon_rab'    => $hitung['diskon_rab'],
+        'nilai_kontrak' => $hitung['nilai_kontrak'],
+    ]);
+
+    // Handle Tax Profile (Logika lama tetap dipertahankan)
+    $taxInput = $this->validateTaxPayload($request->input('tax', []));
+    $taxData  = $this->normalizeTax($taxInput);
+    if (!array_key_exists('aktif', $taxData)) {
+        $taxData['aktif'] = true;
+    }
+
+    // 2. Transaksi Database
+    DB::transaction(function () use ($proyek, $request, $data, $taxData) {
+        
+        // Update data proyek non-file
+        $proyek->update($data);
+
+        // Update status proyek
+        $proyek->status = ($request->tanggal_mulai && $request->tanggal_selesai && $proyek->status === 'perencanaan')
+            ? 'berjalan'
+            : ($request->status ?? $proyek->status);
+        $proyek->save();
+
+        // 3. Handle Upload File SPK (Logika lama tetap dipertahankan)
+        if ($request->hasFile('file_spk')) {
+            // Hapus file lama jika ada
+            if ($proyek->file_spk && Storage::exists('public/' . $proyek->file_spk)) {
+                Storage::delete('public/' . $proyek->file_spk);
+            }
+            // Simpan file baru
+            $path = $request->file('file_spk')->store('spk', 'public');
+            $proyek->file_spk = $path;
+            $proyek->save();
         }
 
-        DB::transaction(function () use ($proyek, $request, $data, $taxData) {
-            $proyek->update($data);
-
-            $proyek->status = ($request->tanggal_mulai && $request->tanggal_selesai && $proyek->status === 'perencanaan')
-                ? 'berjalan'
-                : ($request->status ?? $proyek->status);
+        // ===========================================
+        // 4. Handle Upload File Gambar Kerja (FITUR BARU)
+        // ===========================================
+        if ($request->hasFile('file_gambar_kerja')) {
+            // Hapus file lama jika ada
+            if ($proyek->file_gambar_kerja && Storage::exists('public/' . $proyek->file_gambar_kerja)) {
+                Storage::delete('public/' . $proyek->file_gambar_kerja);
+            }
+            // Simpan file baru. Simpan di folder 'proyek/gambar_kerja'
+            $path = $request->file('file_gambar_kerja')->store('proyek/gambar_kerja', 'public');
+            $proyek->file_gambar_kerja = $path;
             $proyek->save();
+        }
+        // ===========================================
 
-            if ($request->hasFile('file_spk')) {
-                if ($proyek->file_spk && Storage::exists('public/' . $proyek->file_spk)) {
-                    Storage::delete('public/' . $proyek->file_spk);
-                }
-                $path = $request->file('file_spk')->store('spk', 'public');
-                $proyek->file_spk = $path;
-                $proyek->save();
+        // 5. Handle Tax Profile Update (Logika lama tetap dipertahankan)
+        if (!empty($taxData)) {
+            $active = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
+            $taxData['updated_by'] = auth()->id();
+
+            if ($active) {
+                $active->update($taxData);
+            } else {
+                ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->update(['aktif' => 0]);
+                $taxData['proyek_id']  = $proyek->id;
+                $taxData['created_by'] = auth()->id();
+                ProyekTaxProfile::create($taxData);
             }
+        }
+    });
 
-            if (!empty($taxData)) {
-                $active = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
-                $taxData['updated_by'] = auth()->id();
-
-                if ($active) {
-                    $active->update($taxData);
-                } else {
-                    ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->update(['aktif' => 0]);
-                    $taxData['proyek_id']  = $proyek->id;
-                    $taxData['created_by'] = auth()->id();
-                    ProyekTaxProfile::create($taxData);
-                }
-            }
-        });
-
-        return redirect()->route('proyek.show', $proyek->id)->with('success', 'Proyek berhasil diperbarui.');
-    }
+    return redirect()->route('proyek.show', $proyek->id)->with('success', 'Proyek berhasil diperbarui.');
+}
 
     /* =========================
        DESTROY

@@ -266,23 +266,50 @@
     }
 
     // Fungsi untuk menghitung ulang harga penawaran dan total item
-    function updateItemRowCalculations(row) {
-        const hargaDasar = parseFloat(row.data('harga-satuan-dasar') || 0);
-        const volume = parseFloat(row.find('input[name$="[volume]"]').val() || 0);
-        
-        const sectionCard = row.closest('.section-card');
-        const profitPercentage = parseFloat(sectionCard.find('input[name$="[profit_percentage]"]').val() || 0);
-        const overheadPercentage = parseFloat(sectionCard.find('input[name$="[overhead_percentage]"]').val() || 0);
+// Fungsi untuk menghitung ulang harga penawaran dan total item
+function updateItemRowCalculations(row) {
+    const hargaDasar = parseFloat(row.data('harga-satuan-dasar') || 0);
+    const volume = parseFloat(row.find('input[name$="[volume]"]').val() || 0);
+    
+    const sectionCard = row.closest('.section-card');
+    // Ambil persentase Profit dan Overhead
+    const profitPercentage = parseFloat(sectionCard.find('input[name$="[profit_percentage]"]').val() || 0);
+    const overheadPercentage = parseFloat(sectionCard.find('input[name$="[overhead_percentage]"]').val() || 0);
 
-        const koefisienPengali = 1 + (profitPercentage / 100) + (overheadPercentage / 100);
-        const hargaPenawaran = hargaDasar * koefisienPengali;
-        const totalItem = hargaPenawaran * volume;
+    // ===============================================
+    // PERUBAHAN LOGIKA PERHITUNGAN DIMULAI DI SINI
+    // ===============================================
+    
+    // Total persentase margin yang ditargetkan (diasumsikan sebagai persentase dari Harga Penawaran)
+    const totalMarginPercentage = (profitPercentage + overheadPercentage) / 100; // Contoh: (15 + 10) / 100 = 0.25
 
-        row.find('.harga-penawaran').text(formatRupiah(hargaPenawaran));
-        row.find('.total-item').text(formatRupiah(totalItem));
-        
-        updateTotals(); // Perbarui total keseluruhan
+    // Persentase Harga Dasar relatif terhadap Harga Penawaran
+    const penyebut = 1 - totalMarginPercentage; // Contoh: 1 - 0.25 = 0.75 (75%)
+
+    let hargaPenawaran = 0;
+    
+    if (penyebut > 0) {
+        // Harga Penawaran = Harga Dasar / (1 - Total Margin)
+        hargaPenawaran = hargaDasar / penyebut;
+    } else {
+        // Jika total margin 100% atau lebih, Harga Penawaran tidak terdefinisi atau tak hingga
+        hargaPenawaran = 0; 
+        console.error("Total Profit + Overhead mencapai 100% atau lebih. Harga Penawaran tidak valid.");
     }
+    
+    // ===============================================
+    // PERHITUNGAN LANJUTAN
+    // ===============================================
+
+    const totalItem = hargaPenawaran * volume;
+
+    // Output ke elemen HTML
+    row.find('.harga-penawaran').text(formatRupiah(hargaPenawaran));
+    row.find('.total-item').text(formatRupiah(totalItem));
+    
+    updateTotals(); // Perbarui total keseluruhan
+}
+// ... sisa skrip lainnya ...
 
     // Fungsi untuk memperbarui semua total
     function updateTotals() {

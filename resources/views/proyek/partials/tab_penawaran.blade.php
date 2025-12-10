@@ -3,7 +3,7 @@
     <i data-feather="dollar-sign" class="me-2"></i> RAB Penawaran
   </h5>
   <div class="d-flex gap-2">
-    @can('buat penawaran')
+    @can('manage penawaran')
       <a href="{{ route('proyek.penawaran.create', $proyek->id) }}" class="btn btn-primary btn-sm">
         <i data-feather="plus" class="me-1"></i> Tambah Penawaran
       </a>
@@ -108,7 +108,7 @@
               <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">Aksi</button>
               <ul class="dropdown-menu dropdown-menu-end">
                 <li><a class="dropdown-item" href="${base}"><i data-feather="eye" class="me-2"></i>Lihat</a></li>
-                @can('edit penawaran')
+                @can('manage penawaran')
                 <li><a class="dropdown-item" href="${base}/edit"><i data-feather="edit-2" class="me-2"></i>Edit</a></li>
                 @endcan
                 <li><a class="dropdown-item" target="_blank" href="${base}/pdf"><i data-feather="printer" class="me-2"></i>PDF</a></li>

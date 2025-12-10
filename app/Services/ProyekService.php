@@ -32,6 +32,7 @@ class ProyekService
             'jenis_proyek' => 'required|in:kontraktor,cost and fee,office',
             'diskon_rab' => 'nullable|numeric|min:0',
             'file_spk' => 'nullable|file|mimes:pdf|max:10240',
+            'file_gambar_kerja' => 'nullable|file|mimes:pdf,jpg,jpeg|max:10240', // Max 10MB
         ]);
     }
 

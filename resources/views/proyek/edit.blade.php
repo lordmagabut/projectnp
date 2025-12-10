@@ -1,12 +1,9 @@
-{{-- resources/views/proyek/edit.blade.php --}}
 @extends('layout.master')
 
 @section('content')
 @php
-  // Pastikan relasi ada: Proyek::taxProfileAktif()
+  // ... (kode php sebelumnya tetap sama)
   $tax = optional($proyek->taxProfileAktif);
-
-  // Tanggal harus format Y-m-d untuk <input type="date">
   $tglMulai   = old('tanggal_mulai', $proyek->tanggal_mulai ? \Carbon\Carbon::parse($proyek->tanggal_mulai)->format('Y-m-d') : '');
   $tglSelesai = old('tanggal_selesai', $proyek->tanggal_selesai ? \Carbon\Carbon::parse($proyek->tanggal_selesai)->format('Y-m-d') : '');
 @endphp
@@ -17,6 +14,7 @@
       <div class="card-body">
         <h4 class="card-title mb-4">Edit Proyek</h4>
 
+        {{-- Error handling tetap sama --}}
         @if($errors->any())
           <div class="alert alert-danger">
             <ul class="mb-0">
@@ -31,13 +29,12 @@
           @csrf
           @method('PUT')
 
-          {{-- Nama Proyek --}}
+          {{-- Nama Proyek & Pemberi Kerja (Tetap sama) --}}
           <div class="mb-3">
             <label class="form-label">Nama Proyek</label>
             <input type="text" name="nama_proyek" class="form-control" value="{{ old('nama_proyek', $proyek->nama_proyek) }}" required>
           </div>
 
-          {{-- Pemberi Kerja --}}
           <div class="mb-3">
             <label class="form-label">Pemberi Kerja</label>
             <select name="pemberi_kerja_id" class="form-select" required>
@@ -49,7 +46,7 @@
             </select>
           </div>
 
-          {{-- No SPK / Nilai / File --}}
+          {{-- No SPK / Nilai / File SPK (Tetap sama) --}}
           <div class="row g-3">
             <div class="col-md-4">
               <label class="form-label">No SPK</label>
@@ -62,14 +59,41 @@
             <div class="col-md-4">
               <label class="form-label">File SPK (PDF, Max 10MB)</label><br>
               @if($proyek->file_spk)
-                <a href="{{ asset('storage/' . $proyek->file_spk) }}" target="_blank">Lihat File Lama</a><br><br>
+                <a href="{{ asset('storage/' . $proyek->file_spk) }}" target="_blank">Lihat File Lama</a><br>
               @endif
-              <input type="file" name="file_spk" class="form-control" accept="application/pdf">
-              <small class="text-muted">Kosongkan jika tidak ingin mengganti file.</small>
+              <input type="file" name="file_spk" class="form-control mt-1" accept="application/pdf">
             </div>
           </div>
 
-          {{-- Nilai Penawaran / Diskon / Kontrak --}}
+          {{-- ========================================== --}}
+          {{--       FITUR BARU: GAMBAR KERJA             --}}
+          {{-- ========================================== --}}
+          <div class="row g-3 mt-1">
+            <div class="col-md-12">
+                <label class="form-label fw-bold">File Gambar Kerja (Analisa)</label>
+                
+                {{-- Tampilkan file lama jika ada --}}
+                @if($proyek->file_gambar_kerja)
+                    <div class="mb-2 p-2 border rounded bg-light d-flex align-items-center">
+                        <span class="me-2 text-muted small">File saat ini:</span>
+                        <a href="{{ asset('storage/' . $proyek->file_gambar_kerja) }}" target="_blank" class="btn btn-sm btn-info text-white">
+                            <i class="mdi mdi-eye"></i> Lihat Gambar
+                        </a>
+                    </div>
+                @endif
+
+                {{-- Input File Baru --}}
+                <input type="file" name="file_gambar_kerja" class="form-control" accept=".pdf, .jpg, .jpeg, image/jpeg, application/pdf">
+                <div class="form-text text-muted">
+                    Format: <strong>PDF</strong> atau <strong>JPG</strong>. Maksimal ukuran upload sesuai konfigurasi server. 
+                    <br><i>Kosongkan jika tidak ingin mengganti file.</i>
+                </div>
+            </div>
+          </div>
+          {{-- ========================================== --}}
+
+
+          {{-- Nilai Penawaran / Diskon / Kontrak (Tetap sama) --}}
           <div class="row g-3 mt-1">
             <div class="col-md-4">
               <label class="form-label">Nilai Penawaran (Total dari RAB)</label>
@@ -86,7 +110,7 @@
             </div>
           </div>
 
-          {{-- Jenis / Tanggal / Status / Lokasi --}}
+          {{-- Jenis / Tanggal / Status / Lokasi (Tetap sama) --}}
           <div class="row g-3 mt-1">
             <div class="col-md-4">
               <label class="form-label">Jenis Proyek</label>
@@ -122,9 +146,7 @@
             </div>
           </div>
 
-          {{-- ========================
-               Profil Pajak Proyek
-               ======================== --}}
+          {{-- Profil Pajak Proyek (Tetap sama) --}}
           <hr class="my-4">
           <h5 class="mb-3">Profil Pajak Proyek</h5>
           <input type="hidden" name="tax[aktif]" value="1">
@@ -209,7 +231,6 @@
             </ul>
           </div>
 
-          {{-- Aksi --}}
           <div class="mt-4">
             <button type="submit" class="btn btn-primary">Update</button>
             <a href="{{ route('proyek.index') }}" class="btn btn-secondary">Kembali</a>
@@ -223,7 +244,7 @@
 
 @push('custom-scripts')
 <script>
-  // Hitung nilai kontrak saat diskon diubah
+  // Script lama tetap sama
   (function(){
     const diskonEl = document.getElementById('diskon_rab');
     if(!diskonEl) return;
@@ -240,7 +261,6 @@
     recalc();
   })();
 
-  // Enable/disable field pajak
   (function(){
     const isTaxable = document.getElementById('tax_is_taxable');
     const applyPph  = document.getElementById('tax_apply_pph');
