@@ -62,10 +62,22 @@
                                 </td>
                                 <td>{{ $bayar->keterangan }}</td>
                                 <td class="text-center">
-                                    <a href="{{ route('faktur.show', $bayar->faktur_id) }}" class="btn btn-xs btn-outline-info" title="Detail Faktur">
-                                        <i data-feather="eye" class="icon-sm"></i>
-                                    </a>
-                                    </td>
+                                    <div class="btn-group">
+                                        <a href="{{ route('faktur.show', $bayar->faktur_id) }}" class="btn btn-xs btn-outline-info" title="Detail Faktur">
+                                            <i data-feather="eye" class="icon-sm"></i>
+                                        </a>
+                                        {{-- Tombol Edit --}}
+                                        {{-- Tombol Hapus --}}
+                                        <form action="{{ route('pembayaran.destroy', $bayar->id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-xs btn-outline-danger" title="Hapus Pembayaran" 
+                                                onclick="return confirm('Menghapus pembayaran akan mengembalikan saldo hutang faktur dan menghapus jurnal terkait. Lanjutkan?')">
+                                                <i data-feather="trash" class="icon-sm"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
                             </tr>
                             @endforeach
                         </tbody>

@@ -98,6 +98,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/pembayaran', [PembayaranPembelianController::class, 'index'])->name('pembayaran.index');
     Route::get('/pembayaran/create/{faktur_id}', [PembayaranPembelianController::class, 'create'])->name('pembayaran.create');
     Route::post('/pembayaran/store', [PembayaranPembelianController::class, 'store'])->name('pembayaran.store');
+    Route::delete('/pembayaran/{id}', [PembayaranPembelianController::class, 'destroy'])->name('pembayaran.destroy');
 
     // ========== RAB & AHSP ==========
     Route::get('/ahsp/search',                 [AhspController::class, 'search'])->name('ahsp.search');

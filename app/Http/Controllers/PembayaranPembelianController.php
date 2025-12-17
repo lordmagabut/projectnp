@@ -119,4 +119,62 @@ class PembayaranPembelianController extends Controller
         return back()->withInput()->with('error', 'Gagal: ' . $e->getMessage());
     }
 }
+
+public function destroy($id)
+{
+    DB::beginTransaction();
+    try {
+        // 1. Ambil data pembayaran
+        $pembayaran = PembayaranPembelian::findOrFail($id);
+        
+        // 2. Ambil data faktur terkait dengan Lock (mencegah tabrakan data)
+        $faktur = Faktur::lockForUpdate()->findOrFail($pembayaran->faktur_id);
+
+        // 3. Hitung balik saldo sudah_dibayar
+        // Contoh: saldo sekarang 1jt, pembayaran yang dihapus 500rb -> saldo baru jadi 500rb
+        $saldoTerbayarBaru = $faktur->sudah_dibayar - $pembayaran->nominal;
+
+        // 4. Tentukan kembali status berdasarkan saldo baru
+        if ($saldoTerbayarBaru <= 0) {
+            $statusBaru = 'belum';
+            $saldoTerbayarBaru = 0; // Pastikan tidak minus
+        } elseif ($saldoTerbayarBaru < $faktur->total) {
+            $statusBaru = 'sebagian';
+        } else {
+            $statusBaru = 'lunas';
+        }
+
+        // 5. Update Faktur ke kondisi semula
+        $faktur->update([
+            'sudah_dibayar'     => $saldoTerbayarBaru,
+            'status_pembayaran' => $statusBaru,
+            'status'            => ($statusBaru == 'lunas') ? 'lunas' : 'sedang diproses' 
+        ]);
+
+        // 6. Hapus Jurnal Terkait (Agar laporan laba rugi & neraca kembali sinkron)
+        // Kita cari jurnal yang no_jurnal-nya mengandung info pembayaran ini
+        // Atau cari berdasarkan no_jurnal yang polanya unik (JV-PAY-...)
+        $jurnal = Jurnal::where('id_perusahaan', $faktur->id_perusahaan)
+                        ->where('keterangan', 'like', '%' . $faktur->no_faktur . '%')
+                        ->where('total', $pembayaran->nominal)
+                        ->first();
+        
+        if ($jurnal) {
+            // JurnalDetail akan terhapus otomatis jika Anda pakai 'on delete cascade' 
+            // Jika tidak, hapus manual detailnya dulu:
+            \App\Models\JurnalDetail::where('jurnal_id', $jurnal->id)->delete();
+            $jurnal->delete();
+        }
+
+        // 7. Hapus record pembayaran
+        $pembayaran->delete();
+
+        DB::commit();
+        return redirect()->back()->with('success', 'Pembayaran berhasil dihapus. Status faktur telah kembali ke "' . $statusBaru . '".');
+
+    } catch (\Exception $e) {
+        DB::rollback();
+        return redirect()->back()->with('error', 'Gagal membatalkan pembayaran: ' . $e->getMessage());
+    }
+}
 }
