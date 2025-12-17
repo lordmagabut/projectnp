@@ -175,6 +175,10 @@
               <a href="{{ route('faktur.index') }}"
                 class="nav-link {{ active_class(['po']) }}">Daftar Faktur</a>
             </li>
+            <li class="nav-item">
+              <a href="{{ route('pembayaran.index') }}"
+                class="nav-link {{ active_class(['po']) }}">Daftar Pembayaran</a>
+            </li>
           </ul>
         </div>
       </li>

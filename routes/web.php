@@ -29,6 +29,7 @@ use App\Http\Controllers\ProyekTaxProfileController;
 use App\Http\Controllers\BappController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SertifikatPembayaranController;
+use App\Http\Controllers\PembayaranPembelianController;
 
 // =========================
 // Login (tanpa proteksi)
@@ -92,6 +93,11 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/faktur/{id}',             [FakturController::class, 'destroy'])->name('faktur.destroy');
     Route::post('/faktur/{id}/revisi',        [FakturController::class, 'revisi'])->name('faktur.revisi');
     Route::post('/faktur/{id}/approve',       [FakturController::class, 'approve'])->name('faktur.approve');
+
+
+    Route::get('/pembayaran', [PembayaranPembelianController::class, 'index'])->name('pembayaran.index');
+    Route::get('/pembayaran/create/{faktur_id}', [PembayaranPembelianController::class, 'create'])->name('pembayaran.create');
+    Route::post('/pembayaran/store', [PembayaranPembelianController::class, 'store'])->name('pembayaran.store');
 
     // ========== RAB & AHSP ==========
     Route::get('/ahsp/search',                 [AhspController::class, 'search'])->name('ahsp.search');
@@ -186,7 +192,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/jurnal/create', [JurnalController::class, 'create'])->name('jurnal.create');
     Route::get('/jurnal/edit', [JurnalController::class, 'edit'])->name('jurnal.edit');
-    Route::get('/jurnal/destroy', [JurnalController::class, 'destroy'])->name('jurnal.destroy');
+    Route::delete('jurnal/destroy/{id}', [JurnalController::class, 'destroy'])->name('jurnal.destroy');
     Route::post('/jurnal',        [JurnalController::class, 'store'])->name('jurnal.store');
     Route::get('/buku-besar', [\App\Http\Controllers\BukuBesarController::class, 'index'])->name('buku-besar.index');
 
