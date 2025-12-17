@@ -218,7 +218,7 @@ public function destroy($id)
         }
 
         $jurnal->details()->create([
-            'coa_id' => 77, // ID akun Hutang Usaha, ubah sesuai sistemmu
+            'coa_id' => 158, // ID akun Hutang Usaha, ubah sesuai sistemmu
             'debit' => 0,
             'kredit' => $totalFaktur,
         ]);

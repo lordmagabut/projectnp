@@ -171,6 +171,10 @@
               <a href="{{ route('po.index') }}"
                 class="nav-link {{ active_class(['po']) }}">Daftar PO</a>
             </li>
+            <li class="nav-item">
+              <a href="{{ route('faktur.index') }}"
+                class="nav-link {{ active_class(['po']) }}">Daftar Faktur</a>
+            </li>
           </ul>
         </div>
       </li>
