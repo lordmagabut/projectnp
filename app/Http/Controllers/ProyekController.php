@@ -737,23 +737,27 @@ public function update(Request $request, $id)
     /* =========================
        Helpers – Tax Payload
     ========================= */
-    private function validateTaxPayload(array $tax): array
-    {
-        $v = Validator::make($tax, [
-            'is_taxable'     => ['nullable','boolean'],
-            'ppn_mode'       => ['required','in:include,exclude'],
-            'ppn_rate'       => ['required','numeric','min:0'],
-            'apply_pph'      => ['nullable','boolean'],
-            'pph_rate'       => ['required','numeric','min:0'],
-            'pph_base'       => ['required','in:dpp,subtotal'],
-            'rounding'       => ['required','in:HALF_UP,FLOOR,CEIL'],
-            'effective_from' => ['nullable','date'],
-            'effective_to'   => ['nullable','date','after_or_equal:effective_from'],
-            'aktif'          => ['nullable','boolean'],
-            'extra_options'  => ['nullable','string'],
-        ]);
-        return $v->validate();
-    }
+private function validateTaxPayload(array $tax): array
+{
+    $v = Validator::make($tax, [
+        'is_taxable'     => ['nullable','boolean'],
+        // Gunakan 'required_if:is_taxable,1'
+        'ppn_mode'       => ['required_if:is_taxable,1', 'in:include,exclude'],
+        'ppn_rate'       => ['required_if:is_taxable,1', 'numeric', 'min:0'],
+        
+        'apply_pph'      => ['nullable','boolean'],
+        // Gunakan 'required_if:apply_pph,1'
+        'pph_rate'       => ['required_if:apply_pph,1', 'numeric', 'min:0'],
+        'pph_base'       => ['required_if:apply_pph,1', 'in:dpp,subtotal'],
+        
+        'rounding'       => ['required', 'in:HALF_UP,FLOOR,CEIL'],
+        'effective_from' => ['nullable', 'date'],
+        'effective_to'   => ['nullable', 'date', 'after_or_equal:effective_from'],
+        'aktif'          => ['nullable', 'boolean'],
+        'extra_options'  => ['nullable', 'string'],
+    ]);
+    return $v->validate();
+}
 
     private function normalizeTax(array $data): array
     {

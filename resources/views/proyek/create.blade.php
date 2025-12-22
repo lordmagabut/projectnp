@@ -195,19 +195,42 @@
 (function(){
   const isTaxable = document.getElementById('tax_is_taxable');
   const applyPph  = document.getElementById('tax_apply_pph');
-  const ppnFields = ['tax_ppn_mode','tax_ppn_rate'].map(id=>document.getElementById(id));
-  const pphFields = ['tax_pph_rate','tax_pph_base'].map(id=>document.getElementById(id));
+  
+  // Ambil elemen input/select
+  const ppnRateField = document.getElementById('tax_ppn_rate');
+  const ppnModeField = document.getElementById('tax_ppn_mode');
+  const pphRateField = document.getElementById('tax_pph_rate');
+  const pphBaseField = document.getElementById('tax_pph_base');
 
   function togglePpn(){
     const en = isTaxable.value === '1';
-    ppnFields.forEach(el=> el && (el.disabled = !en));
+    if (!en) {
+      // Jika "Tidak", paksa nilai menjadi 0 sebelum di-disable
+      if(ppnRateField) ppnRateField.value = 0;
+    }
+    
+    [ppnRateField, ppnModeField].forEach(el => {
+      if(el) el.disabled = !en;
+    });
   }
+
   function togglePph(){
     const en = applyPph.value === '1';
-    pphFields.forEach(el=> el && (el.disabled = !en));
+    if (!en) {
+      // Jika "Tidak", paksa nilai menjadi 0 sebelum di-disable
+      if(pphRateField) pphRateField.value = 0;
+    }
+
+    [pphRateField, pphBaseField].forEach(el => {
+      if(el) el.disabled = !en;
+    });
   }
+
+  // Event Listeners
   isTaxable && isTaxable.addEventListener('change', togglePpn);
   applyPph && applyPph.addEventListener('change', togglePph);
+  
+  // Jalankan saat halaman pertama kali dimuat
   togglePpn();
   togglePph();
 })();
