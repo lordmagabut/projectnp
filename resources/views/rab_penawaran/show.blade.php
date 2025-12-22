@@ -447,9 +447,12 @@
       <a href="{{ route('proyek.penawaran.edit', ['proyek' => $proyek->id, 'penawaran' => $penawaran->id]) }}" class="btn btn-warning" data-bs-toggle="tooltip" title="Edit Penawaran">
         <i class="fas fa-edit me-1"></i> Edit
       </a>
+      <a target="_blank" class="btn btn-outline-primary btn-sm" href="{{ route('proyek.penawaran.PdfSinglePrice', [$proyek->id, $penawaran->id]) }}">
+        PDF (Gabungan)
+      </a>
 
       <a target="_blank" class="btn btn-outline-primary btn-sm" href="{{ route('proyek.penawaran.pdf-mixed', [$proyek->id, $penawaran->id]) }}">
-        PDF (Ringkasan + Detail Landscape)
+        PDF (Material + Jasa)
       </a>
 
       {{-- SETUJUI → buka modal upload PDF --}}

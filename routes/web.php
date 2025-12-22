@@ -138,6 +138,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/{penawaran}/pdf',        [RabPenawaranController::class, 'generatePdf'])->name('generatePdf');
         Route::get('/{penawaran}/pdf-split',  [RabPenawaranController::class, 'generatePdfSplit'])->name('generatePdfSplit');
+        Route::get('/{penawaran}/PdfSinglePrice',  [RabPenawaranController::class, 'generatePdfSinglePrice'])->name('generatePdfSinglePrice');
         Route::get('/{penawaran}/show-gab',   [RabPenawaranController::class, 'showGab'])->name('showGab');
 
         // Approve & Snapshot schedule penawaran
@@ -185,6 +186,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/proyek/{proyek}/penawaran/{penawaran}/pdf-mixed',
         [RabPenawaranController::class, 'generatePdfMixed']
     )->name('proyek.penawaran.pdf-mixed');
+
+    Route::get('/proyek/{proyek}/penawaran/{penawaran}/pdf-PdfSinglePrice',
+        [RabPenawaranController::class, 'generatePdfSinglePrice']
+    )->name('proyek.penawaran.PdfSinglePrice');
 
     // ========== Akuntansi & Laporan ==========
     Route::get('/jurnal', [\App\Http\Controllers\JurnalController::class, 'index'])->name('jurnal.index');

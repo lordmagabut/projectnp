@@ -1025,7 +1025,41 @@ class RabPenawaranController extends Controller
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'inline; filename="'.$filename.'"');
     }
-    
+
+    public function generatePdfSinglePrice(Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        // Load relasi yang dibutuhkan
+        $penawaran->load([
+            'sections' => function($q){
+                $q->with(['rabHeader', 'items.rabDetail'])->orderBy('id');
+            }
+        ]);
+
+        // 1) Render Ringkasan (Portrait)
+        $pdfSummary = \Barryvdh\DomPDF\Facade\Pdf::loadView(
+            'rab_penawaran.pdf_summary_single',
+            compact('proyek','penawaran')
+        )->setPaper('A4', 'portrait');
+
+        // 2) Render Detail (Landscape)
+        $pdfDetail = \Barryvdh\DomPDF\Facade\Pdf::loadView(
+            'rab_penawaran.pdf_detail_single',
+            compact('proyek','penawaran')
+        )->setPaper('A4', 'landscape');
+
+        // 3) Merge PDF menggunakan iio/libmergepdf (sesuai kode awal Anda)
+        $merger = new Merger; 
+        $merger->addRaw($pdfSummary->output());
+        $merger->addRaw($pdfDetail->output());
+        $final = $merger->merge(); 
+
+        $filename = 'Penawaran_Single_' . str_replace(' ', '_', $penawaran->nama_penawaran) . '.pdf';
+
+        return response($final)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="'.$filename.'"');
+    }
+
     public function updateKeterangan(
         \Illuminate\Http\Request $request,
         Proyek $proyek,
