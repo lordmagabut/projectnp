@@ -119,7 +119,7 @@
     </tbody>
 
     @php
-      $ppnRate = 11;
+      $ppnRate = (isset($tax) && $tax->is_taxable) ? (float)($tax->ppn_rate ?? 11) : 0;
       $ppn = $grandAllDPP * ($ppnRate/100);
       $grandTotal = $grandAllDPP + $ppn;
       $rf = fn($n) => 'Rp '.number_format((float)$n, 0, ',', '.');
@@ -130,10 +130,12 @@
         <td colspan="2" class="text-end"><strong>TOTAL</strong></td>
         <td class="text-end currency"><strong>{!! rupiah_or_blank($grandAllDPP) !!}</strong></td>
       </tr>
+      @if((float)$ppnRate > 0)
       <tr>
         <td colspan="2" class="text-end"><strong>PPN ({{ $ppnRate }}%)</strong></td>
         <td class="text-end currency"><strong>{{ $rf($ppn) }}</strong></td>
       </tr>
+      @endif
       <tr style="background:#e6f7ff;">
         <td colspan="2" class="text-end"><strong>GRAND TOTAL</strong></td>
         <td class="text-end currency"><strong>{{ $rf($grandTotal) }}</strong></td>

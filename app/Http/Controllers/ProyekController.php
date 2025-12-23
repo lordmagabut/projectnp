@@ -125,11 +125,11 @@ public function update(Request $request, $id)
         // 3. Handle Upload File SPK (Logika lama tetap dipertahankan)
         if ($request->hasFile('file_spk')) {
             // Hapus file lama jika ada
-            if ($proyek->file_spk && Storage::exists('public/' . $proyek->file_spk)) {
-                Storage::delete('public/' . $proyek->file_spk);
+            if ($proyek->file_spk && Storage::disk('public')->exists($proyek->file_spk)) {
+                Storage::disk('public')->delete($proyek->file_spk);
             }
-            // Simpan file baru
-            $path = $request->file('file_spk')->store('spk', 'public');
+            // Simpan file baru menggunakan helper untuk konsistensi disk
+            $path = \App\Helpers\FileUploadHelper::upload($request->file('file_spk'), 'spk');
             $proyek->file_spk = $path;
             $proyek->save();
         }
@@ -139,11 +139,11 @@ public function update(Request $request, $id)
         // ===========================================
         if ($request->hasFile('file_gambar_kerja')) {
             // Hapus file lama jika ada
-            if ($proyek->file_gambar_kerja && Storage::exists('public/' . $proyek->file_gambar_kerja)) {
-                Storage::delete('public/' . $proyek->file_gambar_kerja);
+            if ($proyek->file_gambar_kerja && Storage::disk('public')->exists($proyek->file_gambar_kerja)) {
+                Storage::disk('public')->delete($proyek->file_gambar_kerja);
             }
-            // Simpan file baru. Simpan di folder 'proyek/gambar_kerja'
-            $path = $request->file('file_gambar_kerja')->store('proyek/gambar_kerja', 'public');
+            // Simpan file baru menggunakan helper untuk konsistensi
+            $path = \App\Helpers\FileUploadHelper::upload($request->file('file_gambar_kerja'), 'proyek/gambar_kerja');
             $proyek->file_gambar_kerja = $path;
             $proyek->save();
         }
@@ -174,11 +174,14 @@ public function update(Request $request, $id)
     public function destroy($id)
     {
         if (auth()->user()->hapus_proyek != 1) {
-            abort(403, 'Anda tidak memiliki izin untuk edit proyek.');
+            abort(403, 'Anda tidak memiliki izin untuk hapus proyek.');
         }
         $proyek = Proyek::findOrFail($id);
         if ($proyek->file_spk && \Storage::disk('public')->exists($proyek->file_spk)) {
             \Storage::disk('public')->delete($proyek->file_spk);
+        }
+        if ($proyek->file_gambar_kerja && \Storage::disk('public')->exists($proyek->file_gambar_kerja)) {
+            \Storage::disk('public')->delete($proyek->file_gambar_kerja);
         }
         $proyek->delete();
         return redirect()->route('proyek.index')->with('success', 'Data proyek berhasil dihapus.');

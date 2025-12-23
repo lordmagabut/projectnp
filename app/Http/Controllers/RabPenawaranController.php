@@ -20,6 +20,7 @@ use App\Models\RabPenawaranSection;
 use App\Models\RabPenawaranItem;
 use App\Models\RabSchedule;
 use App\Models\RabScheduleDetail;
+use App\Models\ProyekTaxProfile;
 
 class RabPenawaranController extends Controller
 {
@@ -676,8 +677,11 @@ class RabPenawaranController extends Controller
             return $section->rabHeader->kode_sort ?? '';
         })->values(); // Re-index the collection after sorting
 
-        // Muat tampilan Blade untuk PDF
-        $pdf = Pdf::loadView('rab_penawaran.pdf_template', compact('proyek', 'penawaran'));
+        // Ambil profil pajak aktif proyek (jika ada) supaya view bisa menampilkan/menghilangkan PPN
+        $tax = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
+
+        // Muat tampilan Blade untuk PDF (sertakan $tax)
+        $pdf = Pdf::loadView('rab_penawaran.pdf_template', compact('proyek', 'penawaran', 'tax'));
 
         // Atur ukuran kertas dan orientasi (opsional)
         // $pdf->setPaper('A4', 'portrait');
@@ -730,9 +734,10 @@ class RabPenawaranController extends Controller
         })->values();
 
         // Pakai template split
+        $tax = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView(
             'rab_penawaran.pdf_template_split',
-            compact('proyek', 'penawaran')
+            compact('proyek', 'penawaran', 'tax')
         );
 
         $filename = 'Penawaran_' . str_replace(' ', '_', $penawaran->nama_penawaran) . '_' . $penawaran->versi . '_SPLIT.pdf';
@@ -1002,15 +1007,16 @@ class RabPenawaranController extends Controller
         ]);
     
         // 1) Render ringkasan (portrait)
+        $tax = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
         $pdfSummary = Pdf::loadView(
             'rab_penawaran.pdf_summary',
-            compact('proyek','penawaran')
+            compact('proyek','penawaran','tax')
         )->setPaper('A4', 'portrait');
     
         // 2) Render detail (landscape)
         $pdfDetail = Pdf::loadView(
             'rab_penawaran.pdf_detail',
-            compact('proyek','penawaran')
+            compact('proyek','penawaran','tax')
         )->setPaper('A4', 'landscape');
     
         // 3) Merge kedua PDF (tanpa menulis file sementara)
@@ -1036,15 +1042,16 @@ class RabPenawaranController extends Controller
         ]);
 
         // 1) Render Ringkasan (Portrait)
+        $tax = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
         $pdfSummary = \Barryvdh\DomPDF\Facade\Pdf::loadView(
             'rab_penawaran.pdf_summary_single',
-            compact('proyek','penawaran')
+            compact('proyek','penawaran','tax')
         )->setPaper('A4', 'portrait');
 
         // 2) Render Detail (Landscape)
         $pdfDetail = \Barryvdh\DomPDF\Facade\Pdf::loadView(
             'rab_penawaran.pdf_detail_single',
-            compact('proyek','penawaran')
+            compact('proyek','penawaran','tax')
         )->setPaper('A4', 'landscape');
 
         // 3) Merge PDF menggunakan iio/libmergepdf (sesuai kode awal Anda)

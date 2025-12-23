@@ -8,6 +8,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 use App\Models\SertifikatPembayaran;
 use App\Models\Bapp;
+use App\Models\ProyekTaxProfile;
 
 class SertifikatPembayaranController extends Controller
 {
@@ -195,7 +196,15 @@ class SertifikatPembayaranController extends Controller
     }
 
     // ---- PPN & total tagihan (PERIODE INI) ----
-    $ppnPct    = (float) $data['ppn_persen'];
+    // Jika proyek punya profil pajak aktif dan tidak kena PPN, paksa persen PPN = 0
+    $ppnPct = (float) ($data['ppn_persen'] ?? 0);
+    if ($proyekId) {
+        $tax = ProyekTaxProfile::where('proyek_id', $proyekId)->where('aktif', 1)->first();
+        if ($tax && !($tax->is_taxable ?? false)) {
+            $ppnPct = 0.0;
+            $data['ppn_persen'] = 0;
+        }
+    }
     $ppn_nilai = round($total_dibayar * $ppnPct/100, 2);
     $total_tagihan = $total_dibayar + $ppn_nilai;
 
