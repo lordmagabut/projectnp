@@ -148,14 +148,18 @@ class RABDetailSheetImport implements ToCollection, WithHeadingRow
                 $ahsp_id   = isset($row['ahsp_id']) && $row['ahsp_id'] !== '' ? (int)$row['ahsp_id'] : null;
                 $ahsp_kode = trim((string)($row['ahsp_kode'] ?? ''));
 
-                // fallback ke AHSP bila semua harga kosong
+                // fallback ke AHSP bila semua harga kosong (atau bila AHSP tersedia dan ingin mengisi harga)
                 if (($harga_material + $harga_upah + $harga_satuan) == 0 && ($ahsp_id || $ahsp_kode)) {
                     $q = AhspHeader::query();
                     if ($ahsp_id)   $q->where('id', $ahsp_id);
                     if ($ahsp_kode) $q->orWhere('kode_pekerjaan', $ahsp_kode);
                     if ($ahsp = $q->first()) {
-                        $satuan       = $satuan ?: $ahsp->satuan;
-                        $harga_satuan = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? 0);
+                        $satuan = $satuan ?: $ahsp->satuan;
+                        // Isi harga material & upah dari AHSP jika tersedia
+                        $harga_material = (float)($ahsp->total_material ?? 0);
+                        $harga_upah     = (float)($ahsp->total_upah ?? 0);
+                        // Harga satuan berasal dari total AHSP jika ada, fallback ke penjumlahan material+upah
+                        $harga_satuan = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? ($harga_material + $harga_upah));
                     }
                 }
 
