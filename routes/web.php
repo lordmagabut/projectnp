@@ -30,6 +30,7 @@ use App\Http\Controllers\BappController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SertifikatPembayaranController;
 use App\Http\Controllers\PembayaranPembelianController;
+use App\Http\Controllers\SalesOrderController;
 
 // =========================
 // Login (tanpa proteksi)
@@ -96,6 +97,7 @@ Route::middleware(['auth'])->group(function () {
 
 
     Route::get('/pembayaran', [PembayaranPembelianController::class, 'index'])->name('pembayaran.index');
+    Route::get('/pembayaran/{id}', [PembayaranPembelianController::class, 'show'])->name('pembayaran.show');
     Route::get('/pembayaran/create/{faktur_id}', [PembayaranPembelianController::class, 'create'])->name('pembayaran.create');
     Route::post('/pembayaran/store', [PembayaranPembelianController::class, 'store'])->name('pembayaran.store');
     Route::delete('/pembayaran/{id}', [PembayaranPembelianController::class, 'destroy'])->name('pembayaran.destroy');
@@ -226,6 +228,10 @@ Route::middleware(['auth'])->group(function () {
         [RabPenawaranController::class, 'downloadApproval'])
         ->where('encoded', '.*')
         ->name('proyek.penawaran.approval.download');
+
+    // Sales Order (SO) - daftar berasal dari penawaran yang telah disetujui (status = 'final')
+    Route::get('/so', [SalesOrderController::class, 'index'])->name('so.index');
+    Route::get('/so/{id}', [SalesOrderController::class, 'show'])->name('so.show');
 
 
     Route::prefix('proyek/{proyek}')->group(function () {

@@ -63,7 +63,7 @@
                                 <td>{{ $bayar->keterangan }}</td>
                                 <td class="text-center">
                                     <div class="btn-group">
-                                        <a href="{{ route('faktur.show', $bayar->faktur_id) }}" class="btn btn-xs btn-outline-info" title="Detail Faktur">
+                                        <a href="{{ route('pembayaran.show', $bayar->id) }}" class="btn btn-xs btn-outline-info" title="Bukti Pembayaran">
                                             <i data-feather="eye" class="icon-sm"></i>
                                         </a>
                                         {{-- Tombol Edit --}}

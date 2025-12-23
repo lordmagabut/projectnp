@@ -35,6 +35,12 @@ class PembayaranPembelianController extends Controller
         return view('pembayaran.create', compact('faktur', 'coaKas'));
     }
 
+    public function show($id)
+    {
+        $pembayaran = PembayaranPembelian::with(['faktur', 'coa'])->findOrFail($id);
+        return view('pembayaran.show', compact('pembayaran'));
+    }
+
    public function store(Request $request)
 {
     $request->validate([

@@ -193,8 +193,7 @@
         <div class="collapse {{ show_class(['so/*']) }}" id="soMenu">
           <ul class="nav sub-menu">
             <li class="nav-item">
-              {{-- Jika modul Anda memakai nama route lain (mis. sales-orders.index), ganti di sini --}}
-              <a href=""
+              <a href="{{ route('so.index') }}"
                 class="nav-link {{ active_class(['so']) }}">Daftar SO</a>
             </li>
           </ul>

@@ -74,4 +74,9 @@ class RabPenawaranHeader extends Model
     {
         return $this->hasMany(\App\Models\RabScheduleDetail::class, 'penawaran_id');
     }
+
+    public function salesOrder()
+    {
+        return $this->hasOne(\App\Models\SalesOrder::class, 'penawaran_id');
+    }
 }

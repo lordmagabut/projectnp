@@ -21,6 +21,8 @@ use App\Models\RabPenawaranItem;
 use App\Models\RabSchedule;
 use App\Models\RabScheduleDetail;
 use App\Models\ProyekTaxProfile;
+use App\Models\SalesOrder;
+use App\Models\SalesOrderLine;
 
 class RabPenawaranController extends Controller
 {
@@ -958,6 +960,7 @@ class RabPenawaranController extends Controller
         });
     }
 
+
     public function approve(Request $request, $proyekId, $penawaranId)
     {
         $penawaran = \App\Models\RabPenawaranHeader::where('proyek_id', $proyekId)->findOrFail($penawaranId);
@@ -991,6 +994,59 @@ class RabPenawaranController extends Controller
         $penawaran->approved_at = now();
         $penawaran->status = 'final';
         $penawaran->save();
+
+        // Buat Sales Order ringkasan otomatis ketika penawaran disetujui.
+        try {
+            // Hitung total material & jasa dari item penawaran
+            $penawaran->loadMissing('sections.items');
+            $totalMaterial = 0.0; $totalJasa = 0.0;
+            foreach ($penawaran->sections as $sec) {
+                foreach ($sec->items as $it) {
+                    $v = (float) ($it->volume ?? 0);
+                    $totalMaterial += ((float)($it->harga_material_penawaran_item ?? 0)) * $v;
+                    $totalJasa += ((float)($it->harga_upah_penawaran_item ?? 0)) * $v;
+                }
+            }
+
+            // Jika sudah ada sales order untuk penawaran ini, jangan duplikat
+            $exists = SalesOrder::where('penawaran_id', $penawaran->id)->first();
+            if (!$exists) {
+                $so = SalesOrder::create([
+                    'proyek_id' => $penawaran->proyek_id,
+                    'penawaran_id' => $penawaran->id,
+                    'no_so' => 'SO-' . date('YmdHis'),
+                    'tanggal' => now()->toDateString(),
+                    'total' => (float)($penawaran->final_total_penawaran ?? ($totalMaterial + $totalJasa)),
+                    'created_by' => auth()->id() ?? null,
+                ]);
+
+                // Jika ada nilai material dan jasa, buat 2 baris; jika tidak, buat 1 ringkasan
+                if ($totalMaterial > 0 && $totalJasa > 0) {
+                    SalesOrderLine::create([
+                        'sales_order_id' => $so->id,
+                        'description' => 'Total Material',
+                        'line_type' => 'material',
+                        'amount' => $totalMaterial,
+                    ]);
+                    SalesOrderLine::create([
+                        'sales_order_id' => $so->id,
+                        'description' => 'Total Jasa',
+                        'line_type' => 'jasa',
+                        'amount' => $totalJasa,
+                    ]);
+                } else {
+                    SalesOrderLine::create([
+                        'sales_order_id' => $so->id,
+                        'description' => 'Total Penawaran',
+                        'line_type' => 'summary',
+                        'amount' => ($totalMaterial + $totalJasa) > 0 ? ($totalMaterial + $totalJasa) : (float)($penawaran->final_total_penawaran ?? 0),
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            // Log error tapi jangan ganggu flow approval
+            \Log::error('Error creating SalesOrder for penawaran '.$penawaran->id.': '.$e->getMessage());
+        }
 
         return redirect()
             ->route('proyek.penawaran.show', [$penawaran->proyek_id, $penawaran->id])
