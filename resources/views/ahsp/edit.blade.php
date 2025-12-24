@@ -129,20 +129,26 @@
                                     <option value="upah" {{ $d->tipe == 'upah' ? 'selected' : '' }}>Upah</option>
                                 </select>
                             </td>
-                            <td>
-                                <select name="items[{{ $i }}][referensi_id]" class="form-select item-dropdown">
+                            <td class="d-flex align-items-center gap-1">
+                                <select name="items[{{ $i }}][referensi_id]" class="form-select item-dropdown" style="width:85%">
                                     @php
                                         $list = $d->tipe === 'material' ? $materials : $upahs;
                                     @endphp
                                     @foreach($list as $item)
                                         <option value="{{ $item->id }}"
                                             data-harga="{{ $item->harga_satuan }}"
-        data-satuan="{{ $item->satuan }}"
+                                            data-satuan="{{ $item->satuan }}"
                                             {{ $item->id == $d->referensi_id ? 'selected' : '' }}>
                                             {{ $item->nama ?? $item->jenis_pekerja }}
                                         </option>
                                     @endforeach
                                 </select>
+                                <a href="{{ route('hsd-material.create') }}" target="_blank" class="btn btn-sm btn-success px-2 py-1" title="Tambah Material Baru">
+                                    <i class="fas fa-plus"></i> M
+                                </a>
+                                <a href="{{ route('hsd-upah.create') }}" target="_blank" class="btn btn-sm btn-primary px-2 py-1" title="Tambah Jasa/Upah Baru">
+                                    <i class="fas fa-plus"></i> J
+                                </a>
                             </td>
                             <td class="satuan text-center">
                                 @php

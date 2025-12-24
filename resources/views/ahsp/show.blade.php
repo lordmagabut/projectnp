@@ -110,7 +110,8 @@
                 <thead class="table-light">
                     <tr>
                         <th style="width: 15%">Tipe</th>
-                        <th style="width: 35%">Item</th>
+                        <th style="width: 30%">Item</th>
+                        <th style="width: 10%">Satuan</th>
                         <th style="width: 15%" class="text-end">Koefisien</th>
                         <th style="width: 15%" class="text-end">Harga Satuan</th>
                         <th style="width: 15%" class="text-end">Subtotal</th>
@@ -123,16 +124,20 @@
                         <td>
                             @php
                                 $itemName = '-';
+                                $itemSatuan = '-';
                                 if ($d->tipe === 'material') {
                                     $item = App\Models\HsdMaterial::find($d->referensi_id);
                                     $itemName = $item->nama ?? '-';
+                                    $itemSatuan = $item->satuan ?? '-';
                                 } elseif ($d->tipe === 'upah') {
                                     $item = App\Models\HsdUpah::find($d->referensi_id);
                                     $itemName = $item->jenis_pekerja ?? '-';
+                                    $itemSatuan = $item->satuan ?? '-';
                                 }
                             @endphp
                             {{ $itemName }}
                         </td>
+                        <td class="text-center">{{ $itemSatuan }}</td>
                         <td class="text-end">{{ number_format($d->koefisien, 4, ',', '.') }}</td>
                         <td class="text-end">Rp {{ number_format($d->harga_satuan, 0, ',', '.') }}</td>
                         <td class="text-end">Rp {{ number_format($d->subtotal, 0, ',', '.') }}</td>
