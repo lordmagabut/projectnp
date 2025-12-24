@@ -43,10 +43,6 @@
             </select>
         </div>
 
-        <div class="mb-3">
-            <label for="template_po" class="form-label">Template PO (Opsional)</label>
-            <input type="file" name="template_po" class="form-control">
-        </div>
 
         <button type="submit" class="btn btn-primary">Simpan</button>
         <a href="{{ route('perusahaan.index') }}" class="btn btn-secondary">Batal</a>

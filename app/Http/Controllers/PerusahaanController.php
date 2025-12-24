@@ -31,7 +31,6 @@ class PerusahaanController extends Controller
             'no_telp' => 'nullable',
             'npwp' => 'nullable',
             'tipe_perusahaan' => 'required|in:UMKM,Kontraktor,Perorangan',
-            'template_po' => 'nullable|file|mimes:docx|max:20480',
         ]);
 
         $data = $request->only([
@@ -43,12 +42,6 @@ class PerusahaanController extends Controller
             'tipe_perusahaan'
         ]);
 
-        if ($request->hasFile('template_po')) {
-            $file = $request->file('template_po');
-            $filename = time() . '_templatePO_' . strtoupper(str_replace(' ', '_', $data['nama_perusahaan'])) . '.' . $file->getClientOriginalExtension();
-            $filePath = $file->storeAs('template_po', $filename, 'public');
-            $data['template_po'] = $filePath;
-        }
 
         Perusahaan::create($data);
 
@@ -74,7 +67,6 @@ class PerusahaanController extends Controller
             'no_telp' => 'nullable',
             'npwp' => 'nullable',
             'tipe_perusahaan' => 'required|in:UMKM,Kontraktor,Perorangan',
-            'template_po' => 'nullable|file|mimes:doc,docx|max:20480',
         ]);
 
         $perusahaan = Perusahaan::findOrFail($id);
@@ -88,16 +80,6 @@ class PerusahaanController extends Controller
             'tipe_perusahaan',
         ]);
 
-        if ($request->hasFile('template_po')) {
-            if ($perusahaan->template_po && Storage::disk('public')->exists($perusahaan->template_po)) {
-                Storage::disk('public')->delete($perusahaan->template_po);
-            }
-
-            $file = $request->file('template_po');
-            $filename = time() . '_templatePO_' . strtoupper(str_replace(' ', '_', $perusahaan->nama_perusahaan)) . '.' . $file->getClientOriginalExtension();
-            $filePath = $file->storeAs('template_po', $filename, 'public');
-            $data['template_po'] = $filePath;
-        }
 
         $perusahaan->update($data);
 

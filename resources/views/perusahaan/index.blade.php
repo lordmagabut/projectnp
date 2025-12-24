@@ -10,7 +10,13 @@
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title">Profil Perusahaan</h4>
-                <p class="mb-4">Informasi lengkap mengenai perusahaan Anda.</p>
+                <div class="d-flex align-items-center mb-3">
+                    <img src="{{ company_logo_url($perusahaan) }}" alt="Logo {{ $perusahaan->nama_perusahaan ?? '' }}" style="max-height:80px; max-width:180px; object-fit:contain; margin-right:16px;">
+                    <div>
+                        <h4 class="mb-1">Profil Perusahaan</h4>
+                        <p class="mb-0">Informasi lengkap mengenai perusahaan Anda.</p>
+                    </div>
+                </div>
 
                 {{-- Alert yang bisa ditutup --}}
                 @if(session('success'))

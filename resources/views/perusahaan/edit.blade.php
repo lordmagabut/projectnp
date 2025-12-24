@@ -43,15 +43,6 @@
                 <option value="Perorangan" {{ $perusahaan->tipe_perusahaan == 'Perorangan' ? 'selected' : '' }}>Perorangan</option>
             </select>
         </div>
-
-        <div class="mb-3">
-            <label for="template_po" class="form-label">Template PO (Opsional)</label>
-            <input type="file" name="template_po" class="form-control">
-            @if($perusahaan->template_po)
-                <small>File saat ini: <a href="{{ asset('storage/' . $perusahaan->template_po) }}" target="_blank">Lihat File</a></small>
-            @endif
-        </div>
-
         <button type="submit" class="btn btn-primary">Update</button>
         <a href="{{ route('perusahaan.index') }}" class="btn btn-secondary">Batal</a>
     </form>

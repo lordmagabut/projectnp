@@ -1,7 +1,20 @@
 <nav class="sidebar">
-  <div class="sidebar-header">
-    <a href="#" class="sidebar-brand">
-      Artista<span>Group</span>
+  <style>
+    /* Sidebar brand responsive tweaks */
+    .sidebar-header .sidebar-brand { display:flex; align-items:center; }
+    .sidebar-header .sidebar-brand img { height:36px; object-fit:contain; margin-right:8px; }
+    .sidebar-header .brand-text { display:inline-block; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; font-weight:600; line-height:1; }
+
+    @media (max-width: 768px) {
+      .sidebar-header .sidebar-brand { flex-direction:column; align-items:center; gap:4px; }
+      .sidebar-header .sidebar-brand img { margin-right:0; }
+      .sidebar-header .brand-text { max-width:160px; white-space:normal; text-align:center; font-size:13px; }
+    }
+  </style>
+  <div class="sidebar-header d-flex align-items-center">
+    <a href="{{ url('/') }}" class="sidebar-brand d-flex align-items-center">
+      <img src="{{ company_logo_url($company) }}" alt="{{ $company->nama_perusahaan ?? 'Artista Group' }}" style="height:36px; object-fit:contain; margin-right:8px;">
+      <span class="brand-text" title="{{ $company->nama_perusahaan ?? 'Artista Group' }}" style="display:inline-block; max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:14px; font-weight:600; line-height:1;">{{ $company->nama_perusahaan ?? 'Artista Group' }}</span>
     </a>
     <div class="sidebar-toggler not-active">
       <span></span>

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 // ==== Controllers ====
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PerusahaanController;
+use App\Http\Controllers\TemplateDokumenController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PemberiKerjaController;
 use App\Http\Controllers\ProyekController;
@@ -63,6 +64,8 @@ Route::middleware(['auth'])->group(function () {
 
     // ========== Master Data ==========
     Route::resource('perusahaan', PerusahaanController::class);
+    Route::get('/template-dokumen', [TemplateDokumenController::class, 'index'])->name('template-dokumen.index');
+    Route::post('/template-dokumen', [TemplateDokumenController::class, 'store'])->name('template-dokumen.store');
     Route::resource('supplier',   SupplierController::class)->middleware('cek_akses_supplier');
     Route::resource('coa',        CoaController::class)->middleware('cek_akses_coa');
     Route::resource('barang',     BarangController::class)->middleware('cek_akses_barang');

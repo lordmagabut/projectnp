@@ -34,6 +34,9 @@
                             <p class="text-muted small mb-0">No: <strong>{{ $pembayaran->no_pembayaran }}</strong></p>
                         </div>
                         <div class="col-5 text-end">
+                            <div class="mb-2">
+                                <img src="{{ company_logo_url($pembayaran->faktur->perusahaan) }}" alt="Logo {{ $pembayaran->faktur->perusahaan->nama_perusahaan ?? '' }}" style="max-height:80px; max-width:220px; object-fit:contain;">
+                            </div>
                             <h6 class="fw-bold mb-0 text-dark">{{ $pembayaran->faktur->perusahaan->nama_perusahaan ?? 'NAMA PERUSAHAAN' }}</h6>
                             <p style="font-size: 10px; line-height: 1.2;" class="text-muted mb-0">
                                 {{ $pembayaran->faktur->perusahaan->alamat ?? '' }}

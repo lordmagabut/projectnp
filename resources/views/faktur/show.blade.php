@@ -44,6 +44,9 @@
                             <p class="text-muted small mb-0">No: <strong>{{ $faktur->no_faktur }}</strong></p>
                         </div>
                         <div class="col-5 text-end">
+                            <div class="mb-2">
+                                <img src="{{ company_logo_url($faktur->perusahaan) }}" alt="Logo {{ $faktur->perusahaan->nama_perusahaan ?? '' }}" style="max-height:80px; max-width:220px; object-fit:contain;">
+                            </div>
                             <h6 class="fw-bold mb-0 text-dark">{{ $faktur->perusahaan->nama_perusahaan ?? 'NAMA PERUSAHAAN' }}</h6>
                             <p style="font-size: 10px; line-height: 1.2;" class="text-muted mb-0">
                                 {{ $faktur->perusahaan->alamat ?? 'Alamat lengkap perusahaan belum diatur.' }}

@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\View;
+use App\Models\Perusahaan;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,6 +25,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        //
+        // Share first company (if any) with the sidebar view for logo/name display
+        View::composer('layout.sidebar', function ($view) {
+            $view->with('company', Perusahaan::first());
+        });
     }
 }
