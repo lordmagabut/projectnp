@@ -208,6 +208,33 @@ class SertifikatPembayaranController extends Controller
     $ppn_nilai = round($total_dibayar * $ppnPct/100, 2);
     $total_tagihan = $total_dibayar + $ppn_nilai;
 
+    // ---- PPh (PERIODE INI) berdasarkan profil pajak aktif proyek ----
+    $pph_nilai = 0.0;
+    if ($proyekId) {
+        $tax = ProyekTaxProfile::where('proyek_id', $proyekId)->where('aktif', 1)->first();
+        $applyPph = (int)($tax->apply_pph ?? 0) === 1;
+        if ($tax && $applyPph) {
+            $pphRate     = (float)($tax->pph_rate ?? 0);
+            $pphBaseKind = (string)($tax->pph_base ?? 'dpp'); // 'dpp' | 'subtotal'
+            $extra       = is_array($tax->extra_options ?? null) ? $tax->extra_options : [];
+            $src         = (string)($extra['pph_dpp_source'] ?? 'jasa'); // 'jasa' | 'material_jasa'
+
+            if ($pphRate > 0) {
+                if ($src === 'material_jasa') {
+                    $baseM = ($pphBaseKind === 'dpp') ? $dpp_material : $progress_M_now;
+                    $baseJ = ($pphBaseKind === 'dpp') ? $dpp_jasa     : $progress_J_now;
+                    $pph_nilai = round($baseM * $pphRate/100, 2) + round($baseJ * $pphRate/100, 2);
+                } else { // jasa saja
+                    $baseJ = ($pphBaseKind === 'dpp') ? $dpp_jasa : $progress_J_now;
+                    $pph_nilai = round($baseJ * $pphRate/100, 2);
+                }
+            }
+        }
+    }
+
+    // Net tagihan (TOTAL + PPN − PPh) untuk narasi terbilang
+    $total_nett = max(0, round($total_tagihan - $pph_nilai, 2));
+
     // ---- Payload simpan (isi kolom sesuai makna "PERIODE INI") ----
     $payload = array_merge($data, [
         'nomor'               => $this->generateNomor(),
@@ -230,8 +257,8 @@ class SertifikatPembayaranController extends Controller
         'persen_progress_delta' => $deltaPct,
         'subtotal_cum'          => $subtotal_cum_now,
         'subtotal_prev_cum'     => $subtotal_cum_prev,
-        // narasi terbilang utk total tagihan periode ini
-        'terbilang'           => $this->terbilangRupiah($total_tagihan).' Rupiah',
+        // narasi terbilang utk total NETT periode ini (sesuai pemotongan PPh)
+        'terbilang'           => $this->terbilangRupiah($total_nett).' Rupiah',
         'dibuat_oleh_id'      => auth()->id(),
     ]);
 

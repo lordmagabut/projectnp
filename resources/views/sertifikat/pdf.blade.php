@@ -216,6 +216,32 @@
       if ($totJas >= $totMat) $totJas += $delta; else $totMat += $delta;
   }
 
+    // ===== PPh (dipotong) berdasarkan profil pajak proyek =====
+    $tax         = optional($proyek->taxProfileAktif);
+    $applyPph    = (int)($tax->apply_pph ?? 0) === 1;
+    $pphRate     = (float)($tax->pph_rate ?? 0);
+    $pphBaseKind = (string)($tax->pph_base ?? 'dpp'); // 'dpp' | 'subtotal'
+    $extraOpts   = is_array($tax->extra_options ?? null) ? $tax->extra_options : [];
+    $pphSource   = (string)($extraOpts['pph_dpp_source'] ?? 'jasa'); // 'jasa' | 'material_jasa'
+
+    $pphMat = 0.0; $pphJas = 0.0;
+    if ($applyPph && $pphRate > 0) {
+      if ($pphSource === 'material_jasa') {
+        $baseM = ($pphBaseKind === 'dpp') ? $subMat : $prgMat;
+        $baseJ = ($pphBaseKind === 'dpp') ? $subJas : $prgJas;
+        $pphMat = round($baseM * $pphRate/100, 2);
+        $pphJas = round($baseJ * $pphRate/100, 2);
+      } else { // jasa saja
+        $baseJ = ($pphBaseKind === 'dpp') ? $subJas : $prgJas;
+        $pphMat = 0.0;
+        $pphJas = round($baseJ * $pphRate/100, 2);
+      }
+    }
+
+    $netMat = $totMat - $pphMat;
+    $netJas = $totJas - $pphJas;
+    $netAll = round($netMat + $netJas, 2);
+
   // Formatter
   $fmt = fn($n)=> number_format((float)$n, 0, ',', '.');
   $pct = fn($n,$d=2)=> rtrim(rtrim(number_format((float)$n,$d,',','.'),'0'),',');
@@ -271,7 +297,7 @@
 
   <p style="margin-top:12px;">
     Berdasarkan data & rincian terlampir, Pihak Kedua berhak menerima pembayaran termin ke-{{ $terminKe }}
-    sebesar <span class="money fw-bold" style="font-size: 14px;">Rp.&nbsp;{{ $fmt($sp->total_tagihan ?? ($totMat+$totJas)) }}</span>,
+    sebesar <span class="money fw-bold" style="font-size: 14px;">Rp.&nbsp;{{ $fmt($netAll) }}</span>,
     {{ $sp->terbilang }}.
   </p>
 
@@ -359,13 +385,31 @@
       <td class="right money">Rp.&nbsp;{{ $fmt($ppnMat + $ppnJas) }}</td>
     </tr>
 
-    {{-- 6. TOTAL PERIODE INI --}}
+    {{-- 6. TOTAL + PPN PERIODE INI --}}
     <tr class="subrow">
       <td class="center fw-bold" style="background:#eee;">6</td>
-      <td class="fw-bold" style="background:#eee;">TOTAL YANG DIBAYARKAN (4 + 5) — PERIODE INI</td>
-      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($subMat + $ppnMat) }}</td>
-      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($subJas + $ppnJas) }}</td>
-      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt(($subMat + $ppnMat) + ($subJas + $ppnJas)) }}</td>
+      <td class="fw-bold" style="background:#eee;">TOTAL + PPN (4 + 5) — PERIODE INI</td>
+      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($totMat) }}</td>
+      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($totJas) }}</td>
+      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($totMat + $totJas) }}</td>
+    </tr>
+
+    {{-- 7. PPh PERIODE INI (dipotong) --}}
+    <tr>
+      <td class="center">7</td>
+      <td>PPh {{ $pphRate > 0 ? (rtrim(rtrim(number_format($pphRate,3,',','.'),'0'),',')) : '0' }}% — Sumber {{ $pphSource === 'material_jasa' ? 'Material + Jasa' : 'Jasa saja' }}, Basis {{ strtoupper($pphBaseKind) }}</td>
+      <td class="right money">- Rp.&nbsp;{{ $fmt($pphMat) }}</td>
+      <td class="right money">- Rp.&nbsp;{{ $fmt($pphJas) }}</td>
+      <td class="right money">- Rp.&nbsp;{{ $fmt($pphMat + $pphJas) }}</td>
+    </tr>
+
+    {{-- 8. TOTAL NETT PERIODE INI --}}
+    <tr class="subrow">
+      <td class="center fw-bold" style="background:#eee;">8</td>
+      <td class="fw-bold" style="background:#eee;">TOTAL DIBAYARKAN (6 − 7) — PERIODE INI</td>
+      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netMat) }}</td>
+      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netJas) }}</td>
+      <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netAll) }}</td>
     </tr>
   </table>
 

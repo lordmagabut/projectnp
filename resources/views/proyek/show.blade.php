@@ -158,6 +158,8 @@
                   $efTo   = $tax->effective_to   ? \Carbon\Carbon::parse($tax->effective_to)->format('d-m-Y')   : '— (berlaku terus)';
                   $ppnRateStr = rtrim(rtrim(number_format((float)($tax->ppn_rate ?? 0), 3, ',', '.'), '0'), ',');
                   $pphRateStr = rtrim(rtrim(number_format((float)($tax->pph_rate ?? 0), 3, ',', '.'), '0'), ',');
+                  $extraOpts  = is_array($tax->extra_options ?? null) ? $tax->extra_options : [];
+                  $pphSrcStr  = ($extraOpts['pph_dpp_source'] ?? 'jasa') === 'material_jasa' ? 'Material+Jasa' : 'Jasa';
                 @endphp
 
                 <tr>
@@ -182,7 +184,7 @@
                 </tr>
 
                 <tr>
-                  <th><i data-feather="scissors" class="me-2 text-muted"></i> Pajak – PPh (Jasa)</th>
+                  <th><i data-feather="scissors" class="me-2 text-muted"></i> Pajak – PPh</th>
                   <td>
                     @if($proyek->taxProfileAktif)
                       <span class="badge {{ ($tax->apply_pph??false) ? 'bg-warning text-dark' : 'bg-secondary' }}">
@@ -195,7 +197,7 @@
                           </span>
                         </span>
                         <span class="ms-2">Tarif: <strong>{{ $pphRateStr }}%</strong></span>
-                        <span class="ms-2 small text-muted">(basis DPP JASA)</span>
+                        <span class="ms-2">Sumber DPP: <strong>{{ $pphSrcStr }}</strong></span>
                       @endif
                     @else
                       <span class="text-muted">Belum diset</span>

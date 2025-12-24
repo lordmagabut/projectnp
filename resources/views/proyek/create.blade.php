@@ -77,8 +77,8 @@
           <div class="row g-3 mt-1">
             <div class="col-md-4">
               <label class="form-label">Status</label>
+              @php $st = old('status','perencanaan'); @endphp
               <select name="status" class="form-select" required>
-                @php $st = old('status','perencanaan'); @endphp
                 <option value="perencanaan" {{ $st==='perencanaan'?'selected':'' }}>Perencanaan</option>
                 <option value="berjalan" {{ $st==='berjalan'?'selected':'' }}>Berjalan</option>
                 <option value="selesai" {{ $st==='selesai'?'selected':'' }}>Selesai</option>
@@ -169,6 +169,19 @@
             </div>
           </div>
 
+          {{-- Sumber DPP PPh (baru) --}}
+          <div class="row g-3 mt-1">
+            <div class="col-md-4">
+              <label class="form-label">Sumber DPP PPh</label>
+              @php $src = old('tax.pph_dpp_source','jasa'); @endphp
+              <select class="form-select" id="tax_pph_dpp_source" name="tax[pph_dpp_source]">
+                <option value="jasa" {{ $src==='jasa'?'selected':'' }}>Jasa saja</option>
+                <option value="material_jasa" {{ $src==='material_jasa'?'selected':'' }}>Material + Jasa</option>
+              </select>
+              <small class="text-muted">Menentukan apakah PPh dihitung dari DPP Jasa saja atau gabungan Material+Jasa.</small>
+            </div>
+          </div>
+
           <div class="alert alert-light mt-3">
             <div class="small text-muted">Catatan:</div>
             <ul class="small mb-0">
@@ -201,6 +214,7 @@
   const ppnModeField = document.getElementById('tax_ppn_mode');
   const pphRateField = document.getElementById('tax_pph_rate');
   const pphBaseField = document.getElementById('tax_pph_base');
+  const pphDppSourceField = document.getElementById('tax_pph_dpp_source');
 
   function togglePpn(){
     const en = isTaxable.value === '1';
@@ -221,7 +235,7 @@
       if(pphRateField) pphRateField.value = 0;
     }
 
-    [pphRateField, pphBaseField].forEach(el => {
+    [pphRateField, pphBaseField, pphDppSourceField].forEach(el => {
       if(el) el.disabled = !en;
     });
   }

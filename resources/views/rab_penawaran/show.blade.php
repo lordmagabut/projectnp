@@ -76,6 +76,9 @@
       $ppnRate   = (float)($tax->ppn_rate ?? 11.0);    // persen
       $applyPph  = (int)($tax->apply_pph ?? 0) === 1;
       $pphRate   = (float)($tax->pph_rate ?? 2.0);     // persen
+      $pphBaseKind = (string)($tax->pph_base ?? 'dpp'); // 'dpp' | 'subtotal'
+      $extraOpts = is_array($tax->extra_options ?? null) ? $tax->extra_options : [];
+      $pphDppSource = (string)($extraOpts['pph_dpp_source'] ?? 'jasa'); // 'jasa' | 'material_jasa'
 
       // Hitung DPP & PPN
       if (!$isTaxable) {
@@ -90,9 +93,20 @@
           $totalPlusPpn = $dpp + $ppn;
       }
 
-      // Basis PPh = DPP JASA SAJA (setelah diskon). Jika include, ekstrak dulu DPP-nya dari jasa.
-      $jasaDpp = ($isTaxable && $ppnMode === 'include') ? ($jasaNet / (1 + $ppnRate/100)) : $jasaNet;
-      $pph = $applyPph ? ($jasaDpp * ($pphRate/100)) : 0.0;
+        // Hitung DPP untuk jasa (untuk sumber 'jasa')
+        $jasaDpp = ($isTaxable && $ppnMode === 'include') ? ($jasaNet / (1 + $ppnRate/100)) : $jasaNet;
+
+        // Tentukan basis PPh sesuai konfigurasi
+        if ($applyPph) {
+          if ($pphDppSource === 'material_jasa') {
+            $pphBaseAmount = ($pphBaseKind === 'dpp') ? $dpp : $subtotal;
+          } else { // 'jasa' saja
+            $pphBaseAmount = ($pphBaseKind === 'dpp') ? $jasaDpp : $jasaNet;
+          }
+          $pph = $pphBaseAmount * ($pphRate/100);
+        } else {
+          $pph = 0.0;
+        }
 
       // Total dibayar (umum di ID): Total + PPN - PPh
       $totalDibayar = $totalPlusPpn - $pph;
@@ -160,9 +174,11 @@
           <tr>
             <td>PPh</td>
             <td>
-              {{ $applyPph ? 'Dipungut atas DPP Jasa saja' : 'Tidak dipotong' }}
               @if($applyPph)
-                (Tarif {{ rtrim(rtrim(number_format($pphRate,3,',','.'),'0'),',') }}%, DPP Jasa = {{ $rf($jasaDpp) }})
+                Dipungut atas {{ $pphDppSource === 'material_jasa' ? 'Material + Jasa' : 'Jasa saja' }}
+                — Basis {{ strtoupper($pphBaseKind) }}, Tarif {{ rtrim(rtrim(number_format($pphRate,3,',','.'),'0'),',') }}%
+              @else
+                Tidak dipotong
               @endif
             </td>
             <td class="text-end">- {{ $rf($pph) }}</td>

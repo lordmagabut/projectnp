@@ -752,6 +752,8 @@ private function validateTaxPayload(array $tax): array
         // Gunakan 'required_if:apply_pph,1'
         'pph_rate'       => ['required_if:apply_pph,1', 'numeric', 'min:0'],
         'pph_base'       => ['required_if:apply_pph,1', 'in:dpp,subtotal'],
+        // Sumber DPP PPh (baru): jasa saja atau gabungan material+jasa
+        'pph_dpp_source' => ['required_if:apply_pph,1', 'in:jasa,material_jasa'],
         
         'rounding'       => ['required', 'in:HALF_UP,FLOOR,CEIL'],
         'effective_from' => ['nullable', 'date'],
@@ -789,6 +791,24 @@ private function validateTaxPayload(array $tax): array
                 }
             }
         }
+
+        // Pastikan extra_options berbentuk array agar bisa menampung opsi baru
+        $extra = is_array($data['extra_options'] ?? null) ? $data['extra_options'] : [];
+
+        // Default sumber DPP PPh ke 'jasa' bila apply_pph aktif namun tidak ada input
+        if ($data['apply_pph']) {
+            $src = $data['pph_dpp_source'] ?? 'jasa';
+            $extra['pph_dpp_source'] = in_array($src, ['jasa','material_jasa']) ? $src : 'jasa';
+        } else {
+            // Jika tidak ada PPh, hapus opsi sumber bila ada untuk menghindari kebingungan
+            if (isset($extra['pph_dpp_source'])) {
+                unset($extra['pph_dpp_source']);
+            }
+        }
+        $data['extra_options'] = $extra ?: null;
+
+        // Jangan kirim kolom non-schema ke model
+        unset($data['pph_dpp_source']);
 
         return $data;
     }

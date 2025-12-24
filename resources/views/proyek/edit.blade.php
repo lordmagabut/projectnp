@@ -222,6 +222,19 @@
             </div>
           </div>
 
+          {{-- Sumber DPP PPh (baru) --}}
+          <div class="row g-3 mt-1">
+            <div class="col-md-4">
+              <label class="form-label">Sumber DPP PPh</label>
+              @php $extra = is_array($tax->extra_options ?? null) ? $tax->extra_options : []; $src = old('tax.pph_dpp_source', ($extra['pph_dpp_source'] ?? 'jasa')); @endphp
+              <select class="form-select" name="tax[pph_dpp_source]" id="tax_pph_dpp_source">
+                <option value="jasa" {{ $src==='jasa'?'selected':'' }}>Jasa saja</option>
+                <option value="material_jasa" {{ $src==='material_jasa'?'selected':'' }}>Material + Jasa</option>
+              </select>
+              <small class="text-muted">Menentukan apakah PPh dihitung dari DPP Jasa saja atau gabungan Material+Jasa.</small>
+            </div>
+          </div>
+
           <div class="alert alert-light mt-3">
             <div class="small text-muted">Catatan:</div>
             <ul class="small mb-0">
@@ -265,7 +278,7 @@
     const isTaxable = document.getElementById('tax_is_taxable');
     const applyPph  = document.getElementById('tax_apply_pph');
     const ppnFields = ['tax_ppn_mode','tax_ppn_rate'].map(id=>document.getElementById(id));
-    const pphFields = ['tax_pph_rate','tax_pph_base'].map(id=>document.getElementById(id));
+    const pphFields = ['tax_pph_rate','tax_pph_base','tax_pph_dpp_source'].map(id=>document.getElementById(id));
 
     function togglePpn(){
       const en = isTaxable && isTaxable.value === '1';
