@@ -72,6 +72,19 @@
                   {{-- Deskripsi + Spesifikasi di bawahnya --}}
                   <td>
                     @if ($editingDetailId === $d->id)
+                      <div class="mb-1">
+                        <select
+                          wire:model="editingDetailAhspId"
+                          class="form-select form-select-sm d-inline-block w-auto"
+                          style="min-width:180px;max-width:300px;"
+                        >
+                          <option value="">-- Pilih AHSP --</option>
+                          @foreach (\App\Models\AhspHeader::where('kategori_id', $header->kategori_id)->orderBy('kode_pekerjaan')->get() as $ahsp)
+                            <option value="{{ $ahsp->id }}">{{ $ahsp->kode_pekerjaan }} - {{ $ahsp->nama_pekerjaan }}</option>
+                          @endforeach
+                        </select>
+                        @error('editingDetailAhspId') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                      </div>
                       <textarea wire:model.live="editingDetailDeskripsi"
                                 wire:keydown.enter="saveDetailChanges"
                                 wire:blur="saveDetailChanges"

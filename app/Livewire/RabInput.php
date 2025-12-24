@@ -44,6 +44,7 @@ class RabInput extends Component
     public $editingDetailVolume = 0;
     public $editingDetailSatuan = '';
     public $editingDetailDeskripsi = '';
+    public $editingDetailAhspId = '';
 
     // edit header (deskripsi)
     public $editingHeaderId = null;
@@ -449,6 +450,7 @@ class RabInput extends Component
         $this->editingDetailVolume      = $d->volume;
         $this->editingDetailSatuan      = $d->satuan;
         $this->editingDetailDeskripsi   = $d->deskripsi;
+        $this->editingDetailAhspId      = $d->ahsp_id;
     }
 
     public function saveDetailChanges()
@@ -458,19 +460,35 @@ class RabInput extends Component
             'editingDetailVolume'      => 'required|numeric|min:0.01',
             'editingDetailSatuan'      => 'nullable|string',
             'editingDetailDeskripsi'   => 'required|string|max:255',
+            'editingDetailAhspId'      => 'required|exists:ahsp_header,id',
+        ], [
+            'editingDetailAhspId.required' => 'Pilih AHSP.',
+            'editingDetailAhspId.exists'   => 'AHSP tidak valid.',
         ]);
 
         $d = RabDetail::find($this->editingDetailId);
         if (!$d) return;
 
+        $ahspChanged = $d->ahsp_id != $this->editingDetailAhspId;
         $d->spesifikasi = $this->editingDetailSpesifikasi;
         $d->volume      = (float)$this->editingDetailVolume;
         $d->satuan      = $this->editingDetailSatuan;
         $d->deskripsi   = $this->editingDetailDeskripsi;
 
+        if ($ahspChanged) {
+            $d->ahsp_id = $this->editingDetailAhspId;
+            $komp = $this->getAhspKomponen((int)$this->editingDetailAhspId);
+            $d->satuan         = $komp['satuan'];
+            $d->deskripsi      = $komp['nama'];
+            $d->harga_material = (float)$komp['harga_material'];
+            $d->harga_upah     = (float)$komp['harga_upah'];
+            $d->harga_satuan   = (float)$komp['harga_gabungan'];
+            $d->sumber_harga   = 'ahsp';
+        }
+
         // Hitung ulang total-total
         $vol = (float)$d->volume;
-        $hargaPakai = (float)($d->harga_satuan ?? 0);   // jika nanti ada override manual, prioritaskan di sini
+        $hargaPakai = (float)($d->harga_satuan ?? 0);
         $d->total_material = (float)($d->harga_material ?? 0) * $vol;
         $d->total_upah     = (float)($d->harga_upah ?? 0)     * $vol;
         $d->total          = $hargaPakai * $vol;
@@ -483,7 +501,7 @@ class RabInput extends Component
         $this->dispatch('rabDetailUpdated');
         session()->flash('success', 'Detail RAB berhasil diperbarui.');
 
-        $this->reset(['editingDetailId','editingDetailSpesifikasi','editingDetailVolume','editingDetailSatuan','editingDetailDeskripsi']);
+        $this->reset(['editingDetailId','editingDetailSpesifikasi','editingDetailVolume','editingDetailSatuan','editingDetailDeskripsi','editingDetailAhspId']);
     }
 
     public function hapusDetail($id)
