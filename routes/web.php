@@ -47,6 +47,8 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 /* Routes yang diproteksi */
 // =========================
 Route::middleware(['auth'])->group(function () {
+    // Kalkulasi ulang harga RAB dari AHSP
+    Route::post('rab/{proyek}/recalc-ahsp', [App\Http\Controllers\RabController::class, 'recalcAhsp'])->name('rab.recalc-ahsp');
     // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
