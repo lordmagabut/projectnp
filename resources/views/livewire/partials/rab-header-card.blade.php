@@ -41,7 +41,8 @@
           <thead class="table-light">
             <tr>
               <th style="width: 8%">Kode</th>
-              <th style="width: 32%">Deskripsi & <small class="text-muted">Spesifikasi</small></th>
+              <th style="width: 8%">AHSP ID</th>
+              <th style="width: 24%">Deskripsi & <small class="text-muted">Spesifikasi</small></th>
               <th style="width: 7%">Satuan</th>
               <th style="width: 7%" class="text-end">Volume</th>
               <th style="width: 9%" class="text-end">Hrg Material</th>
@@ -68,6 +69,13 @@
               @foreach($areaDetails->sortBy('kode_sort') as $d)
                 <tr class="rab-detail-row">
                   <td>{{ $d->kode }}</td>
+                  <td>
+                    @if($d->ahsp_id)
+                      <span class="badge bg-success">{{ $d->ahsp_id }}</span>
+                    @else
+                      <span class="badge bg-secondary">Manual</span>
+                    @endif
+                  </td>
 
                   {{-- Deskripsi + Spesifikasi di bawahnya --}}
                   <td>
