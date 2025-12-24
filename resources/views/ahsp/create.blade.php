@@ -144,7 +144,12 @@
 
             <hr class="my-4">
 
-            <h6><i class="fas fa-list-alt me-2"></i> Komponen Material / Upah</h6>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="m-0"><i class="fas fa-list-alt me-2"></i> Komponen Material / Upah</h6>
+                <button type="button" class="btn btn-sm btn-outline-info rounded-pill" onclick="location.reload()" title="Reload halaman untuk melihat data material/jasa terbaru">
+                    <i class="fas fa-sync-alt me-1"></i> Refresh Dropdown
+                </button>
+            </div>
 
             <div class="table-responsive">
                 <table class="table table-bordered" id="item-table">
@@ -214,6 +219,123 @@
         return Math.ceil(value / 1000) * 1000;
     }
 
+    window.route_hsd_material_create = '{{ route('hsd-material.create') }}';
+    window.route_hsd_upah_create = '{{ route('hsd-upah.create') }}';
+
+    // Simpan data form + baris items ke localStorage sebelum reload
+    window.saveFormToLocalStorage = function() {
+        const formData = new FormData(document.getElementById('ahsp-form'));
+        const data = Object.fromEntries(formData);
+        
+        // Simpan juga data baris items dari DOM
+        const items = [];
+        document.querySelectorAll('#item-body tr').forEach((row, idx) => {
+            const tipeEl = row.querySelector('.tipe-select');
+            const itemDropdownEl = row.querySelector('.item-dropdown');
+            const koefEl = row.querySelector('.koefisien-input');
+            
+            if (tipeEl && itemDropdownEl && koefEl) {
+                items.push({
+                    tipe: tipeEl.value,
+                    referensi_id: itemDropdownEl.value,
+                    koefisien: koefEl.value,
+                    // simpan juga data display untuk restore
+                    satuan: row.querySelector('.satuan')?.textContent || '-',
+                    harga_satuan: row.querySelector('.harga-satuan')?.textContent || 'Rp 0',
+                    subtotal: row.querySelector('.subtotal')?.textContent || 'Rp 0'
+                });
+            }
+        });
+        
+        data.items = items;
+        localStorage.setItem('ahsp-form-backup', JSON.stringify(data));
+    }
+
+    // Restore data form + baris items dari localStorage
+    window.restoreFormFromLocalStorage = function() {
+        const backup = localStorage.getItem('ahsp-form-backup');
+        if (backup) {
+            const data = JSON.parse(backup);
+            const items = data.items || [];
+            delete data.items; // hapus dari data agar tidak di-set sebagai form field
+            
+            // Restore form fields
+            Object.keys(data).forEach(key => {
+                const el = document.querySelector(`[name="${key}"]`);
+                if (el) el.value = data[key];
+            });
+            
+            // Restore baris items
+            if (items.length > 0) {
+                const tbody = document.getElementById('item-body');
+                tbody.innerHTML = ''; // hapus baris awal (jika ada)
+                
+                items.forEach((item, idx) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>
+                            <select name="items[${idx}][tipe]" class="form-select tipe-select">
+                                <option value="material" ${item.tipe === 'material' ? 'selected' : ''}>Material</option>
+                                <option value="upah" ${item.tipe === 'upah' ? 'selected' : ''}>Upah</option>
+                            </select>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-1">
+                                <select name="items[${idx}][referensi_id]" class="form-select item-dropdown" style="flex:1;min-width:120px">
+                                    ${(item.tipe === 'material' ? materials : upahs).map(m => `<option value="${m.id}" data-harga="${m.harga_satuan}" data-satuan="${m.satuan}" ${m.id == item.referensi_id ? 'selected' : ''}>${m.nama || m.jenis_pekerja}</option>`).join('')}
+                                </select>
+                                <a href="${window.route_hsd_material_create}" target="_blank" class="btn btn-sm btn-success px-2 py-1" title="Tambah Material Baru" onclick="window.saveFormToLocalStorage()"><i class="fas fa-plus"></i> M</a>
+                                <a href="${window.route_hsd_upah_create}" target="_blank" class="btn btn-sm btn-primary px-2 py-1" title="Tambah Jasa/Upah Baru" onclick="window.saveFormToLocalStorage()"><i class="fas fa-plus"></i> J</a>
+                            </div>
+                        </td>
+                        <td class="satuan text-center">${item.satuan}</td>
+                        <td>
+                            <input type="number" name="items[${idx}][koefisien]" class="form-control koefisien-input" step="0.0001" value="${item.koefisien}">
+                        </td>
+                        <td class="harga-satuan text-end">${item.harga_satuan}</td>
+                        <td class="subtotal text-end">${item.subtotal}</td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-danger rounded" onclick="removeRow(this)">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                    window.initSelect2(row);
+                });
+                
+                window.updateTotalHarga();
+            }
+            
+            localStorage.removeItem('ahsp-form-backup');
+        }
+    }
+
+    // Refresh dropdown material/jasa dari server via AJAX
+    window.refreshDropdownData = async function() {
+        try {
+            const matRes = await fetch('{{ route('hsd-material.index') }}');
+            const upRes = await fetch('{{ route('hsd-upah.index') }}');
+            // Setelah refresh, reload halaman untuk update dropdown
+            location.reload();
+        } catch(e) {
+            alert('Gagal refresh data. Silakan reload halaman manual.');
+        }
+    }
+
+    // Saat halaman load, restore form data jika ada di localStorage
+    window.addEventListener('load', function() {
+        window.restoreFormFromLocalStorage();
+        
+        // Auto-save setiap 2 detik saat ada perubahan
+        setInterval(() => window.saveFormToLocalStorage(), 2000);
+        
+        // Save juga sebelum reload/close tab
+        window.addEventListener('beforeunload', () => {
+            window.saveFormToLocalStorage();
+        });
+    });
+
     window.initSelect2 = function(container) {
         $(container).find('.item-dropdown').select2({
             placeholder: 'Pilih item',
@@ -236,9 +358,13 @@
                 </select>
             </td>
             <td>
-                <select name="items[${rowIndex}][referensi_id]" class="form-select item-dropdown">
-                    ${materials.map(m => `<option value="${m.id}" data-harga="${m.harga_satuan}" data-satuan="${m.satuan}">${m.nama}</option>`).join('')}
-                </select>
+                <div class="d-flex align-items-center gap-1">
+                    <select name="items[${rowIndex}][referensi_id]" class="form-select item-dropdown" style="flex:1;min-width:120px">
+                        ${materials.map(m => `<option value="${m.id}" data-harga="${m.harga_satuan}" data-satuan="${m.satuan}">${m.nama}</option>`).join('')}
+                    </select>
+                    <a href="${window.route_hsd_material_create}" target="_blank" class="btn btn-sm btn-success px-2 py-1" title="Tambah Material Baru" onclick="window.saveFormToLocalStorage()"><i class="fas fa-plus"></i> M</a>
+                    <a href="${window.route_hsd_upah_create}" target="_blank" class="btn btn-sm btn-primary px-2 py-1" title="Tambah Jasa/Upah Baru" onclick="window.saveFormToLocalStorage()"><i class="fas fa-plus"></i> J</a>
+                </div>
             </td>
             <td class="satuan text-center">-</td>
             <td>

@@ -100,11 +100,18 @@
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <h6 class="m-0"><i class="fas fa-list-alt me-2"></i> Komponen Material / Upah</h6>
 
-                {{-- TOMBOL KALKULASI ULANG (aktif hanya draft) --}}
-                <button type="button" id="btn-recalc" class="btn btn-sm {{ $isDraft ? 'btn-warning' : 'btn-outline-secondary' }} rounded-pill"
-                        {{ $isDraft ? '' : 'disabled' }}>
-                    <i class="fas fa-rotate me-1"></i> Kalkulasi Ulang (Draft)
-                </button>
+                <div class="d-flex gap-2">
+                    {{-- TOMBOL KALKULASI ULANG (aktif hanya draft) --}}
+                    <button type="button" id="btn-recalc" class="btn btn-sm {{ $isDraft ? 'btn-warning' : 'btn-outline-secondary' }} rounded-pill"
+                            {{ $isDraft ? '' : 'disabled' }}>
+                        <i class="fas fa-rotate me-1"></i> Kalkulasi Ulang (Draft)
+                    </button>
+
+                    {{-- TOMBOL REFRESH DROPDOWN --}}
+                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill" onclick="location.reload()" title="Reload halaman untuk melihat data material/jasa terbaru">
+                        <i class="fas fa-sync-alt me-1"></i> Refresh Dropdown
+                    </button>
+                </div>
             </div>
 
             <div class="table-responsive mt-3">
@@ -143,10 +150,10 @@
                                         </option>
                                     @endforeach
                                 </select>
-                                <a href="{{ route('hsd-material.create') }}" target="_blank" class="btn btn-sm btn-success px-2 py-1" title="Tambah Material Baru">
+                                <a href="{{ route('hsd-material.create') }}" target="_blank" class="btn btn-sm btn-success px-2 py-1" title="Tambah Material Baru" onclick="window.saveFormToLocalStorage()">
                                     <i class="fas fa-plus"></i> M
                                 </a>
-                                <a href="{{ route('hsd-upah.create') }}" target="_blank" class="btn btn-sm btn-primary px-2 py-1" title="Tambah Jasa/Upah Baru">
+                                <a href="{{ route('hsd-upah.create') }}" target="_blank" class="btn btn-sm btn-primary px-2 py-1" title="Tambah Jasa/Upah Baru" onclick="window.saveFormToLocalStorage()">
                                     <i class="fas fa-plus"></i> J
                                 </a>
                             </td>
@@ -237,6 +244,112 @@
     // Buat peta cepat id->data untuk recalc
     const materialMap = Object.fromEntries((materials || []).map(m => [String(m.id), m]));
     const upahMap     = Object.fromEntries((upahs || []).map(u => [String(u.id), u]));
+
+    window.route_hsd_material_create = '{{ route('hsd-material.create') }}';
+    window.route_hsd_upah_create = '{{ route('hsd-upah.create') }}';
+
+    // Simpan data form + baris items ke localStorage sebelum reload
+    window.saveFormToLocalStorage = function() {
+        const formData = new FormData(document.getElementById('ahsp-form'));
+        const data = Object.fromEntries(formData);
+        
+        // Simpan juga data baris items dari DOM
+        const items = [];
+        document.querySelectorAll('#item-body tr').forEach((row, idx) => {
+            const tipeEl = row.querySelector('.tipe-select');
+            const itemDropdownEl = row.querySelector('.item-dropdown');
+            const koefEl = row.querySelector('.koefisien-input');
+            
+            if (tipeEl && itemDropdownEl && koefEl) {
+                items.push({
+                    tipe: tipeEl.value,
+                    referensi_id: itemDropdownEl.value,
+                    koefisien: koefEl.value,
+                    satuan: row.querySelector('.satuan')?.textContent || '-',
+                    harga_satuan: row.querySelector('.harga-satuan')?.textContent || 'Rp 0',
+                    subtotal: row.querySelector('.subtotal')?.textContent || 'Rp 0'
+                });
+            }
+        });
+        
+        data.items = items;
+        localStorage.setItem('ahsp-form-backup', JSON.stringify(data));
+    }
+
+    // Restore data form + baris items dari localStorage
+    window.restoreFormFromLocalStorage = function() {
+        const backup = localStorage.getItem('ahsp-form-backup');
+        if (backup) {
+            const data = JSON.parse(backup);
+            const items = data.items || [];
+            delete data.items;
+            
+            // Restore form fields
+            Object.keys(data).forEach(key => {
+                const el = document.querySelector(`[name="${key}"]`);
+                if (el) el.value = data[key];
+            });
+            
+            // Restore baris items
+            if (items.length > 0) {
+                const tbody = document.getElementById('item-body');
+                tbody.innerHTML = '';
+                
+                items.forEach((item, idx) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>
+                            <select name="items[${idx}][tipe]" class="form-select tipe-select">
+                                <option value="material" ${item.tipe === 'material' ? 'selected' : ''}>Material</option>
+                                <option value="upah" ${item.tipe === 'upah' ? 'selected' : ''}>Upah</option>
+                            </select>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-1">
+                                <select name="items[${idx}][referensi_id]" class="form-select item-dropdown" style="flex:1;min-width:120px">
+                                    ${(item.tipe === 'material' ? materials : upahs).map(m => `<option value="${m.id}" data-harga="${m.harga_satuan}" data-satuan="${m.satuan}" ${m.id == item.referensi_id ? 'selected' : ''}>${m.nama || m.jenis_pekerja}</option>`).join('')}
+                                </select>
+                                <a href="${window.route_hsd_material_create}" target="_blank" class="btn btn-sm btn-success px-2 py-1" title="Tambah Material Baru" onclick="window.saveFormToLocalStorage()"><i class="fas fa-plus"></i> M</a>
+                                <a href="${window.route_hsd_upah_create}" target="_blank" class="btn btn-sm btn-primary px-2 py-1" title="Tambah Jasa/Upah Baru" onclick="window.saveFormToLocalStorage()"><i class="fas fa-plus"></i> J</a>
+                            </div>
+                        </td>
+                        <td class="satuan text-center">${item.satuan}</td>
+                        <td>
+                            <input type="number" name="items[${idx}][koefisien]" class="form-control koefisien-input" step="0.0001" value="${item.koefisien}">
+                        </td>
+                        <td class="harga-satuan text-end">${item.harga_satuan}</td>
+                        <td class="subtotal text-end">${item.subtotal}</td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-danger rounded" onclick="removeRow(this)">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                        <input type="hidden" name="items[${idx}][harga_satuan_detail]" value="${item.harga_satuan_detail || 0}">
+                        <input type="hidden" name="items[${idx}][subtotal_detail]" value="${item.subtotal_detail || 0}">
+                    `;
+                    tbody.appendChild(row);
+                    window.initSelect2(row);
+                });
+                
+                window.updateTotalHarga();
+            }
+            
+            localStorage.removeItem('ahsp-form-backup');
+        }
+    }
+
+    // Saat halaman load, restore form data jika ada di localStorage
+    window.addEventListener('load', function() {
+        window.restoreFormFromLocalStorage();
+        
+        // Auto-save setiap 2 detik saat ada perubahan
+        setInterval(() => window.saveFormToLocalStorage(), 2000);
+        
+        // Save juga sebelum reload/close tab
+        window.addEventListener('beforeunload', () => {
+            window.saveFormToLocalStorage();
+        });
+    });
 
     window.formatRupiah = function(value){ return 'Rp ' + Number(value||0).toLocaleString('id-ID'); }
     window.roundUpToNearestThousand = function(value){ return Math.ceil((value||0) / 1000) * 1000; }
