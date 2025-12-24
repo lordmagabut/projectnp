@@ -32,6 +32,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SertifikatPembayaranController;
 use App\Http\Controllers\PembayaranPembelianController;
 use App\Http\Controllers\SalesOrderController;
+use App\Http\Controllers\DashboardController;
+
 
 // =========================
 // Login (tanpa proteksi)
@@ -40,13 +42,13 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('auth.login');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+
 // =========================
 /* Routes yang diproteksi */
 // =========================
 Route::middleware(['auth'])->group(function () {
-
     // Dashboard
-    Route::get('/', fn () => view('dashboard'))->name('dashboard');
+    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     // ========== User Management & RBAC ==========
     Route::get('/user', [UserController::class, 'index'])->name('user.index');

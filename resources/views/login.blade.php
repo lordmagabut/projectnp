@@ -106,10 +106,13 @@
     <div class="auth-body">
 
       {{-- Brand / Logo (opsional) --}}
+
+      @php $company = \App\Models\Perusahaan::first(); @endphp
       <div class="brand">
-        {{-- Ganti logo sesuai aset Anda --}}
-        <img src="{{ asset('assets/images/logo.png') }}" alt="Logo" onerror="this.style.display='none'">
-        <span class="brand-name">ARTISTA GROUP</span>
+        <img src="{{ company_logo_url($company) }}" alt="Logo" style="height:36px;max-width:80px;object-fit:contain;" onerror="this.style.display='none'">
+        <span class="brand-name" title="{{ $company->nama_perusahaan ?? '' }}">
+          {{ $company->nama_perusahaan ?? 'Nama Perusahaan' }}
+        </span>
       </div>
 
       <div class="auth-header">
