@@ -57,7 +57,7 @@
 @endpush
 
 @section('content')
-<div class="card animate__animated animate__fadeInDown">
+<div id="ahsp-{{ $ahsp->id }}" class="card animate__animated animate__fadeInDown">
     <div class="card-header">
         <h4 class="card-title mb-0"><i class="fas fa-info-circle me-2"></i> Detail Analisa Harga Satuan Pekerjaan</h4>
         <a href="{{ route('ahsp.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
@@ -67,6 +67,10 @@
     <div class="card-body">
         <h5 class="mb-3 text-primary"><i class="fas fa-clipboard-list me-2"></i> Informasi Umum</h5>
         <table class="table table-borderless mb-4">
+            <tr>
+                <th>ID</th>
+                <td>: {{ $ahsp->id }}</td>
+            </tr>
             <tr>
                 <th>Kode Pekerjaan</th>
                 <td>: {{ $ahsp->kode_pekerjaan }}</td>
