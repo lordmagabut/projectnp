@@ -37,9 +37,17 @@
                 <i class="fas fa-project-diagram me-2"></i>
                 Input RAB Proyek: <span class="text-primary">{{ $proyek->nama_proyek }}</span>
             </h4>
-            <a href="{{ route('proyek.show', $proyek->id) }}" class="btn btn-secondary rounded-pill">
-                <i class="fas fa-arrow-left me-1"></i> Kembali ke Detail Proyek
-            </a>
+            <div class="d-flex gap-2">
+                <a href="{{ route('proyek.show', $proyek->id) }}" class="btn btn-secondary rounded-pill">
+                    <i class="fas fa-arrow-left me-1"></i> Kembali ke Detail Proyek
+                </a>
+                <form method="POST" action="{{ route('rab.recalc-ahsp', $proyek->id) }}" onsubmit="return confirm('Kalkulasi ulang akan mengambil harga terbaru dari AHSP untuk semua item yang referensi AHSP. Lanjutkan?')">
+                    @csrf
+                    <button type="submit" class="btn btn-warning rounded-pill">
+                        <i class="fas fa-sync-alt me-1"></i> Kalkulasi Ulang Harga dari AHSP
+                    </button>
+                </form>
+            </div>
         </div>
 
         {{-- Tabs --}}
