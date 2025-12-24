@@ -1,29 +1,3 @@
-    /**
-     * Kalkulasi ulang harga RAB dari AHSP untuk semua item yang referensi AHSP
-     */
-    public function recalcAhsp(Request $request, $proyek_id)
-    {
-        $proyek = Proyek::findOrFail($proyek_id);
-        $rabDetails = \App\Models\RabDetail::where('proyek_id', $proyek_id)
-            ->whereNotNull('ahsp_id')
-            ->get();
-
-        $updated = 0;
-        foreach ($rabDetails as $detail) {
-            $ahsp = \App\Models\AhspHeader::find($detail->ahsp_id);
-            if ($ahsp) {
-                $detail->harga_material = (float)($ahsp->total_material ?? 0);
-                $detail->harga_upah = (float)($ahsp->total_upah ?? 0);
-                $detail->harga_satuan = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? ($detail->harga_material + $detail->harga_upah));
-                $detail->total_material = $detail->harga_material * $detail->volume;
-                $detail->total_upah = $detail->harga_upah * $detail->volume;
-                $detail->total = $detail->harga_satuan * $detail->volume;
-                $detail->save();
-                $updated++;
-            }
-        }
-        return redirect()->back()->with('success', "Kalkulasi ulang selesai. $updated item RAB diperbarui dari AHSP.");
-    }
 <?php
 
 namespace App\Http\Controllers;
@@ -202,6 +176,29 @@ TXT;
         // simpan
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($path);
+    }
+        public function recalcAhsp(Request $request, $proyek_id)
+    {
+        $proyek = Proyek::findOrFail($proyek_id);
+        $rabDetails = \App\Models\RabDetail::where('proyek_id', $proyek_id)
+            ->whereNotNull('ahsp_id')
+            ->get();
+
+        $updated = 0;
+        foreach ($rabDetails as $detail) {
+            $ahsp = \App\Models\AhspHeader::find($detail->ahsp_id);
+            if ($ahsp) {
+                $detail->harga_material = (float)($ahsp->total_material ?? 0);
+                $detail->harga_upah = (float)($ahsp->total_upah ?? 0);
+                $detail->harga_satuan = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? ($detail->harga_material + $detail->harga_upah));
+                $detail->total_material = $detail->harga_material * $detail->volume;
+                $detail->total_upah = $detail->harga_upah * $detail->volume;
+                $detail->total = $detail->harga_satuan * $detail->volume;
+                $detail->save();
+                $updated++;
+            }
+        }
+        return redirect()->back()->with('success', "Kalkulasi ulang selesai. $updated item RAB diperbarui dari AHSP.");
     }
 }
     
