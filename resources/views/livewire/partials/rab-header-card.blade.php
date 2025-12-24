@@ -71,7 +71,9 @@
                   <td>{{ $d->kode }}</td>
                   <td>
                     @if($d->ahsp_id)
-                      <span class="badge bg-success">{{ $d->ahsp_id }}</span>
+                      <a href="{{ route('ahsp.show', $d->ahsp_id) }}" target="_blank" title="Lihat detail AHSP">
+                        <span class="badge bg-success cursor-pointer">{{ $d->ahsp_id }}</span>
+                      </a>
                     @else
                       <span class="badge bg-secondary">Manual</span>
                     @endif

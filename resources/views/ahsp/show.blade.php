@@ -60,9 +60,14 @@
 <div id="ahsp-{{ $ahsp->id }}" class="card animate__animated animate__fadeInDown">
     <div class="card-header">
         <h4 class="card-title mb-0"><i class="fas fa-info-circle me-2"></i> Detail Analisa Harga Satuan Pekerjaan</h4>
-        <a href="{{ route('ahsp.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
-            <i class="fas fa-arrow-left me-1"></i> Kembali ke Daftar
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{{ route('ahsp.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
+                <i class="fas fa-arrow-left me-1"></i> Kembali ke Daftar
+            </a>
+            <a href="{{ route('ahsp.edit', $ahsp->id) }}" class="btn btn-sm btn-primary rounded-pill" title="Edit AHSP">
+                <i class="fas fa-edit me-1"></i> Edit
+            </a>
+        </div>
     </div>
     <div class="card-body">
         <h5 class="mb-3 text-primary"><i class="fas fa-clipboard-list me-2"></i> Informasi Umum</h5>
