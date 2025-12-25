@@ -23,7 +23,7 @@ class AccountMappingSeeder extends Seeder
                          ->first();
         
         if ($hutangUsaha) {
-            AccountMapping::setCoa('hutang_usaha', $hutangUsaha->id);
+            AccountMapping::setCoa('hutang_usaha', $hutangUsaha->id, 'Seeder');
         }
 
         // 2. PPN Masukan (1104)
@@ -32,7 +32,7 @@ class AccountMappingSeeder extends Seeder
                         ->first();
         
         if ($ppnMasukan) {
-            AccountMapping::setCoa('ppn_masukan', $ppnMasukan->id);
+            AccountMapping::setCoa('ppn_masukan', $ppnMasukan->id, 'Seeder');
         }
 
         // 3. Kas (1101)
@@ -41,7 +41,7 @@ class AccountMappingSeeder extends Seeder
                  ->first();
         
         if ($kas) {
-            AccountMapping::setCoa('kas', $kas->id);
+            AccountMapping::setCoa('kas', $kas->id, 'Seeder');
         }
 
         // 4. Persediaan Bahan Baku (1102)
@@ -50,7 +50,7 @@ class AccountMappingSeeder extends Seeder
                                   ->first();
         
         if ($persediaanBahanBaku) {
-            AccountMapping::setCoa('persediaan_bahan_baku', $persediaanBahanBaku->id);
+            AccountMapping::setCoa('persediaan_bahan_baku', $persediaanBahanBaku->id, 'Seeder');
         }
 
         // 5. Beban Bahan Baku (5101)
@@ -59,7 +59,7 @@ class AccountMappingSeeder extends Seeder
                              ->first();
         
         if ($bebanBahanBaku) {
-            AccountMapping::setCoa('beban_bahan_baku', $bebanBahanBaku->id);
+            AccountMapping::setCoa('beban_bahan_baku', $bebanBahanBaku->id, 'Seeder');
         }
 
         $this->command->info('Default account mappings seeded successfully!');

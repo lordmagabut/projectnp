@@ -77,9 +77,15 @@
                         <i class="link-icon" data-feather="check-circle"></i> Sudah di-set
                       </span>
                       <br>
-                      <small class="text-muted">
-                        {{ $info['current_coa']->no_akun }} - {{ $info['current_coa']->nama_akun }}
+                      <small class="text-muted d-block">
+                        Akun: {{ $info['current_coa']->no_akun }} - {{ $info['current_coa']->nama_akun }}
                       </small>
+                      @if(!empty($info['source']))
+                        <small class="text-muted d-block">Sumber: {{ $info['source'] }}</small>
+                      @endif
+                      @if(!empty($info['updated_at']))
+                        <small class="text-muted d-block">Terakhir diubah: {{ \Carbon\Carbon::parse($info['updated_at'])->format('d/m/Y H:i') }}</small>
+                      @endif
                     @else
                       <span class="badge bg-warning">
                         <i class="link-icon" data-feather="alert-triangle"></i> Belum di-set

@@ -11,8 +11,8 @@ class AccountMappingController extends Controller
 {
     public function index()
     {
-        // Ambil semua mapping yang sudah ada
-        $mappings = AccountMapping::all()->pluck('coa_id', 'account_key');
+        // Ambil semua mapping yang sudah ada (keyed by 'key') beserta COA
+        $mappings = AccountMapping::with('coa')->get()->keyBy('key');
         
         // Daftar account yang perlu di-mapping
         $accountKeys = [
@@ -29,13 +29,15 @@ class AccountMappingController extends Controller
         // Build data untuk view
         $data = [];
         foreach ($accountKeys as $key => $label) {
-            $currentCoaId = $mappings->get($key);
-            $currentCoa = $currentCoaId ? Coa::find($currentCoaId) : null;
-            
+            $mapping = $mappings->get($key);
+            $currentCoaId = $mapping?->coa_id;
+            $currentCoa = $mapping?->coa;
             $data[$key] = [
                 'label' => $label,
                 'current_coa_id' => $currentCoaId,
                 'current_coa' => $currentCoa,
+                'source' => $mapping?->description,
+                'updated_at' => $mapping?->updated_at,
             ];
         }
         
@@ -53,10 +55,11 @@ class AccountMappingController extends Controller
         try {
             foreach ($request->mappings as $key => $coaId) {
                 if ($coaId) {
-                    AccountMapping::setCoa($key, $coaId);
+                    // Tandai sumber sebagai Manual
+                    AccountMapping::setCoa($key, (int)$coaId, 'Manual');
                 } else {
                     // Hapus mapping jika tidak dipilih
-                    AccountMapping::where('account_key', $key)->delete();
+                    AccountMapping::where('key', $key)->delete();
                 }
             }
             
