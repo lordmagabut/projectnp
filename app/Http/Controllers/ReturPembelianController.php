@@ -11,6 +11,7 @@ use App\Models\PoDetail;
 use App\Models\Jurnal;
 use App\Models\JurnalDetail;
 use App\Models\Faktur;
+use App\Services\AccountService;
 use DB;
 
 class ReturPembelianController extends Controller
@@ -146,7 +147,7 @@ class ReturPembelianController extends Controller
             // DEBIT: Hutang Usaha (mengurangi hutang)
             JurnalDetail::create([
                 'jurnal_id' => $jurnal->id,
-                'coa_id'    => 158, // ID Hutang Usaha
+                'coa_id'    => AccountService::getHutangUsaha($retur->id_perusahaan),
                 'debit'     => $totalRetur,
                 'kredit'    => 0
             ]);

@@ -34,19 +34,22 @@
 
       <li class="nav-item nav-category">Setting</li>
       @can('manage perusahaan')
-      <li class="nav-item {{ active_class(['perusahaan/*', 'template-dokumen/*']) }}"> {{-- Sesuaikan active_class dengan rute yang benar --}}
-        <a class="nav-link" data-bs-toggle="collapse" href="#perusahaanSettings" role="button" aria-expanded="{{ is_active_route(['perusahaan/*', 'template-dokumen/*']) }}" aria-controls="perusahaanSettings">
+      <li class="nav-item {{ active_class(['perusahaan/*', 'template-dokumen/*', 'account-mapping*']) }}"> {{-- Sesuaikan active_class dengan rute yang benar --}}
+        <a class="nav-link" data-bs-toggle="collapse" href="#perusahaanSettings" role="button" aria-expanded="{{ is_active_route(['perusahaan/*', 'template-dokumen/*', 'account-mapping*']) }}" aria-controls="perusahaanSettings">
           <i class="link-icon" data-feather="settings"></i>
           <span class="link-title">Perusahaan</span> {{-- Ubah label agar lebih jelas --}}
           <i class="link-arrow" data-feather="chevron-down"></i>
         </a>
-        <div class="collapse {{ show_class(['perusahaan/*', 'template-dokumen/*']) }}" id="perusahaanSettings"> {{-- ID UNIK BARU --}}
+        <div class="collapse {{ show_class(['perusahaan/*', 'template-dokumen/*', 'account-mapping*']) }}" id="perusahaanSettings"> {{-- ID UNIK BARU --}}
           <ul class="nav sub-menu">
             <li class="nav-item">
               <a href="{{ url('/perusahaan') }}" class="nav-link {{ active_class(['perusahaan']) }}">Profil Perusahaan</a>
             </li>
             <li class="nav-item">
               <a href="{{ url('/template-dokumen') }}" class="nav-link {{ active_class(['template-dokumen']) }}">Template Dokumen</a> {{-- Ubah URL ini ke rute yang benar --}}
+            </li>
+            <li class="nav-item">
+              <a href="{{ route('account-mapping.index') }}" class="nav-link {{ active_class(['account-mapping']) }}">Mapping COA</a>
             </li>
           </ul>
         </div>
@@ -223,18 +226,21 @@
       
       <li class="nav-item nav-category">AKUNTING</li>
       {{-- ===== Laporan ===== --}}
-      <li class="nav-item {{ active_class(['laporan/*', 'laporan/jurnal*', 'laporan/laba-rugi*', 'laporan/neraca*', 'laporan/buku-besar*']) }}">
+      <li class="nav-item {{ active_class(['laporan/*', 'laporan/jurnal*', 'laporan/laba-rugi*', 'laporan/neraca*', 'laporan/buku-besar*', 'laporan/general-ledger*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#laporanMenu" role="button"
-          aria-expanded="{{ is_active_route(['laporan/*','laporan/jurnal*','laporan/laba-rugi*','laporan/neraca*','laporan/buku-besar*']) }}"
+          aria-expanded="{{ is_active_route(['laporan/*','laporan/jurnal*','laporan/laba-rugi*','laporan/neraca*','laporan/buku-besar*','laporan/general-ledger*']) }}"
           aria-controls="laporanMenu">
           <i class="link-icon" data-feather="bar-chart-2"></i>
           <span class="link-title">Laporan</span>
           <i class="link-arrow" data-feather="chevron-down"></i>
         </a>
-        <div class="collapse {{ show_class(['laporan/*','laporan/jurnal*','laporan/laba-rugi*','laporan/neraca*','laporan/buku-besar*']) }}" id="laporanMenu">
+        <div class="collapse {{ show_class(['laporan/*','laporan/jurnal*','laporan/laba-rugi*','laporan/neraca*','laporan/buku-besar*','laporan/general-ledger*']) }}" id="laporanMenu">
           <ul class="nav sub-menu">
             <li class="nav-item">
               <a href="{{ url('/jurnal') }}" class="nav-link {{ active_class(['laporan/jurnal*']) }}">Jurnal</a>
+                        <li class="nav-item">
+                          <a href="{{ route('laporan.general-ledger') }}" class="nav-link {{ active_class(['laporan/general-ledger*']) }}">General Ledger</a>
+                        </li>
             </li>
             <li class="nav-item">
               <a href="{{ url('/laporan/laba-rugi') }}" class="nav-link {{ active_class(['laporan/laba-rugi*']) }}">Laba Rugi</a>

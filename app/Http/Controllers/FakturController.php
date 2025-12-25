@@ -15,6 +15,9 @@ use App\Models\JurnalDetail;
 use App\Models\PenerimaanPembelian;
 use App\Models\PenerimaanPembelianDetail;
 use App\Models\ReturPembelianDetail;
+use App\Services\AccountService;
+use App\Models\Coa;
+use App\Models\AccountMapping;
 
 class FakturController extends Controller
 {
@@ -131,6 +134,22 @@ class FakturController extends Controller
             $ppnRupiah     = $afterDiskon * $ppnPersenGlobal / 100;
             $totalBaris    = $afterDiskon + $ppnRupiah;
 
+            // Validasi & fallback COA IDs agar tidak melanggar FK
+            $coaBebanId = $barang?->coa_beban_id;
+            if ($coaBebanId && !Coa::whereKey($coaBebanId)->exists()) { $coaBebanId = null; }
+
+            $coaPersediaanId = $barang?->coa_persediaan_id;
+            if ($coaPersediaanId && !Coa::whereKey($coaPersediaanId)->exists()) { $coaPersediaanId = null; }
+
+            $coaHppId = $barang?->coa_hpp_id;
+            if ($coaHppId && !Coa::whereKey($coaHppId)->exists()) { $coaHppId = null; }
+
+            // Fallback ke global mapping bila tidak ada di barang
+            $coaBebanId = $coaBebanId ?? AccountMapping::getCoaId('beban_bahan_baku');
+            $coaPersediaanId = $coaPersediaanId ?? AccountMapping::getCoaId('persediaan_bahan_baku');
+            // Jika tidak ada akun HPP spesifik, gunakan beban bahan baku sebagai default
+            $coaHppId = $coaHppId ?? AccountMapping::getCoaId('beban_bahan_baku');
+
             $faktur->details()->create([
                 'po_detail_id'       => $poDetail->id,
                 'kode_item'          => $item['kode_item'] ?? '',
@@ -143,9 +162,9 @@ class FakturController extends Controller
                 'ppn_persen'         => $ppnPersenGlobal,
                 'ppn_rupiah'         => $ppnRupiah,
                 'total'              => $totalBaris,
-                'coa_beban_id'       => $barang?->coa_beban_id,
-                'coa_persediaan_id'  => $barang?->coa_persediaan_id,
-                'coa_hpp_id'         => $barang?->coa_hpp_id,
+                'coa_beban_id'       => $coaBebanId,
+                'coa_persediaan_id'  => $coaPersediaanId,
+                'coa_hpp_id'         => $coaHppId,
             ]);
 
             $poDetail->qty_terfaktur += $qtyDipakai;
@@ -336,7 +355,7 @@ public function destroy($id)
         }
 
         $jurnal->details()->create([
-            'coa_id' => 158, // ID akun Hutang Usaha, ubah sesuai sistemmu
+            'coa_id' => AccountService::getHutangUsaha($faktur->id_perusahaan),
             'debit' => 0,
             'kredit' => $totalFaktur,
         ]);

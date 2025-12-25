@@ -8,6 +8,7 @@ use App\Models\Faktur;
 use App\Models\Coa;
 use App\Models\Jurnal;
 use App\Models\JurnalDetail;
+use App\Services\AccountService;
 use DB;
 
 class PembayaranPembelianController extends Controller
@@ -102,10 +103,10 @@ class PembayaranPembelianController extends Controller
             'tipe'          => 'Jurnal Umum'
         ]);
 
-        // DEBIT: Hutang Usaha (Gunakan ID 158 sesuai info Anda)
+        // DEBIT: Hutang Usaha (Dinamis sesuai perusahaan)
         JurnalDetail::create([
             'jurnal_id' => $jurnal->id,
-            'coa_id'    => 158, 
+            'coa_id'    => AccountService::getHutangUsaha($faktur->id_perusahaan), 
             'debit'     => $request->nominal,
             'kredit'    => 0
         ]);

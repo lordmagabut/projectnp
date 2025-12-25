@@ -35,6 +35,7 @@ use App\Http\Controllers\PenerimaanPembelianController;
 use App\Http\Controllers\ReturPembelianController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\AccountMappingController;
 
 
 // =========================
@@ -72,6 +73,11 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('perusahaan', PerusahaanController::class);
     Route::get('/template-dokumen', [TemplateDokumenController::class, 'index'])->name('template-dokumen.index');
     Route::post('/template-dokumen', [TemplateDokumenController::class, 'store'])->name('template-dokumen.store');
+    
+    // Account Mapping (Global COA Settings)
+    Route::get('/account-mapping', [AccountMappingController::class, 'index'])->name('account-mapping.index');
+    Route::put('/account-mapping', [AccountMappingController::class, 'update'])->name('account-mapping.update');
+    
     Route::resource('supplier',   SupplierController::class)->middleware('cek_akses_supplier');
     Route::resource('coa',        CoaController::class)->middleware('cek_akses_coa');
     Route::resource('barang',     BarangController::class)->middleware('cek_akses_barang');
@@ -233,6 +239,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/laporan/neraca',    [LaporanController::class, 'neraca'])->name('laporan.neraca');
     Route::get('/laporan/laba-rugi', [LaporanController::class, 'labaRugi'])->name('laporan.labaRugi');
+    Route::get('/laporan/general-ledger', [LaporanController::class, 'generalLedger'])->name('laporan.general-ledger');
 
     // ========== Profil Pajak Proyek ==========
     Route::resource('proyek-tax-profiles', ProyekTaxProfileController::class)
