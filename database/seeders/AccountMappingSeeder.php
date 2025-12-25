@@ -17,8 +17,8 @@ class AccountMappingSeeder extends Seeder
     {
         // Cari COA berdasarkan nomor akun atau nama yang sudah di-seed
         
-        // 1. Hutang Usaha (2101)
-        $hutangUsaha = Coa::where('no_akun', '2101')
+        // 1. Hutang Usaha (2-110)
+        $hutangUsaha = Coa::where('no_akun', '2-110')
                          ->orWhere('nama_akun', 'Hutang Usaha')
                          ->first();
         
@@ -26,8 +26,8 @@ class AccountMappingSeeder extends Seeder
             AccountMapping::setCoa('hutang_usaha', $hutangUsaha->id, 'Seeder');
         }
 
-        // 2. PPN Masukan (1104)
-        $ppnMasukan = Coa::where('no_akun', '1104')
+        // 2. PPN Masukan (1-170)
+        $ppnMasukan = Coa::where('no_akun', '1-170')
                         ->orWhere('nama_akun', 'PPN Masukan')
                         ->first();
         
@@ -35,27 +35,29 @@ class AccountMappingSeeder extends Seeder
             AccountMapping::setCoa('ppn_masukan', $ppnMasukan->id, 'Seeder');
         }
 
-        // 3. Kas (1101)
-        $kas = Coa::where('no_akun', '1101')
-                 ->orWhere('nama_akun', 'Kas')
+        // 3. Kas & Setara Kas (1-110) atau Bank (1-120)
+        $kas = Coa::where('no_akun', '1-120')
+                 ->orWhere('nama_akun', 'Bank')
+                 ->orWhere('no_akun', '1-110')
+                 ->orWhere('nama_akun', 'Kas & Setara Kas')
                  ->first();
         
         if ($kas) {
             AccountMapping::setCoa('kas', $kas->id, 'Seeder');
         }
 
-        // 4. Persediaan Bahan Baku (1102)
-        $persediaanBahanBaku = Coa::where('no_akun', '1102')
-                                  ->orWhere('nama_akun', 'Persediaan Bahan Baku')
+        // 4. Persediaan Material Proyek (1-160) – sebagai pengganti Persediaan Bahan Baku
+        $persediaanBahanBaku = Coa::where('no_akun', '1-160')
+                                  ->orWhere('nama_akun', 'Persediaan Material Proyek')
                                   ->first();
         
         if ($persediaanBahanBaku) {
             AccountMapping::setCoa('persediaan_bahan_baku', $persediaanBahanBaku->id, 'Seeder');
         }
 
-        // 5. Beban Bahan Baku (5101)
-        $bebanBahanBaku = Coa::where('no_akun', '5101')
-                             ->orWhere('nama_akun', 'Beban Bahan Baku')
+        // 5. HPP Proyek - Material (5-110) – sebagai pengganti Beban Bahan Baku
+        $bebanBahanBaku = Coa::where('no_akun', '5-110')
+                             ->orWhere('nama_akun', 'HPP Proyek - Material')
                              ->first();
         
         if ($bebanBahanBaku) {
