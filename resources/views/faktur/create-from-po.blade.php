@@ -43,12 +43,19 @@
                     </div>
 
                     <h5 class="mb-3">Detail Barang dari PO</h5>
+                    <div class="alert alert-info">
+                        <i data-feather="info"></i> <strong>Catatan:</strong> Qty yang bisa difaktur adalah qty yang sudah diterima dan belum difaktur.
+                    </div>
                     <table class="table table-bordered table-sm align-middle">
                         <thead class="table-light">
                             <tr>
                                 <th>Kode Item</th>
                                 <th>Uraian</th>
-                                <th>Qty</th>
+                                <th>Qty PO</th>
+                                <th>Qty Diterima</th>
+                                <th>Sudah Difaktur</th>
+                                <th>Sisa Bisa Difaktur</th>
+                                <th>Qty Faktur</th>
                                 <th>UOM</th>
                                 <th>Harga</th>
                                 <th>Total</th>
@@ -57,9 +64,18 @@
                         <tbody>
                             @foreach($po->poDetails as $i => $detail)
                                 @php
-                                    $qty_sisa = $detail->qty - $detail->qty_terfaktur;
+                                    // Hanya qty dari penerimaan approved dikurangi retur approved yang dihitung
+                                    $qty_approved = \App\Models\PenerimaanPembelianDetail::where('po_detail_id', $detail->id)
+                                        ->whereHas('penerimaan', function($q){ $q->where('status','approved'); })
+                                        ->sum('qty_diterima');
+                                    $qty_retur_approved = \App\Models\ReturPembelianDetail::whereHas('retur', function($q){ $q->where('status','approved'); })
+                                        ->whereHas('penerimaanDetail', function($q) use ($detail){ $q->where('po_detail_id', $detail->id); })
+                                        ->sum('qty_retur');
+                                    $qty_diterima = max(0, $qty_approved - $qty_retur_approved);
+                                    $qty_terfaktur = $detail->qty_terfaktur;
+                                    $qty_sisa_bisa_difaktur = max(0, $qty_diterima - $qty_terfaktur);
                                 @endphp
-                                @if($qty_sisa > 0)
+                                @if($qty_sisa_bisa_difaktur > 0)
                                 <tr>
                                     <td>
                                         {{ $detail->kode_item }}
@@ -72,26 +88,32 @@
                                         <input type="hidden" name="items[{{ $i }}][coa_persediaan_id]" value="{{ $detail->coa_persediaan_id }}">
                                         <input type="hidden" name="items[{{ $i }}][coa_hpp_id]" value="{{ $detail->coa_hpp_id }}">
                                     </td>
-                                    <td>
-                                        {{ $detail->uraian }}
+                                    <td>{{ $detail->uraian }}</td>
+                                    <td class="text-end">{{ number_format($detail->qty, 2) }}</td>
+                                    <td class="text-end">
+                                        <span class="badge bg-success">{{ number_format($qty_diterima, 2) }}</span>
+                                    </td>
+                                    <td class="text-end">{{ number_format($qty_terfaktur, 2) }}</td>
+                                    <td class="text-end">
+                                        <strong class="text-primary">{{ number_format($qty_sisa_bisa_difaktur, 2) }}</strong>
                                     </td>
                                     <td>
                                         <input type="number"
                                             name="items[{{ $i }}][qty]"
-                                            value="{{ $qty_sisa }}"
+                                            value="{{ $qty_sisa_bisa_difaktur }}"
                                             min="0"
                                             step="0.000001"
-                                            max="{{ $qty_sisa }}"
+                                            max="{{ $qty_sisa_bisa_difaktur }}"
                                             class="form-control form-control-sm qty-input"
                                             required>
                                     </td>
                                     <td>{{ $detail->uom }}</td>
-                                    <td>
+                                    <td class="text-end">
                                         Rp {{ number_format($detail->harga, 0, ',', '.') }}
                                     </td>
                                     <td class="text-end">
-                                        <span class="total-text">Rp {{ number_format($qty_sisa * $detail->harga, 0, ',', '.') }}</span>
-                                        <input type="hidden" name="items[{{ $i }}][total]" class="total-input" value="{{ $qty_sisa * $detail->harga }}">
+                                        <span class="total-text">Rp {{ number_format($qty_sisa_bisa_difaktur * $detail->harga, 0, ',', '.') }}</span>
+                                        <input type="hidden" name="items[{{ $i }}][total]" class="total-input" value="{{ $qty_sisa_bisa_difaktur * $detail->harga }}">
                                     </td>
                                 </tr>
                                 @endif

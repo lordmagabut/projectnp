@@ -147,6 +147,20 @@
                                     <td class="text-primary pt-1">GRAND TOTAL:</td>
                                     <td class="text-primary pt-1">Rp {{ number_format($faktur->total, 0, ',', '.') }}</td>
                                 </tr>
+                                @if(($faktur->total_kredit_retur ?? 0) > 0)
+                                <tr>
+                                    <td class="text-muted fw-normal">Nota Kredit Retur:</td>
+                                    <td class="text-danger">- {{ number_format($faktur->total_kredit_retur, 0, ',', '.') }}</td>
+                                </tr>
+                                @endif
+                                <tr>
+                                    <td class="text-muted fw-normal">Terbayar:</td>
+                                    <td class="text-success">{{ number_format($faktur->sudah_dibayar, 0, ',', '.') }}</td>
+                                </tr>
+                                <tr style="border-top: 1px dashed #ccc;">
+                                    <td class="text-dark pt-1">Sisa Bayar (Net):</td>
+                                    <td class="text-dark pt-1">Rp {{ number_format(max(0, ($faktur->total - ($faktur->total_kredit_retur ?? 0)) - $faktur->sudah_dibayar), 0, ',', '.') }}</td>
+                                </tr>
                             </table>
                         </div>
                     </div>

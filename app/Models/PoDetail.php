@@ -20,7 +20,9 @@ class PoDetail extends Model
         'ppn_persen', 
         'ppn_rupiah', 
         'total',
-        'qty_terfaktur'
+        'qty_terfaktur',
+        'qty_diterima',
+        'qty_diretur'
     ];
 
     public function po()
@@ -31,5 +33,14 @@ class PoDetail extends Model
     {
         return $this->belongsTo(Barang::class, 'kode_item', 'kode_barang');
     }
-    
+
+    public function penerimaanDetails()
+    {
+        return $this->hasMany(PenerimaanPembelianDetail::class, 'po_detail_id');
+    }
+
+    public function fakturDetails()
+    {
+        return $this->hasMany(FakturDetail::class, 'po_detail_id');
+    }
 }

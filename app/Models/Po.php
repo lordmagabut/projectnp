@@ -49,5 +49,13 @@ class Po extends Model
         return $this->hasMany(PoDetail::class, 'po_id')->with('barang');
     }
 
+    public function penerimaans()
+    {
+        return $this->hasMany(PenerimaanPembelian::class, 'po_id');
+    }
 
+    public function fakturs()
+    {
+        return $this->hasMany(Faktur::class, 'id_po');
+    }
 }

@@ -12,6 +12,9 @@ use App\Models\Perusahaan;
 use App\Models\Proyek;
 use App\Models\Jurnal;
 use App\Models\JurnalDetail;
+use App\Models\PenerimaanPembelian;
+use App\Models\PenerimaanPembelianDetail;
+use App\Models\ReturPembelianDetail;
 
 class FakturController extends Controller
 {
@@ -32,16 +35,23 @@ class FakturController extends Controller
     public function createFromPo($id)
     {
         $po = Po::with(['poDetails.barang'])->findOrFail($id);
-    
-        // Cek jika semua qty sudah difakturkan
-        $semuaSudahDifakturkan = $po->poDetails->every(function ($detail) {
-            return $detail->qty_terfaktur >= $detail->qty;
+
+        // Periksa penerimaan approved dikurangi retur approved
+        $adaApprovedQtyBelumDifaktur = $po->poDetails->some(function ($detail) {
+            $qtyApproved = PenerimaanPembelianDetail::where('po_detail_id', $detail->id)
+                ->whereHas('penerimaan', function ($q) { $q->where('status', 'approved'); })
+                ->sum('qty_diterima');
+            $qtyReturApproved = ReturPembelianDetail::whereHas('retur', function($q){ $q->where('status','approved'); })
+                ->whereHas('penerimaanDetail', function($q) use ($detail){ $q->where('po_detail_id', $detail->id); })
+                ->sum('qty_retur');
+            $netApproved = max(0, $qtyApproved - $qtyReturApproved);
+            return ($netApproved - $detail->qty_terfaktur) > 0;
         });
-    
-        if ($semuaSudahDifakturkan) {
-            return redirect()->route('faktur.index')->with('warning', 'Semua item dalam PO ini sudah difakturkan.');
+
+        if (!$adaApprovedQtyBelumDifaktur) {
+            return redirect()->route('po.index')->with('warning', 'Belum ada penerimaan approved atau semua qty approved sudah difakturkan.');
         }
-    
+
         return view('faktur.create-from-po', compact('po'));
     }
 
@@ -92,8 +102,26 @@ class FakturController extends Controller
 
             $barang = $poDetail->barang; // Ambil relasi barang dari kode_item
 
-            $qtySisa = $poDetail->qty - $poDetail->qty_terfaktur;
-            $qtyDipakai = min($qtyFaktur, $qtySisa);
+            // VALIDASI OPSI A (approved only): Faktur tidak boleh melebihi qty yang sudah diterima dan disetujui
+            $qtyDiterima = PenerimaanPembelianDetail::where('po_detail_id', $poDetail->id)
+                ->whereHas('penerimaan', function ($q) { $q->where('status', 'approved'); })
+                ->sum('qty_diterima');
+            $qtyReturApproved = ReturPembelianDetail::whereHas('retur', function($q){ $q->where('status','approved'); })
+                ->whereHas('penerimaanDetail', function($q) use ($poDetail){ $q->where('po_detail_id', $poDetail->id); })
+                ->sum('qty_retur');
+            $qtyDiterima -= $qtyReturApproved;
+            $qtyTerfaktur = $poDetail->qty_terfaktur;
+            $sisaBisaDifaktur = $qtyDiterima - $qtyTerfaktur;
+
+            if ($sisaBisaDifaktur <= 0) {
+                continue; // Skip item yang sudah difaktur semua
+            }
+
+            if ($qtyFaktur > $sisaBisaDifaktur) {
+                throw new \Exception("Item {$poDetail->kode_item}: Qty faktur ({$qtyFaktur}) melebihi qty yang sudah diterima dan belum difaktur ({$sisaBisaDifaktur}). Qty diterima: {$qtyDiterima}, Sudah terfaktur: {$qtyTerfaktur}");
+            }
+
+            $qtyDipakai = $qtyFaktur;
             if ($qtyDipakai <= 0) continue;
 
             $harga         = floatval($item['harga']);
@@ -123,17 +151,51 @@ class FakturController extends Controller
             $poDetail->qty_terfaktur += $qtyDipakai;
             $poDetail->save();
 
+            // Alokasikan qty faktur ke detail penerimaan (FIFO)
+            $remaining = $qtyDipakai;
+            $receiptDetails = PenerimaanPembelianDetail::where('po_detail_id', $poDetail->id)
+                ->whereHas('penerimaan', function ($q) { $q->where('status', 'approved'); })
+                ->orderBy('id', 'asc')
+                ->get();
+            foreach ($receiptDetails as $rd) {
+                if ($remaining <= 0) break;
+                $returOnDetail = ReturPembelianDetail::where('penerimaan_detail_id', $rd->id)
+                    ->whereHas('retur', function($q){ $q->where('status','approved'); })
+                    ->sum('qty_retur');
+                $available = max(0, ($rd->qty_diterima - $returOnDetail - $rd->qty_terfaktur));
+                if ($available <= 0) continue;
+                $use = min($available, $remaining);
+                $rd->qty_terfaktur += $use;
+                $rd->save();
+                $remaining -= $use;
+            }
+
             $faktur->subtotal     += $subtotalBaris;
             $faktur->total_diskon += $diskonRupiah;
             $faktur->total_ppn    += $ppnRupiah;
-
-            if ($qtyFaktur > $qtySisa) {
-                return back()->with('error', 'Qty faktur melebihi sisa PO untuk item: ' . $item['kode_item']);
-            }
         }
 
         $faktur->total = $faktur->subtotal - $faktur->total_diskon + $faktur->total_ppn;
         $faktur->save();
+
+        // Recalculate status_penagihan for related receipts in this PO
+        $receiptIds = PenerimaanPembelianDetail::whereIn('po_detail_id', $po->poDetails->pluck('id'))
+            ->pluck('penerimaan_id')
+            ->unique()
+            ->values();
+        $receipts = PenerimaanPembelian::whereIn('id', $receiptIds)->get();
+        foreach ($receipts as $rec) {
+            $sumDiterima = $rec->details()->sum('qty_diterima');
+            $sumTerfaktur = $rec->details()->sum('qty_terfaktur');
+            $statusPenagihan = 'belum';
+            if ($sumTerfaktur >= $sumDiterima && $sumDiterima > 0) {
+                $statusPenagihan = 'lunas';
+            } elseif ($sumTerfaktur > 0) {
+                $statusPenagihan = 'sebagian';
+            }
+            $rec->status_penagihan = $statusPenagihan;
+            $rec->save();
+        }
 
         // Ubah status PO jika semua selesai
         if ($po->poDetails->every(fn($d) => $d->qty_terfaktur >= $d->qty)) {
@@ -167,17 +229,73 @@ public function destroy($id)
             }
         }
 
+        // Reverse allocation from receipt details (LIFO)
+        $remaining = $detail->qty;
+        $receiptDetails = PenerimaanPembelianDetail::where('po_detail_id', $detail->po_detail_id)
+            ->orderBy('id', 'desc')
+            ->get();
+        foreach ($receiptDetails as $rd) {
+            if ($remaining <= 0) break;
+            $allocated = max(0, $rd->qty_terfaktur);
+            if ($allocated <= 0) continue;
+            $reduce = min($allocated, $remaining);
+            $rd->qty_terfaktur -= $reduce;
+            if ($rd->qty_terfaktur < 0) $rd->qty_terfaktur = 0;
+            $rd->save();
+            $remaining -= $reduce;
+        }
+
         $detail->delete();
     }
 
     $faktur->delete();
 
-    // Tambahan: ubah status PO menjadi draft jika semua qty_terfaktur kembali 0
+    // Tambahan status PO saat faktur dihapus:
+    // - Jika tidak ada penerimaan sama sekali dan semua qty_terfaktur 0 -> draft
+    // - Jika masih ada penerimaan dan belum semua terfaktur -> sedang diproses
+    // - Jika masih ada penerimaan dan semua terfaktur = qty -> selesai (tetap)
+    if ($faktur->id_po) {
+        $po = Po::with(['poDetails', 'penerimaans'])->find($faktur->id_po);
+        if ($po) {
+            $hasReceipts = $po->penerimaans()->exists();
+            $allInvoiced = $po->poDetails->every(fn($d) => $d->qty_terfaktur >= $d->qty);
+            $allUninvoiced = $po->poDetails->every(fn($d) => $d->qty_terfaktur <= 0);
+
+            if (!$hasReceipts && $allUninvoiced) {
+                $po->status = 'draft';
+                $po->save();
+            } elseif ($hasReceipts && !$allInvoiced) {
+                // Pastikan status kembali ke sedang diproses jika sebelumnya selesai
+                if ($po->status !== 'sedang diproses') {
+                    $po->status = 'sedang diproses';
+                    $po->save();
+                }
+            }
+            // Jika hasReceipts && allInvoiced -> biarkan status selesai
+        }
+    }
+
+    // Recalculate receipt billing status for this PO
     if ($faktur->id_po) {
         $po = Po::with('poDetails')->find($faktur->id_po);
-        if ($po && $po->poDetails->every(fn($d) => $d->qty_terfaktur <= 0)) {
-            $po->status = 'draft';
-            $po->save();
+        if ($po) {
+            $receiptIds = PenerimaanPembelianDetail::whereIn('po_detail_id', $po->poDetails->pluck('id'))
+                ->pluck('penerimaan_id')
+                ->unique()
+                ->values();
+            $receipts = PenerimaanPembelian::whereIn('id', $receiptIds)->get();
+            foreach ($receipts as $rec) {
+                $sumDiterima = $rec->details()->sum('qty_diterima');
+                $sumTerfaktur = $rec->details()->sum('qty_terfaktur');
+                $statusPenagihan = 'belum';
+                if ($sumTerfaktur >= $sumDiterima && $sumDiterima > 0) {
+                    $statusPenagihan = 'lunas';
+                } elseif ($sumTerfaktur > 0) {
+                    $statusPenagihan = 'sebagian';
+                }
+                $rec->status_penagihan = $statusPenagihan;
+                $rec->save();
+            }
         }
     }
 

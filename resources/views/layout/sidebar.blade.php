@@ -171,26 +171,34 @@
         </div>
       </li>
 
-      <li class="nav-item {{ active_class(['po/*']) }}">
+      <li class="nav-item {{ active_class(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'pembayaran/*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#poMenu" role="button"
-          aria-expanded="{{ is_active_route(['po/*']) }}" aria-controls="poMenu">
+          aria-expanded="{{ is_active_route(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'pembayaran/*']) }}" aria-controls="poMenu">
           <i class="link-icon" data-feather="shopping-cart"></i>
           <span class="link-title">Pembelian</span>
           <i class="link-arrow" data-feather="chevron-down"></i>
         </a>
-        <div class="collapse {{ show_class(['po/*']) }}" id="poMenu">
+        <div class="collapse {{ show_class(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'pembayaran/*']) }}" id="poMenu">
           <ul class="nav sub-menu">
             <li class="nav-item">
               <a href="{{ route('po.index') }}"
-                class="nav-link {{ active_class(['po']) }}">Daftar PO</a>
+                class="nav-link {{ active_class(['po']) }}">Pesanan Pembelian</a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ route('penerimaan.index') }}"
+                class="nav-link {{ active_class(['penerimaan']) }}">Penerimaan Barang</a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ route('retur.index') }}"
+                class="nav-link {{ active_class(['retur']) }}">Retur Pembelian</a>
             </li>
             <li class="nav-item">
               <a href="{{ route('faktur.index') }}"
-                class="nav-link {{ active_class(['po']) }}">Daftar Faktur</a>
+                class="nav-link {{ active_class(['faktur']) }}">Faktur Pembelian</a>
             </li>
             <li class="nav-item">
               <a href="{{ route('pembayaran.index') }}"
-                class="nav-link {{ active_class(['po']) }}">Daftar Pembayaran</a>
+                class="nav-link {{ active_class(['pembayaran']) }}">Pembayaran</a>
             </li>
           </ul>
         </div>

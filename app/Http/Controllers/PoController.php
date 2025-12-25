@@ -8,6 +8,7 @@ use App\Models\Supplier;
 use App\Models\Perusahaan;
 use App\Models\Proyek;
 use App\Models\Barang;
+use App\Models\PenerimaanPembelian;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use NcJoes\OfficeConverter\OfficeConverter;
@@ -18,7 +19,7 @@ class PoController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $query = Po::query()->with(['supplier', 'proyek']);
+        $query = Po::query()->with(['supplier', 'proyek', 'penerimaans']);
     
         // Ambil tahun dari request atau default tahun saat ini
         $tahun = $request->tahun ?? now()->format('Y');
@@ -135,6 +136,12 @@ class PoController extends Controller
             return redirect()->route('po.index')->with('error', 'PO ini sudah diproses dan tidak dapat diedit.');
         }
 
+        // Blok edit jika sudah ada penerimaan (walaupun sebagian)
+        $sudahAdaPenerimaan = \App\Models\PenerimaanPembelian::where('po_id', $po->id)->exists();
+        if ($sudahAdaPenerimaan) {
+            return redirect()->route('po.index')->with('error', 'PO tidak dapat diedit karena sudah ada penerimaan barang.');
+        }
+
         $suppliers = Supplier::all();
         $proyek = Proyek::all();
         $barang = Barang::all();
@@ -159,6 +166,12 @@ class PoController extends Controller
         $ppnGlobal = $request->ppn_persen ?? 0;
 
         $po = Po::findOrFail($id);
+
+        // Blok update jika sudah ada penerimaan (walaupun sebagian)
+        $sudahAdaPenerimaan = \App\Models\PenerimaanPembelian::where('po_id', $po->id)->exists();
+        if ($sudahAdaPenerimaan) {
+            return redirect()->route('po.index')->with('error', 'PO tidak dapat diupdate karena sudah ada penerimaan barang.');
+        }
         $supplier = Supplier::findOrFail($request->id_supplier);
 
         $po->update([
@@ -210,6 +223,12 @@ class PoController extends Controller
             abort(403, 'Anda tidak memiliki izin.');
         }
         $po = Po::findOrFail($id);
+
+        // Blok hapus jika sudah ada penerimaan (walaupun sebagian)
+        $sudahAdaPenerimaan = \App\Models\PenerimaanPembelian::where('po_id', $po->id)->exists();
+        if ($sudahAdaPenerimaan) {
+            return redirect()->route('po.index')->with('error', 'PO tidak dapat dihapus karena sudah ada penerimaan barang.');
+        }
         $po->details()->delete();
         $po->delete();
 
@@ -324,6 +343,12 @@ public function revisi($id)
 
     if ($po->status != 'sedang diproses') {
         return redirect()->route('po.index')->with('error', 'Hanya PO yang sedang diproses yang bisa direvisi.');
+    }
+
+    // Blok revisi jika sudah ada penerimaan barang untuk PO ini
+    $sudahAdaPenerimaan = PenerimaanPembelian::where('po_id', $po->id)->exists();
+    if ($sudahAdaPenerimaan) {
+        return redirect()->route('po.index')->with('error', 'PO tidak dapat direvisi karena sudah memiliki penerimaan barang.');
     }
 
     // Hapus file dari storage jika ada

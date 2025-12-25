@@ -66,20 +66,36 @@
                                         <td>{{ ucfirst($item->status) }}</td>
                                         <td>
                                             @if(auth()->user()->edit_po == 1)
-                                            @if($item->status == 'draft')
-                                            <a href="{{ route('po.edit', $item->id) }}" class="btn btn-sm btn-primary btn-icon-text me-2">
-                                            <i class="btn-icon-prepend" data-feather="edit"></i>Edit</a>
-                                            @endif
+                                                @php
+                                                    $sudahAdaPenerimaan = $item->penerimaans()->exists();
+                                                @endphp
+                                                @if($item->status == 'draft' && !$sudahAdaPenerimaan)
+                                                    <a href="{{ route('po.edit', $item->id) }}" class="btn btn-sm btn-primary btn-icon-text me-2">
+                                                    <i class="btn-icon-prepend" data-feather="edit"></i>Edit</a>
+                                                @elseif($item->status == 'draft' && $sudahAdaPenerimaan)
+                                                    <button class="btn btn-sm btn-secondary btn-icon-text me-2" disabled title="Tidak bisa edit: sudah ada penerimaan">
+                                                        <i class="btn-icon-prepend" data-feather="edit"></i>Edit
+                                                    </button>
+                                                @endif
                                             @endif
                                             
                                             @if(auth()->user()->edit_po == 1 && $item->status == 'sedang diproses')
-                                            <form action="{{ route('po.revisi', $item->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin merevisi PO ini?')">
-                                                @csrf
-                                                @method('PUT')
-                                                <button type="submit" class="btn btn-sm btn-warning btn-icon-text me-2">
-                                                    <i class="btn-icon-prepend" data-feather="refresh-ccw"></i>Revisi
-                                                </button>
-                                            </form>
+                                                @php
+                                                    $sudahAdaPenerimaan = $item->penerimaans()->exists();
+                                                @endphp
+                                                @if(!$sudahAdaPenerimaan)
+                                                    <form action="{{ route('po.revisi', $item->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin merevisi PO ini?')">
+                                                        @csrf
+                                                        @method('PUT')
+                                                        <button type="submit" class="btn btn-sm btn-warning btn-icon-text me-2">
+                                                            <i class="btn-icon-prepend" data-feather="refresh-ccw"></i>Revisi
+                                                        </button>
+                                                    </form>
+                                                @else
+                                                    <button class="btn btn-sm btn-secondary btn-icon-text me-2" disabled title="PO tidak bisa direvisi karena sudah ada penerimaan">
+                                                        <i class="btn-icon-prepend" data-feather="refresh-ccw"></i>Revisi
+                                                    </button>
+                                                @endif
                                             @endif
                                             {{-- Tombol Print jika draft --}}
                                             @if(auth()->user()->print_po == 1 && $item->status == 'draft')
@@ -87,19 +103,51 @@
                                                     <i class="btn-icon-prepend" data-feather="check-circle"></i>Setuju</a>
                                             @endif
 
-                                            {{-- Tombol Buat Faktur jika sedang diproses --}}
-                                            @if(auth()->user()->buat_faktur == 1 && $item->status == 'sedang diproses')
-                                                <a href="{{ route('faktur.createFromPo', $item->id) }}" class="btn btn-sm btn-success btn-icon-text me-2">
-                                                    <i class="btn-icon-prepend" data-feather="file-text"></i>Buat Faktur</a>
+                                            {{-- Tombol Buat Penerimaan jika sedang diproses --}}
+                                            @if($item->status == 'sedang diproses')
+                                                <a href="{{ route('penerimaan.create', $item->id) }}" class="btn btn-sm btn-info btn-icon-text me-2">
+                                                    <i class="btn-icon-prepend" data-feather="package"></i>Terima Barang</a>
                                             @endif
+
+                                            {{-- Tombol Buat Faktur: hanya jika ada penerimaan approved --}}
+                                            @if(auth()->user()->buat_faktur == 1 && $item->status == 'sedang diproses')
+                                                @php
+                                                    // Cek apakah ada qty approved yang belum difaktur
+                                                    $adaYangBisaDifaktur = $item->poDetails->some(function($detail) {
+                                                        $qtyApproved = \App\Models\PenerimaanPembelianDetail::where('po_detail_id', $detail->id)
+                                                            ->whereHas('penerimaan', function($q){ $q->where('status','approved'); })
+                                                            ->sum('qty_diterima');
+                                                        $qtyReturApproved = \App\Models\ReturPembelianDetail::whereHas('retur', function($q){ $q->where('status','approved'); })
+                                                            ->whereHas('penerimaanDetail', function($q) use ($detail){ $q->where('po_detail_id', $detail->id); })
+                                                            ->sum('qty_retur');
+                                                        $netApproved = max(0, $qtyApproved - $qtyReturApproved);
+                                                        return ($netApproved - $detail->qty_terfaktur) > 0;
+                                                    });
+                                                @endphp
+                                                @if($adaYangBisaDifaktur)
+                                                    <a href="{{ route('faktur.createFromPo', $item->id) }}" class="btn btn-sm btn-success btn-icon-text me-2">
+                                                        <i class="btn-icon-prepend" data-feather="file-text"></i>Buat Faktur</a>
+                                                @else
+                                                    <button class="btn btn-sm btn-secondary btn-icon-text me-2" disabled title="Belum ada penerimaan approved atau semua sudah difakturkan">
+                                                        <i class="btn-icon-prepend" data-feather="file-text"></i>Buat Faktur</button>
+                                                @endif
+                                            @endif
+
                                             @if(auth()->user()->hapus_po == 1 && $item->status == 'draft')
-                                                <form action="{{ route('po.destroy', $item->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin menghapus?')">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="btn btn-sm btn-danger btn-icon-text">
+                                                @php $sudahAdaPenerimaan = $item->penerimaans()->exists(); @endphp
+                                                @if(!$sudahAdaPenerimaan)
+                                                    <form action="{{ route('po.destroy', $item->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin menghapus?')">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn btn-sm btn-danger btn-icon-text">
+                                                            <i class="btn-icon-prepend" data-feather="delete"></i>Hapus
+                                                        </button>
+                                                    </form>
+                                                @else
+                                                    <button class="btn btn-sm btn-secondary btn-icon-text" disabled title="Tidak bisa hapus: sudah ada penerimaan">
                                                         <i class="btn-icon-prepend" data-feather="delete"></i>Hapus
                                                     </button>
-                                                </form>
+                                                @endif
                                             @endif
                                        </td>
                                     </tr>

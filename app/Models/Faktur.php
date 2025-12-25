@@ -20,6 +20,7 @@ class Faktur extends Model
         'total_diskon',
         'total_ppn',
         'total',
+        'total_kredit_retur',
         'sudah_dibayar',      // <--- TAMBAHKAN INI
         'status_pembayaran',  // <--- TAMBAHKAN INI (Sesuai DDL Enum Anda)
         'status',             // Ini untuk status alur (draft/proses/lunas)

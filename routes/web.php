@@ -31,6 +31,8 @@ use App\Http\Controllers\BappController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SertifikatPembayaranController;
 use App\Http\Controllers\PembayaranPembelianController;
+use App\Http\Controllers\PenerimaanPembelianController;
+use App\Http\Controllers\ReturPembelianController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\DashboardController;
 
@@ -91,6 +93,24 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/po/{id}/print',  [PoController::class, 'print'])->name('po.print');
     Route::put('/po/revisi/{id}', [PoController::class, 'revisi'])->name('po.revisi');
     Route::resource('po', PoController::class)->middleware('cek_akses_po');
+
+    // ========== Penerimaan Pembelian ==========
+    Route::get('/penerimaan', [PenerimaanPembelianController::class, 'index'])->name('penerimaan.index');
+    Route::get('/penerimaan/create/{po_id}', [PenerimaanPembelianController::class, 'create'])->name('penerimaan.create');
+    Route::post('/penerimaan/store', [PenerimaanPembelianController::class, 'store'])->name('penerimaan.store');
+    Route::get('/penerimaan/{id}', [PenerimaanPembelianController::class, 'show'])->name('penerimaan.show');
+    Route::post('/penerimaan/{id}/approve', [PenerimaanPembelianController::class, 'approve'])->name('penerimaan.approve');
+    Route::post('/penerimaan/{id}/revisi', [PenerimaanPembelianController::class, 'revisi'])->name('penerimaan.revisi');
+    Route::delete('/penerimaan/{id}', [PenerimaanPembelianController::class, 'destroy'])->name('penerimaan.destroy');
+
+    // ========== Retur Pembelian ==========
+    Route::get('/retur', [ReturPembelianController::class, 'index'])->name('retur.index');
+    Route::get('/retur/create/{penerimaan_id}', [ReturPembelianController::class, 'create'])->name('retur.create');
+    Route::post('/retur/store', [ReturPembelianController::class, 'store'])->name('retur.store');
+    Route::get('/retur/{id}', [ReturPembelianController::class, 'show'])->name('retur.show');
+    Route::post('/retur/{id}/approve', [ReturPembelianController::class, 'approve'])->name('retur.approve');
+    Route::post('/retur/{id}/revisi', [ReturPembelianController::class, 'revisi'])->name('retur.revisi');
+    Route::delete('/retur/{id}', [ReturPembelianController::class, 'destroy'])->name('retur.destroy');
 
     // ========== Faktur Pembelian ==========
     Route::get('/faktur/create-from-po/{po}', [FakturController::class, 'createFromPo'])->name('faktur.createFromPo');
