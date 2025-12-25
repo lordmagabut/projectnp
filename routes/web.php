@@ -37,6 +37,7 @@ use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AccountMappingController;
 use App\Http\Controllers\OpeningBalanceController;
+use App\Http\Controllers\UangMukaPembelianController;
 
 
 // =========================
@@ -118,6 +119,23 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/retur/{id}/approve', [ReturPembelianController::class, 'approve'])->name('retur.approve');
     Route::post('/retur/{id}/revisi', [ReturPembelianController::class, 'revisi'])->name('retur.revisi');
     Route::delete('/retur/{id}', [ReturPembelianController::class, 'destroy'])->name('retur.destroy');
+
+    // ========== Uang Muka Pembelian ==========
+    Route::get('/uang-muka-pembelian', [UangMukaPembelianController::class, 'index'])->name('uang-muka-pembelian.index');
+    Route::get('/uang-muka-pembelian/create', [UangMukaPembelianController::class, 'create'])->name('uang-muka-pembelian.create');
+    Route::post('/uang-muka-pembelian/store', [UangMukaPembelianController::class, 'store'])->name('uang-muka-pembelian.store');
+    Route::get('/uang-muka-pembelian/{id}', [UangMukaPembelianController::class, 'show'])->name('uang-muka-pembelian.show');
+    Route::get('/uang-muka-pembelian/{id}/edit', [UangMukaPembelianController::class, 'edit'])->name('uang-muka-pembelian.edit');
+    Route::put('/uang-muka-pembelian/{id}', [UangMukaPembelianController::class, 'update'])->name('uang-muka-pembelian.update');
+    Route::post('/uang-muka-pembelian/{id}/approve', [UangMukaPembelianController::class, 'approve'])->name('uang-muka-pembelian.approve');
+    Route::post('/uang-muka-pembelian/{id}/revisi', [UangMukaPembelianController::class, 'revisi'])->name('uang-muka-pembelian.revisi');
+    Route::get('/uang-muka-pembelian/{id}/edit-paid', [UangMukaPembelianController::class, 'editPaid'])->name('uang-muka-pembelian.edit-paid');
+    Route::put('/uang-muka-pembelian/{id}/update-paid', [UangMukaPembelianController::class, 'updatePaid'])->name('uang-muka-pembelian.update-paid');
+    Route::post('/uang-muka-pembelian/{id}/cancel-payment', [UangMukaPembelianController::class, 'cancelPayment'])->name('uang-muka-pembelian.cancel-payment');
+    Route::delete('/uang-muka-pembelian/{id}', [UangMukaPembelianController::class, 'destroy'])->name('uang-muka-pembelian.destroy');
+    Route::get('/uang-muka-pembelian/{id}/bkk', [UangMukaPembelianController::class, 'printBkk'])->name('uang-muka-pembelian.bkk');
+    Route::get('/uang-muka-pembelian/{id}/bkk/create', [UangMukaPembelianController::class, 'createBkk'])->name('uang-muka-pembelian.bkk.create');
+    Route::post('/uang-muka-pembelian/{id}/bkk', [UangMukaPembelianController::class, 'storeBkk'])->name('uang-muka-pembelian.bkk.store');
 
     // ========== Faktur Pembelian ==========
     Route::get('/faktur/create-from-po/{po}', [FakturController::class, 'createFromPo'])->name('faktur.createFromPo');
@@ -291,4 +309,21 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/general/profile', [\App\Http\Controllers\ProfileController::class,'show'])
     ->name('profile.show')
     ->middleware('auth');
+    
+    // ========== API Endpoints ==========
+    Route::get('/api/uang-muka-by-supplier/{supplier_id}', function ($supplier_id) {
+        $umList = \App\Models\UangMukaPembelian::where('id_supplier', $supplier_id)
+            ->where('status', 'approved')
+            ->select('id', 'no_uang_muka', 'nominal', 'nominal_digunakan')
+            ->get()
+            ->map(function ($um) {
+                return [
+                    'id' => $um->id,
+                    'no_uang_muka' => $um->no_uang_muka,
+                    'nominal' => $um->nominal,
+                    'nominal_digunakan' => $um->nominal_digunakan,
+                ];
+            });
+        return response()->json($umList);
+    });
 });

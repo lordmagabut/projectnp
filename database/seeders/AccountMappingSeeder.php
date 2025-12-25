@@ -64,6 +64,24 @@ class AccountMappingSeeder extends Seeder
             AccountMapping::setCoa('beban_bahan_baku', $bebanBahanBaku->id, 'Seeder');
         }
 
+        // 6. Uang Muka ke Vendor (1-150) – untuk Advance Payment Pembelian
+        $uangMukaVendor = Coa::where('no_akun', '1-150')
+                             ->orWhere('nama_akun', 'Uang Muka ke Vendor')
+                             ->first();
+        
+        if ($uangMukaVendor) {
+            AccountMapping::setCoa('uang_muka_vendor', $uangMukaVendor->id, 'Seeder');
+        }
+
+        // 7. Bank untuk pembayaran UM (1-120)
+        $bank = Coa::where('no_akun', '1-120')
+                   ->orWhere('nama_akun', 'Bank')
+                   ->first();
+        
+        if ($bank) {
+            AccountMapping::setCoa('kas_bank', $bank->id, 'Seeder');
+        }
+
         $this->command->info('Default account mappings seeded successfully!');
     }
 }

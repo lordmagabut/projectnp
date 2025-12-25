@@ -15,6 +15,7 @@ use App\Models\JurnalDetail;
 use App\Models\PenerimaanPembelian;
 use App\Models\PenerimaanPembelianDetail;
 use App\Models\ReturPembelianDetail;
+use App\Models\UangMukaPembelian;
 use App\Services\AccountService;
 use App\Models\Coa;
 use App\Models\AccountMapping;
@@ -88,14 +89,34 @@ class FakturController extends Controller
     public function store(Request $request)
 {
     $request->validate([
-        'no_faktur'   => 'required',
-        'tanggal'     => 'required|date',
-        'file_path'   => 'nullable|file|mimes:pdf|max:30000',
+        'no_faktur'           => 'required',
+        'tanggal'             => 'required|date',
+        'file_path'           => 'nullable|file|mimes:pdf|max:30000',
+        'uang_muka_dipakai'   => 'nullable|numeric|min:0',  // NEW: UM amount to use
     ]);
 
     $filePath = null;
     if ($request->hasFile('file_path')) {
         $filePath = $request->file('file_path')->store('faktur', 'public');
+    }
+
+    // NEW: Get UM if provided
+    $uangMukaDisepakati = floatval($request->uang_muka_dipakai ?? 0);
+    $uangMukaId = null;
+    $uangMukaModel = null;
+    
+    if ($uangMukaDisepakati > 0) {
+        // Find approved UM for this PO
+        if ($request->has('uang_muka_id')) {
+            $uangMukaModel = \App\Models\UangMukaPembelian::findOrFail($request->uang_muka_id);
+            if ($uangMukaModel->status !== 'approved') {
+                throw new \Exception('Uang Muka harus berstatus Approved');
+            }
+            if ($uangMukaDisepakati > $uangMukaModel->sisa_uang_muka) {
+                throw new \Exception('Nominal UM melebihi sisa UM tersedia');
+            }
+            $uangMukaId = $uangMukaModel->id;
+        }
     }
 
     // === FAKTUR DARI PO ===
@@ -116,6 +137,8 @@ class FakturController extends Controller
         $faktur->total_diskon   = 0;
         $faktur->total_ppn      = 0;
         $faktur->total          = 0;
+        $faktur->uang_muka_dipakai = $uangMukaDisepakati;  // NEW
+        $faktur->uang_muka_id       = $uangMukaId;         // NEW
         $faktur->save();
 
         $diskonPersenGlobal = floatval($request->diskon_persen ?? 0);
@@ -222,6 +245,12 @@ class FakturController extends Controller
         }
 
         $faktur->total = $faktur->subtotal - $faktur->total_diskon + $faktur->total_ppn;
+
+        // Validate UM does not exceed total after discount+PPN
+        if ($faktur->uang_muka_dipakai > 0 && $faktur->uang_muka_dipakai > $faktur->total) {
+            throw new \Exception('Uang Muka yang dipakai melebihi total faktur setelah diskon dan PPN');
+        }
+
         $faktur->save();
 
         // Recalculate status_penagihan for related receipts in this PO
@@ -266,6 +295,13 @@ class FakturController extends Controller
         $faktur->id_proyek      = $po->id_proyek;
         $faktur->file_path      = $filePath;
         $faktur->status         = 'draft';
+        $faktur->subtotal       = 0;
+        $faktur->total_diskon   = 0;
+        $faktur->total_ppn      = 0;
+        $faktur->total          = 0;
+        $faktur->uang_muka_dipakai = $uangMukaDisepakati;  // NEW
+        $faktur->uang_muka_id       = $uangMukaId;         // NEW
+        $faktur->save();
         $faktur->subtotal       = 0;
         $faktur->total_diskon   = 0;
         $faktur->total_ppn      = 0;
@@ -354,6 +390,12 @@ class FakturController extends Controller
         }
 
         $faktur->total = $faktur->subtotal - $faktur->total_diskon + $faktur->total_ppn;
+
+        // Validate UM does not exceed total after discount+PPN
+        if ($faktur->uang_muka_dipakai > 0 && $faktur->uang_muka_dipakai > $faktur->total) {
+            throw new \Exception('Uang Muka yang dipakai melebihi total faktur setelah diskon dan PPN');
+        }
+
         $faktur->save();
 
         // Update status_penagihan penerimaan
@@ -481,6 +523,12 @@ public function destroy($id)
             return redirect()->back()->with('warning', 'Faktur sudah diproses.');
         }
 
+        // NEW: Track UM usage if this faktur uses UM
+        if ($faktur->uang_muka_dipakai > 0 && $faktur->uang_muka_id) {
+            $uangMuka = \App\Models\UangMukaPembelian::findOrFail($faktur->uang_muka_id);
+            $uangMuka->updateNominalDigunakan($faktur->uang_muka_dipakai);
+        }
+
         $faktur->status = 'sedang diproses';
         $faktur->save();
 
@@ -491,26 +539,64 @@ public function destroy($id)
         $jurnal->keterangan = 'Faktur: ' . $faktur->no_faktur;
         $jurnal->save();
 
-        $totalFaktur = 0;
+        $totalDpp = 0.0;
+        $totalPpn = 0.0;
 
         foreach ($faktur->details as $detail) {
             $coaId = $detail->coa_beban_id ?? $detail->coa_persediaan_id ?? $detail->coa_hpp_id;
             if (!$coaId) continue;
 
+            $ppnBaris = floatval($detail->ppn_rupiah ?? 0);
+            $dppBaris = floatval($detail->total) - $ppnBaris;
+            if ($dppBaris < 0) { $dppBaris = 0; }
+
             $jurnal->details()->create([
                 'coa_id' => $coaId,
-                'debit' => $detail->total,
+                'debit' => $dppBaris,
                 'kredit' => 0,
             ]);
 
-            $totalFaktur += $detail->total;
+            $totalDpp += $dppBaris;
+            $totalPpn += $ppnBaris;
         }
 
-        $jurnal->details()->create([
-            'coa_id' => AccountService::getHutangUsaha($faktur->id_perusahaan),
-            'debit' => 0,
-            'kredit' => $totalFaktur,
-        ]);
+        $totalGross = $totalDpp + $totalPpn;
+        $umGrossUsed = min(floatval($faktur->uang_muka_dipakai ?? 0), $totalGross);
+        $umPpnUsed = $totalGross > 0 ? round($umGrossUsed * ($totalPpn / $totalGross), 2) : 0.0;
+        $umDppUsed = max(0, round($umGrossUsed - $umPpnUsed, 2));
+
+        // Debit PPN Masukan hanya untuk sisa yang belum diakui saat UM
+        $ppnToDebitNow = max(0, round($totalPpn - $umPpnUsed, 2));
+        if ($ppnToDebitNow > 0) {
+            $jurnal->details()->create([
+                'coa_id' => AccountService::getPpnMasukan($faktur->id_perusahaan),
+                'debit'  => $ppnToDebitNow,
+                'kredit' => 0,
+            ]);
+        }
+
+        // Credits
+        if ($umDppUsed > 0) {
+            $coaUangMukaId = AccountMapping::getCoaId('uang_muka_vendor') 
+                             ?? \App\Models\Coa::where('no_akun', '1-150')->first()?->id;
+            if ($coaUangMukaId) {
+                $jurnal->details()->create([
+                    'coa_id' => $coaUangMukaId,
+                    'debit'  => 0,
+                    'kredit' => $umDppUsed,
+                ]);
+            }
+        }
+
+        // Sisanya ke Hutang Usaha: totalGross - umGrossUsed
+        $sisaHutang = max(0, round($totalGross - $umGrossUsed, 2));
+        if ($sisaHutang > 0) {
+            $jurnal->details()->create([
+                'coa_id' => AccountService::getHutangUsaha($faktur->id_perusahaan),
+                'debit'  => 0,
+                'kredit' => $sisaHutang,
+            ]);
+        }
 
         $faktur->jurnal_id = $jurnal->id;
         $faktur->save();

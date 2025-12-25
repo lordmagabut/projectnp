@@ -3,8 +3,8 @@
 @section('content')
 <nav class="page-breadcrumb d-print-none">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="{{ route('faktur.index') }}">Faktur</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Detail & Cetak</li>
+        <li class="breadcrumb-item"><a href="{{ route('po.index') }}">Purchase Order</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Detail & Cetak Ringan</li>
     </ol>
 </nav>
 
@@ -12,44 +12,35 @@
     <div class="col-md-10">
         <div class="card shadow-none border-0">
             <div class="card-header d-print-none bg-transparent border-bottom d-flex justify-content-between align-items-center p-3">
-                <a href="{{ route('faktur.index') }}" class="btn btn-outline-secondary">
+                <a href="{{ route('po.index') }}" class="btn btn-outline-secondary">
                     <i data-feather="arrow-left" class="icon-sm"></i> Kembali
                 </a>
                 <div class="d-flex align-items-center">
                     <button onclick="window.print()" class="btn btn-info text-white me-2">
-                        <i data-feather="printer" class="icon-sm"></i> Cetak 
+                        <i data-feather="printer" class="icon-sm"></i> Cetak Ringan
                     </button>
-
-                    @if(strtolower($faktur->status) === 'draft')
-                    <form action="{{ route('faktur.approve', $faktur->id) }}" method="POST">
-                        @csrf
-                        <button type="submit" class="btn btn-primary" onclick="return confirm('Setujui faktur ini dan buat jurnal?')">
-                            <i data-feather="check-circle" class="icon-sm"></i> Setujui Faktur
-                        </button>
-                    </form>
-                    @else
-                    <span class="badge bg-success py-2 px-3 text-uppercase">
-                        <i data-feather="shield" class="icon-sm me-1"></i> {{ $faktur->status }}
+                    <span class="badge {{ strtolower($po->status ?? 'draft') === 'draft' ? 'bg-warning text-dark' : 'bg-success' }} py-2 px-3 text-uppercase">
+                        <i data-feather="clipboard" class="icon-sm me-1"></i> {{ $po->status ?? 'draft' }}
                     </span>
-                    @endif
                 </div>
             </div>
 
             <div class="print-container">
-                <div class="faktur-print-box">
-                    
+                <div class="po-print-box">
+
                     <div class="row align-items-center mb-2">
                         <div class="col-7">
-                            <h4 class="text-primary fw-bolder mb-0">FAKTUR PEMBELIAN</h4>
-                            <p class="text-muted small mb-0">No: <strong>{{ $faktur->no_faktur }}</strong></p>
+                            <h4 class="text-primary fw-bolder mb-0">PURCHASE ORDER</h4>
+                            <p class="text-muted small mb-0">No: <strong>{{ $po->no_po }}</strong></p>
+                            <p class="text-muted small mb-0">Tanggal: {{ \Carbon\Carbon::parse($po->tanggal)->format('d/m/Y') }}</p>
                         </div>
                         <div class="col-5 text-end">
                             <div class="mb-2">
-                                <img src="{{ company_logo_url($faktur->perusahaan) }}" alt="Logo {{ $faktur->perusahaan->nama_perusahaan ?? '' }}" style="max-height:80px; max-width:220px; object-fit:contain;">
+                                <img src="{{ company_logo_url($po->perusahaan) }}" alt="Logo {{ $po->perusahaan->nama_perusahaan ?? '' }}" style="max-height:80px; max-width:220px; object-fit:contain;">
                             </div>
-                            <h6 class="fw-bold mb-0 text-dark">{{ $faktur->perusahaan->nama_perusahaan ?? 'NAMA PERUSAHAAN' }}</h6>
+                            <h6 class="fw-bold mb-0 text-dark">{{ $po->perusahaan->nama_perusahaan ?? 'NAMA PERUSAHAAN' }}</h6>
                             <p style="font-size: 10px; line-height: 1.2;" class="text-muted mb-0">
-                                {{ $faktur->perusahaan->alamat ?? 'Alamat lengkap perusahaan belum diatur.' }}
+                                {{ $po->perusahaan->alamat ?? 'Alamat lengkap perusahaan belum diatur.' }}
                             </p>
                         </div>
                     </div>
@@ -61,23 +52,31 @@
                             <table class="table table-sm table-borderless mb-0">
                                 <tr>
                                     <td class="p-0 text-muted" width="35%">Supplier</td>
-                                    <td class="p-0 text-dark">: <strong>{{ $faktur->nama_supplier }}</strong></td>
+                                    <td class="p-0 text-dark">: <strong>{{ $po->nama_supplier }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td class="p-0 text-muted">PIC / Kontak</td>
+                                    <td class="p-0 text-dark">: {{ $po->supplier->pic ?? '-' }} {{ $po->supplier && $po->supplier->no_kontak ? '('.$po->supplier->no_kontak.')' : '' }}</td>
                                 </tr>
                                 <tr>
                                     <td class="p-0 text-muted">Proyek</td>
-                                    <td class="p-0 text-dark">: {{ $faktur->proyek->nama_proyek ?? '-' }}</td>
+                                    <td class="p-0 text-dark">: {{ $po->proyek->nama_proyek ?? '-' }}</td>
                                 </tr>
                             </table>
                         </div>
                         <div class="col-6">
                             <table class="table table-sm table-borderless mb-0">
                                 <tr>
-                                    <td class="p-0 text-muted text-end" width="60%">Tanggal</td>
-                                    <td class="p-0 text-end text-dark">: {{ \Carbon\Carbon::parse($faktur->tanggal)->format('d/m/Y') }}</td>
+                                    <td class="p-0 text-muted text-end" width="60%">ID Transaksi</td>
+                                    <td class="p-0 text-end text-dark">: #{{ $po->id }}</td>
                                 </tr>
                                 <tr>
-                                    <td class="p-0 text-muted text-end">ID Transaksi</td>
-                                    <td class="p-0 text-end text-dark">: #{{ $faktur->id }}</td>
+                                    <td class="p-0 text-muted text-end">Status</td>
+                                    <td class="p-0 text-end text-dark">: {{ ucfirst($po->status ?? 'draft') }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="p-0 text-muted text-end">Keterangan</td>
+                                    <td class="p-0 text-end text-dark">: {{ $po->keterangan ?? '-' }}</td>
                                 </tr>
                             </table>
                         </div>
@@ -88,21 +87,21 @@
                             <thead>
                                 <tr>
                                     <th class="text-center" width="5%">No</th>
-                                    <th width="45%">Deskripsi / Uraian</th>
+                                    <th width="40%">Deskripsi / Uraian</th>
                                     <th class="text-center" width="12%">Qty</th>
                                     <th class="text-end" width="18%">Harga</th>
-                                    <th class="text-end" width="20%">Total</th>
+                                    <th class="text-end" width="20%">Subtotal</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($faktur->details as $index => $detail)
+                                @foreach($po->details as $index => $detail)
                                 <tr>
                                     <td class="text-center">{{ $index + 1 }}</td>
                                     <td style="line-height: 1.2;">
                                         <div class="fw-bold">{{ $detail->kode_item }}</div>
                                         <div class="text-muted small">{{ $detail->uraian }}</div>
                                     </td>
-                                    <td class="text-center">{{ $detail->qty }} {{ $detail->uom }}</td>
+                                    <td class="text-center">{{ number_format($detail->qty, 2, ',', '.') }} {{ $detail->uom }}</td>
                                     <td class="text-end">{{ number_format($detail->harga, 0, ',', '.') }}</td>
                                     <td class="text-end fw-bold">{{ number_format($detail->total, 0, ',', '.') }}</td>
                                 </tr>
@@ -131,51 +130,33 @@
                             <table class="table table-sm table-borderless text-end fw-bold" style="font-size: 11px;">
                                 <tr>
                                     <td class="text-muted fw-normal">Subtotal:</td>
-                                    <td class="text-dark">Rp {{ number_format($faktur->subtotal, 0, ',', '.') }}</td>
+                                    <td class="text-dark">Rp {{ number_format($subtotal, 0, ',', '.') }}</td>
                                 </tr>
-                                @if($faktur->total_diskon > 0)
+                                @if($diskonPersen > 0)
                                 <tr>
-                                    <td class="text-muted fw-normal">Potongan:</td>
-                                    <td class="text-danger">- {{ number_format($faktur->total_diskon, 0, ',', '.') }}</td>
+                                    <td class="text-muted fw-normal">Diskon ({{ $diskonPersen }}%):</td>
+                                    <td class="text-danger">- {{ number_format($diskonRupiah, 0, ',', '.') }}</td>
                                 </tr>
                                 @endif
-                                @if($faktur->uang_muka_dipakai > 0)
+                                @if($ppnPersen > 0)
                                 <tr>
-                                    <td class="text-muted fw-normal">Uang Muka Dipakai:</td>
-                                    <td class="text-info">- {{ number_format($faktur->uang_muka_dipakai, 0, ',', '.') }}</td>
+                                    <td class="text-muted fw-normal">PPN ({{ $ppnPersen }}%):</td>
+                                    <td class="text-dark">{{ number_format($ppnRupiah, 0, ',', '.') }}</td>
                                 </tr>
                                 @endif
-                                <tr>
-                                    <td class="text-muted fw-normal">PPN:</td>
-                                    <td class="text-dark">{{ number_format($faktur->total_ppn, 0, ',', '.') }}</td>
-                                </tr>
                                 <tr style="font-size: 14px; border-top: 2px solid #6571ff;">
-                                    <td class="text-primary pt-1">GRAND TOTAL (Setelah UM):</td>
-                                    <td class="text-primary pt-1">Rp {{ number_format(max(0, $faktur->total - ($faktur->uang_muka_dipakai ?? 0)), 0, ',', '.') }}</td>
-                                </tr>
-                                @if(($faktur->total_kredit_retur ?? 0) > 0)
-                                <tr>
-                                    <td class="text-muted fw-normal">Nota Kredit Retur:</td>
-                                    <td class="text-danger">- {{ number_format($faktur->total_kredit_retur, 0, ',', '.') }}</td>
-                                </tr>
-                                @endif
-                                <tr>
-                                    <td class="text-muted fw-normal">Terbayar:</td>
-                                    <td class="text-success">{{ number_format($faktur->sudah_dibayar, 0, ',', '.') }}</td>
-                                </tr>
-                                <tr style="border-top: 1px dashed #ccc;">
-                                    <td class="text-dark pt-1">Sisa Bayar (Net):</td>
-                                    <td class="text-dark pt-1">Rp {{ number_format(max(0, ($faktur->total - ($faktur->total_kredit_retur ?? 0) - ($faktur->uang_muka_dipakai ?? 0)) - $faktur->sudah_dibayar), 0, ',', '.') }}</td>
+                                    <td class="text-primary pt-1">GRAND TOTAL:</td>
+                                    <td class="text-primary pt-1">Rp {{ number_format($grandTotal, 0, ',', '.') }}</td>
                                 </tr>
                             </table>
                         </div>
                     </div>
 
-                    @if($faktur->file_path)
+                    @if($po->file_path)
                     <div class="mt-3 d-print-none">
                         <hr>
-                        <a href="{{ asset('storage/' . $faktur->file_path) }}" target="_blank" class="btn btn-sm btn-outline-danger">
-                            <i data-feather="file-text" class="icon-sm"></i> Lihat File PDF Asli
+                        <a href="{{ asset('storage/' . $po->file_path) }}" target="_blank" class="btn btn-sm btn-outline-danger">
+                            <i data-feather="file-text" class="icon-sm"></i> Lihat File PO (PDF dari Template)
                         </a>
                     </div>
                     @endif
@@ -187,7 +168,7 @@
 
 <style>
 /* --- Tampilan Web --- */
-.faktur-print-box {
+.po-print-box {
     background: #fff;
     padding: 30px;
     border-radius: 8px;
@@ -217,10 +198,9 @@
 @media print {
     @page {
         size: A4 portrait;
-        margin: 0; /* Margin nol agar height 50% akurat */
+        margin: 0;
     }
 
-    /* Sembunyikan elemen UI Laravel */
     .sidebar, .navbar, .footer, .d-print-none, .page-breadcrumb, .btn {
         display: none !important;
     }
@@ -231,39 +211,30 @@
         background: white !important;
     }
 
-    /* Memaksa konten hanya di SETENGAH ATAS A4 */
     .print-container {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
-        height: 50%; /* Membagi A4 jadi 2 */
-        padding: 1.5cm; /* Margin dalam kertas saat print */
+        height: 100%;
+        padding: 1.5cm;
         box-sizing: border-box;
     }
 
-    .faktur-print-box {
+    .po-print-box {
         border: none !important;
         padding: 0 !important;
         box-shadow: none !important;
         width: 100% !important;
     }
 
-    /* Penajaman teks saat print */
     body, table, td, th {
         color: #000 !important;
         font-family: 'Arial', sans-serif !important;
     }
 
-    .text-primary {
-        color: #6571ff !important;
-    }
-
-    /* Aktifkan warna background saat cetak */
-    * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-    }
+    .text-primary { color: #6571ff !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 </style>
 @endsection

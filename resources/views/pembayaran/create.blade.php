@@ -21,8 +21,8 @@
                             <h6 class="fw-bold">{{ $faktur->no_faktur }}</h6>
                         </div>
                         <div class="col-sm-6 text-sm-end">
-                            <p class="text-muted mb-1">Total Tagihan:</p>
-                            <h5 class="text-dark fw-bold">Rp {{ number_format($faktur->total, 0, ',', '.') }}</h5>
+                            <p class="text-muted mb-1">Total Tagihan (Setelah UM):</p>
+                            <h5 class="text-dark fw-bold">Rp {{ number_format(max(0, $faktur->total - ($faktur->uang_muka_dipakai ?? 0)), 0, ',', '.') }}</h5>
                         </div>
                     </div>
                     <hr>
@@ -33,7 +33,7 @@
                         </div>
                         <div class="col-sm-6 text-sm-end">
                             <p class="text-muted mb-1">Sisa Hutang:</p>
-                            <p class="text-danger fw-bold">Rp {{ number_format($faktur->total - $faktur->sudah_dibayar, 0, ',', '.') }}</p>
+                            <p class="text-danger fw-bold">Rp {{ number_format(max(0, ($faktur->total - ($faktur->uang_muka_dipakai ?? 0) - ($faktur->total_kredit_retur ?? 0)) - $faktur->sudah_dibayar), 0, ',', '.') }}</p>
                         </div>
                     </div>
                 </div>
@@ -68,8 +68,8 @@
                         <div class="input-group">
                             <span class="input-group-text bg-primary text-white">Rp</span>
                             <input type="number" name="nominal" class="form-control fw-bold" 
-                                   value="{{ $faktur->total - $faktur->sudah_dibayar }}" 
-                                   max="{{ $faktur->total - $faktur->sudah_dibayar }}" required>
+                                value="{{ max(0, ($faktur->total - ($faktur->uang_muka_dipakai ?? 0) - ($faktur->total_kredit_retur ?? 0)) - $faktur->sudah_dibayar) }}" 
+                                max="{{ max(0, ($faktur->total - ($faktur->uang_muka_dipakai ?? 0) - ($faktur->total_kredit_retur ?? 0)) - $faktur->sudah_dibayar) }}" required>
                         </div>
                         <small class="text-muted">*Pastikan nominal sesuai dengan bukti transfer/kas keluar.</small>
                     </div>

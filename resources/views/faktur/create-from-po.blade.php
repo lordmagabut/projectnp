@@ -137,6 +137,38 @@
                         <label class="form-label">Keterangan</label>
                         <textarea name="keterangan" class="form-control" rows="3">{{ $po->keterangan }}</textarea>
                     </div>
+
+                    <!-- Uang Muka Section -->
+                    <div class="card bg-light p-3 my-4">
+                        <h5 class="mb-3">Uang Muka Pembelian (Opsional)</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Pilih Uang Muka</label>
+                                <select name="uang_muka_id" id="uangMukaSelect" class="form-select">
+                                    <option value="">-- Tanpa Uang Muka --</option>
+                                    @if($uangMukaList = \App\Models\UangMukaPembelian::where('id_supplier', $po->id_supplier)->where('status', 'approved')->get())
+                                        @foreach($uangMukaList as $um)
+                                            <option value="{{ $um->id }}" data-nominal="{{ $um->nominal }}" data-sisa="{{ $um->nominal - $um->nominal_digunakan }}">
+                                                {{ $um->no_uang_muka }} - Sisa: Rp {{ number_format($um->nominal - $um->nominal_digunakan, 0, ',', '.') }}
+                                            </option>
+                                        @endforeach
+                                    @endif
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Jumlah UM yang Dipakai (Rp)</label>
+                                <input type="number" name="uang_muka_dipakai" id="uangMukaDipakai" class="form-control" min="0" step="0.01" placeholder="0">
+                                <small class="form-text text-muted">Kosongkan jika tidak menggunakan UM</small>
+                            </div>
+                        </div>
+                        <div id="uangMukaInfo" class="alert alert-info mt-2" style="display:none;">
+                            <small>
+                                <strong>Nominal UM:</strong> Rp <span id="uangMukaNominal">0</span><br>
+                                <strong>Sisa UM:</strong> Rp <span id="uangMukaSisa">0</span>
+                            </small>
+                        </div>
+                    </div>
+                    
                     <div class="mb-4">
                         <label class="form-label">Upload Faktur (PDF)</label>
                         <input type="file" name="file_path" class="form-control" accept="application/pdf">
@@ -145,7 +177,9 @@
                         <h5 class="mb-1">Subtotal: <span id="subtotalLabel" class="text-muted">Rp 0</span></h5>
                         <h5 class="mb-1">Diskon ({{ old('diskon_persen', $po->diskon_persen ?? 0) }}%): <span id="diskonLabel" class="text-muted">Rp 0</span></h5>
                         <h5 class="mb-1">PPN ({{ old('ppn_persen', $po->ppn_persen ?? 0) }}%): <span id="ppnLabel" class="text-muted">Rp 0</span></h5>
-                        <h5 class="fw-bold">Grand Total: <span id="grandTotal" class="text-primary">Rp 0</span></h5>
+                        <h5 class="mb-1">Grand Total (sebelum UM): <span id="grandTotal" class="text-primary">Rp 0</span></h5>
+                        <h5 class="mb-1">Uang Muka Dipakai: <span id="uangMukaLabel" class="text-info">Rp 0</span></h5>
+                        <h5 class="fw-bold">Total Tagihan Setelah UM: <span id="netTotal" class="text-primary">Rp 0</span></h5>
                     </div>
 
                     <div class="text-end mt-4">
@@ -174,22 +208,22 @@ function hitungGrandTotal() {
     const rows = document.querySelectorAll('table tbody tr');
 
     rows.forEach(row => {
-    const qtyInput = row.querySelector('input[name$="[qty]"]');
-    const hargaInput = row.querySelector('input[name$="[harga]"]');
-    const totalInput = row.querySelector('input[name$="[total]"]');
-    const totalText = row.querySelector('.total-text');
+        const qtyInput = row.querySelector('input[name$="[qty]"]');
+        const hargaInput = row.querySelector('input[name$="[harga]"]');
+        const totalInput = row.querySelector('input[name$="[total]"]');
+        const totalText = row.querySelector('.total-text');
 
-    if (!qtyInput || !hargaInput) return;
+        if (!qtyInput || !hargaInput) return;
 
-    const qty = parseFloat(qtyInput.value) || 0;
-    const harga = parseFloat(hargaInput.value) || 0;
-    const total = qty * harga;
+        const qty = parseFloat(qtyInput.value) || 0;
+        const harga = parseFloat(hargaInput.value) || 0;
+        const total = qty * harga;
 
-    subtotal += total;
+        subtotal += total;
 
-    if (totalInput) totalInput.value = total;
-    if (totalText) totalText.textContent = formatRupiah(total);
-});
+        if (totalInput) totalInput.value = total;
+        if (totalText) totalText.textContent = formatRupiah(total);
+    });
 
     let diskonPersen = parseFloat(document.getElementById('diskon-global')?.value || 0);
     let ppnPersen = parseFloat(document.getElementById('ppn-global')?.value || 0);
@@ -199,10 +233,23 @@ function hitungGrandTotal() {
     let ppnRp = setelahDiskon * (ppnPersen / 100);
     let grandTotal = setelahDiskon + ppnRp;
 
+    const umInput = document.getElementById('uangMukaDipakai');
+    const umDipakai = parseFloat(umInput?.value || 0);
+    // Set max UM = min(Sisa UM, Grand Total)
+    const selected = document.getElementById('uangMukaSelect')?.options[document.getElementById('uangMukaSelect')?.selectedIndex];
+    const sisa = selected?.dataset?.sisa ? parseFloat(selected.dataset.sisa) : Infinity;
+    const maxUm = Math.min(isFinite(sisa) ? sisa : Number.MAX_VALUE, grandTotal);
+    if (umInput) {
+        if (isFinite(maxUm)) umInput.max = maxUm; else umInput.removeAttribute('max');
+    }
+    const netTotal = Math.max(0, grandTotal - (parseFloat(umInput?.value || 0)));
+
     document.getElementById('subtotalLabel').innerText = formatRupiah(subtotal);
     document.getElementById('diskonLabel').innerText = formatRupiah(diskonRp);
     document.getElementById('ppnLabel').innerText = formatRupiah(ppnRp);
     document.getElementById('grandTotal').innerText = formatRupiah(grandTotal);
+    document.getElementById('uangMukaLabel').innerText = formatRupiah(umDipakai);
+    document.getElementById('netTotal').innerText = formatRupiah(netTotal);
 }
 
 document.addEventListener('input', function (e) {
@@ -210,12 +257,38 @@ document.addEventListener('input', function (e) {
         e.target.name?.includes('[qty]') ||
         e.target.name?.includes('[harga]') ||
         e.target.id === 'diskon-global' ||
-        e.target.id === 'ppn-global'
+        e.target.id === 'ppn-global' ||
+        e.target.id === 'uangMukaDipakai'
     ) {
         hitungGrandTotal();
     }
 });
 
 document.addEventListener('DOMContentLoaded', hitungGrandTotal);
+
+// Uang Muka handlers
+document.getElementById('uangMukaSelect').addEventListener('change', function () {
+    const selected = this.options[this.selectedIndex];
+    const nominal = selected.dataset.nominal;
+    const sisa = selected.dataset.sisa;
+    const info = document.getElementById('uangMukaInfo');
+    const inputDipakai = document.getElementById('uangMukaDipakai');
+    
+    if (nominal) {
+        document.getElementById('uangMukaNominal').textContent = parseInt(nominal).toLocaleString('id-ID');
+        document.getElementById('uangMukaSisa').textContent = parseInt(sisa).toLocaleString('id-ID');
+        // set max UM jadi min(sisa, grand total)
+        const grandTotalText = document.getElementById('grandTotal')?.innerText?.replace(/[^0-9]/g,'');
+        const gt = parseFloat(grandTotalText) || 0;
+        inputDipakai.max = Math.min(parseFloat(sisa) || 0, gt || Number.MAX_VALUE);
+        info.style.display = 'block';
+    } else {
+        info.style.display = 'none';
+        inputDipakai.value = '';
+        inputDipakai.max = '';
+    }
+
+    hitungGrandTotal();
+});
 </script>
 @endpush

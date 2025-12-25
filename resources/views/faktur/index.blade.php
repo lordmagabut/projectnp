@@ -32,7 +32,7 @@
                                 <th>Tanggal</th>
                                 <th>No. Faktur</th>
                                 <th>Supplier</th>
-                                <th>Total Tagihan</th>
+                                <th>Total Tagihan (Setelah UM)</th>
                                 <th>Proyek</th>
                                 <th>Status Faktur</th>
                                 <th>File</th>
@@ -45,7 +45,7 @@
                                 <td>{{ \Carbon\Carbon::parse($faktur->tanggal)->format('d/m/Y') }}</td>
                                 <td class="fw-bold">{{ $faktur->no_faktur }}</td>
                                 <td>{{ $faktur->nama_supplier }}</td>
-                                <td>Rp {{ number_format($faktur->total, 0, ',', '.') }}</td>
+                                <td>Rp {{ number_format(max(0, $faktur->total - ($faktur->uang_muka_dipakai ?? 0)), 0, ',', '.') }}</td>
                                 <td>{{ $faktur->proyek->nama_proyek ?? '-' }}</td>
                                 <td>
                                     @if($faktur->status == 'draft')

@@ -94,13 +94,27 @@ class PoController extends Controller
             'id_perusahaan' => auth()->user()->perusahaans->first()->id
         ]);
 
+        $diskonGlobal = $request->diskon_persen ?? 0;
+        $ppnGlobal = $request->ppn_persen ?? 0;
+        
+        $grandSubtotal = 0;
+
+        // Hitung total subtotal terlebih dahulu
         foreach ($request->items as $item) {
             $qty = floatval($item['qty']);
             $harga = floatval($item['harga']);
             $subtotal = $qty * $harga;
-            $diskonItem = ($diskonGlobal / 100) * $subtotal;
-            $ppnItem = (($subtotal - $diskonItem) * $ppnGlobal / 100);
-            $totalItem = ($subtotal - $diskonItem) + $ppnItem;
+            $grandSubtotal += $subtotal;
+        }
+
+        // Hitung diskon dan PPN dari grand subtotal
+        $diskonRupiah = ($diskonGlobal / 100) * $grandSubtotal;
+        $ppnRupiah = (($grandSubtotal - $diskonRupiah) * $ppnGlobal / 100);
+
+        foreach ($request->items as $item) {
+            $qty = floatval($item['qty']);
+            $harga = floatval($item['harga']);
+            $subtotal = $qty * $harga;
 
             PoDetail::create([
                 'po_id' => $po->id,
@@ -110,10 +124,10 @@ class PoController extends Controller
                 'uom' => $item['uom'],
                 'harga' => $harga,
                 'diskon_persen' => $diskonGlobal,
-                'diskon_rupiah' => $diskonItem,
+                'diskon_rupiah' => $diskonRupiah,
                 'ppn_persen' => $ppnGlobal,
-                'ppn_rupiah' => $ppnItem,
-                'total' => $totalItem
+                'ppn_rupiah' => $ppnRupiah,
+                'total' => $subtotal
             ]);
         }
 
@@ -185,15 +199,28 @@ class PoController extends Controller
 
         $po->details()->delete();
 
-        $grandTotal = 0;
+        $diskonGlobal = $request->diskon_persen ?? 0;
+        $ppnGlobal = $request->ppn_persen ?? 0;
+        
+        $grandSubtotal = 0;
+
+        // Hitung total subtotal terlebih dahulu
+        foreach ($request->items as $item) {
+            $qty = floatval($item['qty']);
+            $harga = floatval($item['harga']);
+            $subtotal = $qty * $harga;
+            $grandSubtotal += $subtotal;
+        }
+
+        // Hitung diskon dan PPN dari grand subtotal
+        $diskonRupiah = ($diskonGlobal / 100) * $grandSubtotal;
+        $ppnRupiah = (($grandSubtotal - $diskonRupiah) * $ppnGlobal / 100);
+        $grandTotal = $grandSubtotal - $diskonRupiah + $ppnRupiah;
 
         foreach ($request->items as $item) {
             $qty = floatval($item['qty']);
             $harga = floatval($item['harga']);
             $subtotal = $qty * $harga;
-            $diskonItem = ($diskonGlobal / 100) * $subtotal;
-            $ppnItem = (($subtotal - $diskonItem) * $ppnGlobal / 100);
-            $totalItem = ($subtotal - $diskonItem) + $ppnItem;
 
             PoDetail::create([
                 'po_id' => $po->id,
@@ -203,18 +230,39 @@ class PoController extends Controller
                 'uom' => $item['uom'],
                 'harga' => $harga,
                 'diskon_persen' => $diskonGlobal,
-                'diskon_rupiah' => $diskonItem,
+                'diskon_rupiah' => $diskonRupiah,
                 'ppn_persen' => $ppnGlobal,
-                'ppn_rupiah' => $ppnItem,
-                'total' => $totalItem
+                'ppn_rupiah' => $ppnRupiah,
+                'total' => $subtotal
             ]);
-
-            $grandTotal += $totalItem;
         }
 
         $po->update(['total' => $grandTotal]);
 
         return redirect()->route('po.index')->with('success', 'PO berhasil diupdate.');
+    }
+
+    public function show($id)
+    {
+        $po = Po::with(['details', 'perusahaan', 'proyek', 'supplier'])->findOrFail($id);
+
+        $subtotal = $po->details->sum('total');
+        $diskonPersen = $po->details->first()->diskon_persen ?? 0;
+        $ppnPersen = $po->details->first()->ppn_persen ?? 0;
+
+        $diskonRupiah = ($diskonPersen / 100) * $subtotal;
+        $ppnRupiah = (($subtotal - $diskonRupiah) * $ppnPersen / 100);
+        $grandTotal = ($subtotal - $diskonRupiah) + $ppnRupiah;
+
+        return view('po.show', compact(
+            'po',
+            'subtotal',
+            'diskonPersen',
+            'diskonRupiah',
+            'ppnPersen',
+            'ppnRupiah',
+            'grandTotal'
+        ));
     }
         
     public function destroy($id)

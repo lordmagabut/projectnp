@@ -127,6 +127,22 @@
                       @endif
                     @endif
 
+                    {{-- Lihat / Cetak Ringan (HTML) --}}
+                    <a href="{{ route('po.show', $item->id) }}" class="btn btn-outline-primary" title="Lihat / Cetak Ringan">
+                      <i class="link-icon" data-feather="eye"></i>
+                    </a>
+
+                    {{-- Buat Uang Muka dari PO (hanya yang sudah disetujui & belum ada penerimaan) --}}
+                    @if(($item->status ?? '') === 'sedang diproses' && !$item->penerimaans()->exists())
+                      <a href="{{ route('uang-muka-pembelian.create', ['po_id' => $item->id]) }}" class="btn btn-outline-warning" title="Buat Uang Muka untuk PO ini">
+                        <i class="link-icon" data-feather="credit-card"></i>
+                      </a>
+                    @else
+                      <button class="btn btn-outline-secondary" disabled title="Uang Muka hanya untuk PO yang sudah disetujui dan belum ada penerimaan">
+                        <i class="link-icon" data-feather="credit-card"></i>
+                      </button>
+                    @endif
+
                     {{-- Print/Setuju PO (draft) --}}
                     @if(auth()->user()->print_po == 1 && $item->status == 'draft')
                       <a href="{{ route('po.print', $item->id) }}" class="btn btn-outline-success" title="Setuju / Print">

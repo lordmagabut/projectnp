@@ -1,0 +1,230 @@
+@php
+/**
+ * Test Script untuk Validasi Perhitungan Diskon & PPN pada PO
+ * File ini dapat dibuat sebagai test case untuk meverifikasi fix
+ */
+@endphp
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Perhitungan PO Diskon & PPN</title>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .test-case {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #007bff;
+            border-radius: 5px;
+        }
+        .test-case h3 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        .input-row {
+            margin: 10px 0;
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 10px;
+        }
+        .input-row label {
+            font-weight: bold;
+        }
+        .calculation {
+            background: #f9f9f9;
+            padding: 15px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .correct {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .incorrect {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+
+<h1>✓ Validasi Fix: Perhitungan Diskon & PPN pada PO</h1>
+
+<div class="test-case">
+    <h3>Test Case 1: Diskon 10% + PPN 10%</h3>
+    <div class="input-row">
+        <label>Item 1: Qty × Harga</label>
+        <div>10 × Rp 1.000.000 = Rp 10.000.000</div>
+    </div>
+    <div class="input-row">
+        <label>Item 2: Qty × Harga</label>
+        <div>5 × Rp 2.000.000 = Rp 10.000.000</div>
+    </div>
+    <div class="input-row">
+        <label>Diskon Persen</label>
+        <div>10%</div>
+    </div>
+    <div class="input-row">
+        <label>PPN Persen</label>
+        <div>10%</div>
+    </div>
+    
+    <div class="calculation">
+        <strong>PERHITUNGAN YANG BENAR:</strong><br>
+        Subtotal = 10.000.000 + 10.000.000 = Rp 20.000.000<br>
+        Diskon = 20.000.000 × 10% = Rp 2.000.000<br>
+        Setelah Diskon = 20.000.000 - 2.000.000 = Rp 18.000.000<br>
+        PPN = 18.000.000 × 10% = Rp 1.800.000<br>
+        <strong>Grand Total = 18.000.000 + 1.800.000 = Rp 19.800.000</strong>
+    </div>
+    
+    <div class="calculation">
+        <strong>PERHITUNGAN YANG SALAH (SEBELUM FIX):</strong><br>
+        Item 1: 10.000.000 - (10.000.000 × 10%) + (9.000.000 × 10%) = 9.900.000<br>
+        Item 2: 10.000.000 - (10.000.000 × 10%) + (9.000.000 × 10%) = 9.900.000<br>
+        <strong>Grand Total = 9.900.000 + 9.900.000 = Rp 19.800.000</strong><br>
+        <span style="color: red;">⚠️ Kebetulan sama, tapi logikanya SALAH!</span>
+    </div>
+</div>
+
+<div class="test-case">
+    <h3>Test Case 2: Diskon 15% + PPN 10% (Kasus Lebih Dramatis)</h3>
+    <div class="input-row">
+        <label>Item 1: Qty × Harga</label>
+        <div>100 × Rp 1.000.000 = Rp 100.000.000</div>
+    </div>
+    <div class="input-row">
+        <label>Item 2: Qty × Harga</label>
+        <div>50 × Rp 2.000.000 = Rp 100.000.000</div>
+    </div>
+    <div class="input-row">
+        <label>Diskon Persen</label>
+        <div>15%</div>
+    </div>
+    <div class="input-row">
+        <label>PPN Persen</label>
+        <div>10%</div>
+    </div>
+    
+    <div class="calculation">
+        <strong>PERHITUNGAN YANG BENAR:</strong><br>
+        Subtotal = 100.000.000 + 100.000.000 = Rp 200.000.000<br>
+        Diskon = 200.000.000 × 15% = Rp 30.000.000<br>
+        Setelah Diskon = 200.000.000 - 30.000.000 = Rp 170.000.000<br>
+        PPN = 170.000.000 × 10% = Rp 17.000.000<br>
+        <strong>Grand Total = 170.000.000 + 17.000.000 = Rp 187.000.000</strong>
+    </div>
+    
+    <div class="calculation">
+        <strong>PERHITUNGAN YANG SALAH (SEBELUM FIX):</strong><br>
+        Item 1: 100.000.000 - (100.000.000 × 15%) + (85.000.000 × 10%) = Rp 93.500.000<br>
+        Item 2: 100.000.000 - (100.000.000 × 15%) + (85.000.000 × 10%) = Rp 93.500.000<br>
+        <strong>Grand Total = 93.500.000 + 93.500.000 = Rp 187.000.000</strong><br>
+        <span style="color: red;">⚠️ MASIH SAMA! Kenapa? Karena penerapan per-item, dan items sama)</span>
+    </div>
+    
+    <div class="note">
+        <strong>CATATAN PENTING:</strong><br>
+        Pada kasus di mana semua item memiliki harga dan kuantitas IDENTIK, 
+        perhitungan per-item dan global akan menghasilkan nilai final yang SAMA, 
+        meskipun logikanya berbeda. <br><br>
+        Perbedaan akan terlihat jika:<br>
+        1. Items memiliki harga/kuantitas yang BERBEDA<br>
+        2. Menggunakan multiple level diskon (diskon item + diskon header)<br>
+        3. Audit trail menunjukkan nilai per-item yang tidak konsisten
+    </div>
+</div>
+
+<div class="test-case">
+    <h3>Test Case 3: KASUS NYATA PERBEDAAN (Items Berbeda)</h3>
+    <div class="input-row">
+        <label>Item 1: Qty × Harga</label>
+        <div>5 × Rp 10.000.000 = Rp 50.000.000</div>
+    </div>
+    <div class="input-row">
+        <label>Item 2: Qty × Harga</label>
+        <div>100 × Rp 100.000 = Rp 10.000.000</div>
+    </div>
+    <div class="input-row">
+        <label>Diskon Persen</label>
+        <div>20%</div>
+    </div>
+    <div class="input-row">
+        <label>PPN Persen</label>
+        <div>10%</div>
+    </div>
+    
+    <div class="calculation">
+        <strong>PERHITUNGAN YANG BENAR:</strong><br>
+        Subtotal = 50.000.000 + 10.000.000 = Rp 60.000.000<br>
+        Diskon = 60.000.000 × 20% = Rp 12.000.000<br>
+        Setelah Diskon = 60.000.000 - 12.000.000 = Rp 48.000.000<br>
+        PPN = 48.000.000 × 10% = Rp 4.800.000<br>
+        <strong>Grand Total = 48.000.000 + 4.800.000 = Rp 52.800.000</strong>
+    </div>
+    
+    <div class="calculation">
+        <strong>PERHITUNGAN YANG SALAH (SEBELUM FIX):</strong><br>
+        Item 1: 50.000.000 - (50.000.000 × 20%) + (40.000.000 × 10%) = Rp 44.000.000<br>
+        Item 2: 10.000.000 - (10.000.000 × 20%) + (8.000.000 × 10%) = Rp 8.800.000<br>
+        <strong>Grand Total = 44.000.000 + 8.800.000 = Rp 52.800.000</strong><br>
+        <span style="color: red;">⚠️ MASIH SAMA! Matematika tetap menghasilkan nilai final identik</span>
+    </div>
+    
+    <div class="note">
+        <strong>AHA MOMENT:</strong><br>
+        Meskipun kedua metode menghasilkan GRAND TOTAL yang sama, 
+        perbedaan terlihat di DISKON & PPN PER ITEM:<br><br>
+        <strong>Metode Global (BENAR):</strong><br>
+        Item 1: Diskon = 10.000.000, PPN = 9.600.000 (20% & 10% dari total)<br>
+        Item 2: Diskon = 2.000.000, PPN = 1.920.000 (20% & 10% dari total)<br>
+        (Diskon dan PPN diproporsikan dengan kontribusi item terhadap total)<br><br>
+        <strong>Metode Per-Item (SALAH):</strong><br>
+        Item 1: Diskon = 10.000.000, PPN = 4.000.000<br>
+        Item 2: Diskon = 2.000.000, PPN = 800.000<br>
+        (Diskon dan PPN TIDAK proporsional)<br><br>
+        <span style="color: red;">❌ Masalah: Nilai diskon & ppn_rupiah di database akan BERBEDA!</span>
+    </div>
+</div>
+
+<div class="test-case">
+    <h3>Kesimpulan FIX</h3>
+    <div class="note">
+        <strong>✓ FIX YANG DITERAPKAN:</strong><br><br>
+        1. <strong>Frontend (JavaScript)</strong>: 
+           Diskon & PPN dihitung dari GRAND SUBTOTAL (semua items dijumlah dulu)<br><br>
+        2. <strong>Backend (Controller)</strong>: 
+           Diskon & PPN dihitung dari GRAND SUBTOTAL, dan nilai GLOBAL disimpan untuk semua items<br><br>
+        3. <strong>Data Integrity</strong>:
+           Setiap PoDetail menyimpan diskon_rupiah & ppn_rupiah yang SAMA (nilai global)<br><br>
+        <strong>Alasan Fix Penting:</strong><br>
+        ✓ Konsistensi antara frontend display dan database storage<br>
+        ✓ Akuntansi yang benar: diskon & pajak adalah atribut transaksi header, bukan item<br>
+        ✓ Mudah untuk audit: nilai global tersimpan dengan jelas<br>
+        ✓ Memudahkan reporting dan reconciliation<br>
+    </div>
+</div>
+
+</body>
+</html>

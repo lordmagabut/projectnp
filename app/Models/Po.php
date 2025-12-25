@@ -25,6 +25,24 @@ class Po extends Model
         'file_path'      
     ];
 
+    protected $casts = [
+        'tanggal' => 'date',
+        'printed_at' => 'datetime',
+    ];
+
+    // Derived attributes
+    public function getPpnPersenAttribute()
+    {
+        // PPN disimpan di PoDetail sebagai nilai global per PO
+        // Ambil dari baris pertama jika tersedia; fallback 0
+        try {
+            $detail = $this->relationLoaded('details') ? $this->details->first() : $this->details()->select('ppn_persen')->first();
+            return (float)($detail->ppn_persen ?? 0);
+        } catch (\Throwable $e) {
+            return 0.0;
+        }
+    }
+
     public function perusahaan()
     {
         return $this->belongsTo(Perusahaan::class, 'id_perusahaan');

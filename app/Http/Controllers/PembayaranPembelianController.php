@@ -57,7 +57,9 @@ class PembayaranPembelianController extends Controller
         $faktur = Faktur::lockForUpdate()->findOrFail($request->faktur_id);
 
         // Validasi: Jangan biarkan bayar melebihi total tagihan
-        $sisaHutang = ($faktur->total - ($faktur->total_kredit_retur ?? 0)) - $faktur->sudah_dibayar;
+        // Net hutang = total faktur - retur kredit - uang muka yang dipakai - pembayaran sebelumnya
+        $netTagihan = ($faktur->total - ($faktur->total_kredit_retur ?? 0) - ($faktur->uang_muka_dipakai ?? 0));
+        $sisaHutang = $netTagihan - $faktur->sudah_dibayar;
         if ($request->nominal > $sisaHutang) {
             throw new \Exception("Nominal pembayaran (Rp " . number_format($request->nominal) . ") melebihi sisa hutang (Rp " . number_format($sisaHutang) . ")");
         }
@@ -77,7 +79,7 @@ class PembayaranPembelianController extends Controller
         $totalSudahBayar = $faktur->sudah_dibayar + $request->nominal;
         
         // Logika Status Pembayaran berdasarkan DDL Enum: belum, sebagian, lunas
-        $netTagihan = $faktur->total - ($faktur->total_kredit_retur ?? 0);
+        $netTagihan = ($faktur->total - ($faktur->total_kredit_retur ?? 0) - ($faktur->uang_muka_dipakai ?? 0));
         if ($totalSudahBayar >= $netTagihan) {
             $statusBayar = 'lunas';
         } elseif ($totalSudahBayar > 0) {
@@ -143,7 +145,7 @@ public function destroy($id)
         $saldoTerbayarBaru = $faktur->sudah_dibayar - $pembayaran->nominal;
 
         // 4. Tentukan kembali status berdasarkan saldo baru
-        $netTagihan = $faktur->total - ($faktur->total_kredit_retur ?? 0);
+        $netTagihan = ($faktur->total - ($faktur->total_kredit_retur ?? 0) - ($faktur->uang_muka_dipakai ?? 0));
         if ($saldoTerbayarBaru <= 0) {
             $statusBaru = 'belum';
             $saldoTerbayarBaru = 0; // Pastikan tidak minus

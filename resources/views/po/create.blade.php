@@ -96,7 +96,25 @@
                     </div>
 
                     <div class="mb-4">
-                        <h5>Grand Total: <span id="grandTotal" class="text-primary fw-bold">Rp 0</span></h5>
+                        <h5 class="mb-2">Ringkasan Perhitungan</h5>
+                        <div class="border rounded p-3 bg-light">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Subtotal</span>
+                                <span id="subtotalDisplay">Rp 0</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Diskon (Rp)</span>
+                                <span id="diskonDisplay">Rp 0</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>PPN (Rp)</span>
+                                <span id="ppnDisplay">Rp 0</span>
+                            </div>
+                            <div class="d-flex justify-content-between fw-bold border-top pt-2 mt-2">
+                                <span>Grand Total</span>
+                                <span id="grandTotal" class="text-primary">Rp 0</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="text-end">
@@ -116,21 +134,37 @@
     function hitungTotal() {
         let diskon = parseFloat(document.getElementById('diskon-global').value) || 0;
         let ppn = parseFloat(document.getElementById('ppn-global').value) || 0;
-        let grandTotal = 0;
+        let grandSubtotal = 0;
 
+        // Hitung subtotal dari semua items
         document.querySelectorAll('#detail-barang tr').forEach(row => {
             let qty = parseFloat(row.querySelector('.qty').value) || 0;
             let harga = parseFloat(row.querySelector('.harga').value) || 0;
             let subtotal = qty * harga;
-
-            let totalDiskon = subtotal * (diskon / 100);
-            let totalPPN = (subtotal - totalDiskon) * (ppn / 100);
-            let total = (subtotal - totalDiskon) + totalPPN;
-
-            row.querySelector('.total-row').innerText = total.toLocaleString('id-ID', {minimumFractionDigits: 2});
-            grandTotal += total;
+            grandSubtotal += subtotal;
         });
 
+        // Hitung diskon dari grand subtotal
+        let totalDiskon = grandSubtotal * (diskon / 100);
+        
+        // Hitung PPN dari (grandSubtotal - diskon)
+        let totalPPN = (grandSubtotal - totalDiskon) * (ppn / 100);
+        
+        // Grand Total = subtotal - diskon + ppn
+        let grandTotal = (grandSubtotal - totalDiskon) + totalPPN;
+
+        // Update tampilan di setiap row
+        document.querySelectorAll('#detail-barang tr').forEach(row => {
+            let qty = parseFloat(row.querySelector('.qty').value) || 0;
+            let harga = parseFloat(row.querySelector('.harga').value) || 0;
+            let subtotal = qty * harga;
+            row.querySelector('.total-row').innerText = subtotal.toLocaleString('id-ID', {minimumFractionDigits: 2});
+        });
+
+        // Update ringkasan
+        document.getElementById('subtotalDisplay').innerText = 'Rp ' + grandSubtotal.toLocaleString('id-ID', {minimumFractionDigits: 2});
+        document.getElementById('diskonDisplay').innerText = 'Rp ' + totalDiskon.toLocaleString('id-ID', {minimumFractionDigits: 2});
+        document.getElementById('ppnDisplay').innerText = 'Rp ' + totalPPN.toLocaleString('id-ID', {minimumFractionDigits: 2});
         document.getElementById('grandTotal').innerText = 'Rp ' + grandTotal.toLocaleString('id-ID', {minimumFractionDigits: 2});
     }
 

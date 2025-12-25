@@ -21,11 +21,13 @@ class Faktur extends Model
         'total_ppn',
         'total',
         'total_kredit_retur',
-        'sudah_dibayar',      // <--- TAMBAHKAN INI
-        'status_pembayaran',  // <--- TAMBAHKAN INI (Sesuai DDL Enum Anda)
-        'status',             // Ini untuk status alur (draft/proses/lunas)
+        'sudah_dibayar',
+        'status_pembayaran',
+        'status',
         'file_path',
-        'jurnal_id',          // Tambahkan juga agar ID jurnal bisa disimpan
+        'jurnal_id',
+        'uang_muka_dipakai',  // NEW
+        'uang_muka_id',       // NEW
     ];
 
     // Relasi ke detail
@@ -69,5 +71,11 @@ class Faktur extends Model
     {
         // Sesuaikan dengan nama class Model yang kita buat tadi
         return $this->hasMany(PembayaranPembelian::class, 'faktur_id');
+    }
+
+    // Relasi ke UangMukaPembelian
+    public function uangMuka()
+    {
+        return $this->belongsTo(UangMukaPembelian::class, 'uang_muka_id');
     }
 }

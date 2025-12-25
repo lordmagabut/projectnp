@@ -174,14 +174,14 @@
         </div>
       </li>
 
-      <li class="nav-item {{ active_class(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'pembayaran/*']) }}">
+      <li class="nav-item {{ active_class(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'uang-muka-pembelian/*', 'pembayaran/*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#poMenu" role="button"
-          aria-expanded="{{ is_active_route(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'pembayaran/*']) }}" aria-controls="poMenu">
+          aria-expanded="{{ is_active_route(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'uang-muka-pembelian/*', 'pembayaran/*']) }}" aria-controls="poMenu">
           <i class="link-icon" data-feather="shopping-cart"></i>
           <span class="link-title">Pembelian</span>
           <i class="link-arrow" data-feather="chevron-down"></i>
         </a>
-        <div class="collapse {{ show_class(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'pembayaran/*']) }}" id="poMenu">
+        <div class="collapse {{ show_class(['po/*', 'penerimaan/*', 'retur/*', 'faktur/*', 'uang-muka-pembelian/*', 'pembayaran/*']) }}" id="poMenu">
           <ul class="nav sub-menu">
             <li class="nav-item">
               <a href="{{ route('po.index') }}"
@@ -198,6 +198,10 @@
             <li class="nav-item">
               <a href="{{ route('faktur.index') }}"
                 class="nav-link {{ active_class(['faktur']) }}">Faktur Pembelian</a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ route('uang-muka-pembelian.index') }}"
+                class="nav-link {{ active_class(['uang-muka-pembelian']) }}">Uang Muka Pembelian</a>
             </li>
             <li class="nav-item">
               <a href="{{ route('pembayaran.index') }}"

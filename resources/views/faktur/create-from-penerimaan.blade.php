@@ -141,6 +141,44 @@
             </table>
           </div>
 
+          <!-- Uang Muka Section -->
+          <div class="card bg-light p-3 my-4">
+            <h5 class="mb-3">Uang Muka Pembelian (Opsional)</h5>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Pilih Uang Muka</label>
+                <select name="uang_muka_id" id="uangMukaSelect" class="form-select">
+                  <option value="">-- Tanpa Uang Muka --</option>
+                  @if($uangMukaList = \App\Models\UangMukaPembelian::where('id_supplier', $penerimaan->po->id_supplier)->where('status', 'approved')->get())
+                    @foreach($uangMukaList as $um)
+                      <option value="{{ $um->id }}" data-nominal="{{ $um->nominal }}" data-sisa="{{ $um->nominal - $um->nominal_digunakan }}">
+                        {{ $um->no_uang_muka }} - Sisa: Rp {{ number_format($um->nominal - $um->nominal_digunakan, 0, ',', '.') }}
+                      </option>
+                    @endforeach
+                  @endif
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Jumlah UM yang Dipakai (Rp)</label>
+                <input type="number" name="uang_muka_dipakai" id="uangMukaDipakai" class="form-control" min="0" step="0.01" placeholder="0">
+                <small class="form-text text-muted">Kosongkan jika tidak menggunakan UM</small>
+              </div>
+            </div>
+            <div id="uangMukaInfo" class="alert alert-info mt-2" style="display:none;">
+              <small>
+                <strong>Nominal UM:</strong> Rp <span id="uangMukaNominal">0</span><br>
+                <strong>Sisa UM:</strong> Rp <span id="uangMukaSisa">0</span>
+              </small>
+            </div>
+          </div>
+
+          <!-- Ringkasan Total -->
+          <div class="mb-4">
+            <h5 class="mb-1">Grand Total (sebelum UM): <span id="grandTotalLabel" class="text-primary">Rp 0</span></h5>
+            <h5 class="mb-1">Uang Muka Dipakai: <span id="uangMukaLabel" class="text-info">Rp 0</span></h5>
+            <h5 class="fw-bold">Total Tagihan Setelah UM: <span id="netTotalLabel" class="text-primary">Rp 0</span></h5>
+          </div>
+
           <!-- File Upload -->
           <div class="mb-4">
             <label class="form-label">File Faktur (PDF)</label>
@@ -195,9 +233,30 @@
       $('#diskon_nominal').text('Rp ' + diskonNominal.toLocaleString('id-ID', {style: 'decimal', minimumFractionDigits: 0}));
       $('#ppn_nominal').text('Rp ' + ppnNominal.toLocaleString('id-ID', {style: 'decimal', minimumFractionDigits: 0}));
       $('#total').text('Rp ' + total.toLocaleString('id-ID', {style: 'decimal', minimumFractionDigits: 0}));
+
+      // Update ringkasan dan batas UM berdasarkan grand total
+      const umInput = $('#uangMukaDipakai');
+      const selected = $('#uangMukaSelect').find('option:selected');
+      const sisaUM = parseFloat(selected.data('sisa')) || Infinity;
+      const maxUM = Math.min(sisaUM, total);
+      if (!isFinite(sisaUM)) {
+        umInput.removeAttr('max');
+      } else {
+        umInput.attr('max', maxUM);
+      }
+      const umDipakai = parseFloat(umInput.val()) || 0;
+      const netTotal = Math.max(0, total - umDipakai);
+      $('#grandTotalLabel').text('Rp ' + total.toLocaleString('id-ID', {style: 'decimal', minimumFractionDigits: 0}));
+      $('#uangMukaLabel').text('Rp ' + umDipakai.toLocaleString('id-ID', {style: 'decimal', minimumFractionDigits: 0}));
+      $('#netTotalLabel').text('Rp ' + netTotal.toLocaleString('id-ID', {style: 'decimal', minimumFractionDigits: 0}));
     }
 
     $(document).on('change', '.qty-input, #diskon_persen, #ppn_persen', function() {
+      hitungTotal();
+    });
+
+    // Update ringkasan saat input UM berubah
+    $(document).on('input', '#uangMukaDipakai', function() {
       hitungTotal();
     });
 
@@ -206,6 +265,31 @@
     if (feather) {
       feather.replace();
     }
+
+    // Uang Muka handlers
+    $('#uangMukaSelect').on('change', function () {
+      const selected = $(this).find('option:selected');
+      const nominal = selected.data('nominal');
+      const sisa = selected.data('sisa');
+      const info = $('#uangMukaInfo');
+      const inputDipakai = $('#uangMukaDipakai');
+      
+      if (nominal) {
+        $('#uangMukaNominal').text(parseInt(nominal).toLocaleString('id-ID'));
+        $('#uangMukaSisa').text(parseInt(sisa).toLocaleString('id-ID'));
+        // batas maksimum UM adalah min(sisa UM, grand total terkini)
+        const totalText = $('#grandTotalLabel').text().replace(/[^0-9]/g,'');
+        const grandTotal = parseFloat(totalText) || 0;
+        inputDipakai.attr('max', Math.min(parseFloat(sisa) || 0, grandTotal || Number.MAX_VALUE));
+        info.show();
+      } else {
+        info.hide();
+        inputDipakai.val('');
+        inputDipakai.removeAttr('max');
+      }
+
+      hitungTotal();
+    });
   });
 </script>
 @endpush
