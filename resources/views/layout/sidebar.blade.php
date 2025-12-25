@@ -225,8 +225,15 @@
       </li>   
       
       <li class="nav-item nav-category">AKUNTING</li>
+      <li class="nav-item {{ active_class(['saldo-awal*']) }}">
+        <a href="{{ route('opening-balance.index') }}" class="nav-link {{ active_class(['saldo-awal*']) }}">
+          <i class="link-icon" data-feather="edit"></i>
+          <span class="link-title">Saldo Awal</span>
+        </a>
+      </li>
+
       {{-- ===== Laporan ===== --}}
-      <li class="nav-item {{ active_class(['laporan/*', 'laporan/jurnal*', 'laporan/laba-rugi*', 'laporan/neraca*', 'laporan/buku-besar*', 'laporan/general-ledger*']) }}">
+      <li class="nav-item {{ active_class(['laporan/*', 'laporan/jurnal*', 'laporan/laba-rugi*', 'laporan/neraca*', 'laporan/buku-besar*', 'laporan/general-ledger*', 'saldo-awal*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#laporanMenu" role="button"
           aria-expanded="{{ is_active_route(['laporan/*','laporan/jurnal*','laporan/laba-rugi*','laporan/neraca*','laporan/buku-besar*','laporan/general-ledger*']) }}"
           aria-controls="laporanMenu">

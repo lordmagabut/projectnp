@@ -36,6 +36,7 @@ use App\Http\Controllers\ReturPembelianController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AccountMappingController;
+use App\Http\Controllers\OpeningBalanceController;
 
 
 // =========================
@@ -120,6 +121,7 @@ Route::middleware(['auth'])->group(function () {
 
     // ========== Faktur Pembelian ==========
     Route::get('/faktur/create-from-po/{po}', [FakturController::class, 'createFromPo'])->name('faktur.createFromPo');
+    Route::get('/faktur/create-from-penerimaan/{penerimaan}', [FakturController::class, 'createFromPenerimaan'])->name('faktur.createFromPenerimaan');
     Route::get('/faktur/create',              [FakturController::class, 'create'])->name('faktur.create');
     Route::post('/faktur/store',              [FakturController::class, 'store'])->name('faktur.store');
     Route::get('/faktur',                     [FakturController::class, 'index'])->name('faktur.index');
@@ -240,6 +242,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/laporan/neraca',    [LaporanController::class, 'neraca'])->name('laporan.neraca');
     Route::get('/laporan/laba-rugi', [LaporanController::class, 'labaRugi'])->name('laporan.labaRugi');
     Route::get('/laporan/general-ledger', [LaporanController::class, 'generalLedger'])->name('laporan.general-ledger');
+
+    // ========== Saldo Awal ==========
+    Route::get('/saldo-awal', [OpeningBalanceController::class, 'index'])->name('opening-balance.index');
+    Route::get('/saldo-awal/create', [OpeningBalanceController::class, 'create'])->name('opening-balance.create');
+    Route::post('/saldo-awal', [OpeningBalanceController::class, 'store'])->name('opening-balance.store');
+    Route::delete('/saldo-awal/{id}', [OpeningBalanceController::class, 'destroy'])->name('opening-balance.destroy');
 
     // ========== Profil Pajak Proyek ==========
     Route::resource('proyek-tax-profiles', ProyekTaxProfileController::class)

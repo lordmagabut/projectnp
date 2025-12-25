@@ -58,6 +58,33 @@ class FakturController extends Controller
         return view('faktur.create-from-po', compact('po'));
     }
 
+    public function createFromPenerimaan($id)
+    {
+        $penerimaan = PenerimaanPembelian::with(['details.poDetail.barang', 'po'])->findOrFail($id);
+
+        // Cek apakah penerimaan sudah approved
+        if ($penerimaan->status !== 'approved') {
+            return redirect()->route('penerimaan.index')
+                           ->with('warning', 'Penerimaan harus sudah di-approve untuk membuat faktur.');
+        }
+
+        // Cek apakah ada qty yang belum difaktur
+        $adaBelumDifaktur = $penerimaan->details->some(function ($detail) {
+            $qtyReturApproved = ReturPembelianDetail::where('penerimaan_detail_id', $detail->id)
+                ->whereHas('retur', function($q){ $q->where('status','approved'); })
+                ->sum('qty_retur');
+            $netQty = $detail->qty_diterima - $qtyReturApproved;
+            return ($netQty - $detail->qty_terfaktur) > 0;
+        });
+
+        if (!$adaBelumDifaktur) {
+            return redirect()->route('penerimaan.index')
+                           ->with('warning', 'Semua qty pada penerimaan ini sudah difakturkan.');
+        }
+
+        return view('faktur.create-from-penerimaan', compact('penerimaan'));
+    }
+
     public function store(Request $request)
 {
     $request->validate([
@@ -222,6 +249,131 @@ class FakturController extends Controller
         }
 
         return redirect()->route('faktur.index')->with('success', 'Faktur berhasil dibuat dari PO.');
+    }
+
+    // === FAKTUR DARI PENERIMAAN ===
+    if ($request->has('penerimaan_id')) {
+        $penerimaan = PenerimaanPembelian::with(['details.poDetail.barang', 'po'])->findOrFail($request->penerimaan_id);
+        $po = $penerimaan->po;
+
+        $faktur = new \App\Models\Faktur();
+        $faktur->no_faktur      = $request->no_faktur;
+        $faktur->tanggal        = $request->tanggal;
+        $faktur->id_po          = $po->id;
+        $faktur->id_supplier    = $po->id_supplier;
+        $faktur->nama_supplier  = $po->nama_supplier;
+        $faktur->id_perusahaan  = $po->id_perusahaan;
+        $faktur->id_proyek      = $po->id_proyek;
+        $faktur->file_path      = $filePath;
+        $faktur->status         = 'draft';
+        $faktur->subtotal       = 0;
+        $faktur->total_diskon   = 0;
+        $faktur->total_ppn      = 0;
+        $faktur->total          = 0;
+        $faktur->save();
+
+        $diskonPersenGlobal = floatval($request->diskon_persen ?? 0);
+        $ppnPersenGlobal    = floatval($request->ppn_persen ?? 0);
+
+        foreach ($request->items as $item) {
+            $qtyFaktur = floatval($item['qty'] ?? 0);
+            if ($qtyFaktur <= 0) continue;
+
+            $penerimaanDetail = PenerimaanPembelianDetail::findOrFail($item['penerimaan_detail_id']);
+            $poDetail = $penerimaanDetail->poDetail;
+            $barang = $poDetail->barang;
+
+            // VALIDASI: Faktur tidak boleh melebihi qty diterima - retur - sudah terfaktur
+            $qtyReturApproved = ReturPembelianDetail::where('penerimaan_detail_id', $penerimaanDetail->id)
+                ->whereHas('retur', function($q){ $q->where('status','approved'); })
+                ->sum('qty_retur');
+            $netQty = $penerimaanDetail->qty_diterima - $qtyReturApproved;
+            $sisaBisaDifaktur = $netQty - $penerimaanDetail->qty_terfaktur;
+
+            if ($sisaBisaDifaktur <= 0) {
+                continue; // Skip item yang sudah difaktur semua
+            }
+
+            if ($qtyFaktur > $sisaBisaDifaktur) {
+                throw new \Exception("Item {$poDetail->kode_item}: Qty faktur ({$qtyFaktur}) melebihi qty yang bisa difaktur ({$sisaBisaDifaktur}).");
+            }
+
+            $qtyDipakai = $qtyFaktur;
+            $harga = floatval($item['harga'] ?? $poDetail->harga ?? 0);
+            if ($harga == 0) {
+                $harga = floatval($poDetail->harga ?? 0);
+            }
+            $subtotalBaris = $qtyDipakai * $harga;
+            $diskonRupiah  = $subtotalBaris * $diskonPersenGlobal / 100;
+            $afterDiskon   = $subtotalBaris - $diskonRupiah;
+            $ppnRupiah     = $afterDiskon * $ppnPersenGlobal / 100;
+            $totalBaris    = $afterDiskon + $ppnRupiah;
+
+            // Validasi & fallback COA IDs
+            $coaBebanId = $barang?->coa_beban_id;
+            if ($coaBebanId && !Coa::whereKey($coaBebanId)->exists()) { $coaBebanId = null; }
+
+            $coaPersediaanId = $barang?->coa_persediaan_id;
+            if ($coaPersediaanId && !Coa::whereKey($coaPersediaanId)->exists()) { $coaPersediaanId = null; }
+
+            $coaHppId = $barang?->coa_hpp_id;
+            if ($coaHppId && !Coa::whereKey($coaHppId)->exists()) { $coaHppId = null; }
+
+            $coaBebanId = $coaBebanId ?? AccountMapping::getCoaId('beban_bahan_baku');
+            $coaPersediaanId = $coaPersediaanId ?? AccountMapping::getCoaId('persediaan_bahan_baku');
+            $coaHppId = $coaHppId ?? AccountMapping::getCoaId('beban_bahan_baku');
+
+            $faktur->details()->create([
+                'po_detail_id'       => $poDetail->id,
+                'kode_item'          => $item['kode_item'] ?? '',
+                'uraian'             => $item['uraian'] ?? '',
+                'qty'                => $qtyDipakai,
+                'uom'                => $item['uom'] ?? '',
+                'harga'              => $harga,
+                'diskon_persen'      => $diskonPersenGlobal,
+                'diskon_rupiah'      => $diskonRupiah,
+                'ppn_persen'         => $ppnPersenGlobal,
+                'ppn_rupiah'         => $ppnRupiah,
+                'total'              => $totalBaris,
+                'coa_beban_id'       => $coaBebanId,
+                'coa_persediaan_id'  => $coaPersediaanId,
+                'coa_hpp_id'         => $coaHppId,
+            ]);
+
+            // Update qty_terfaktur di penerimaan detail
+            $penerimaanDetail->qty_terfaktur += $qtyDipakai;
+            $penerimaanDetail->save();
+
+            // Update qty_terfaktur di PO detail
+            $poDetail->qty_terfaktur += $qtyDipakai;
+            $poDetail->save();
+
+            $faktur->subtotal     += $subtotalBaris;
+            $faktur->total_diskon += $diskonRupiah;
+            $faktur->total_ppn    += $ppnRupiah;
+        }
+
+        $faktur->total = $faktur->subtotal - $faktur->total_diskon + $faktur->total_ppn;
+        $faktur->save();
+
+        // Update status_penagihan penerimaan
+        $sumDiterima = $penerimaan->details()->sum('qty_diterima');
+        $sumTerfaktur = $penerimaan->details()->sum('qty_terfaktur');
+        $statusPenagihan = 'belum';
+        if ($sumTerfaktur >= $sumDiterima && $sumDiterima > 0) {
+            $statusPenagihan = 'lunas';
+        } elseif ($sumTerfaktur > 0) {
+            $statusPenagihan = 'sebagian';
+        }
+        $penerimaan->status_penagihan = $statusPenagihan;
+        $penerimaan->save();
+
+        // Update status PO jika semua selesai
+        if ($po->poDetails->every(fn($d) => $d->qty_terfaktur >= $d->qty)) {
+            $po->update(['status' => 'selesai']);
+        }
+
+        return redirect()->route('faktur.index')->with('success', 'Faktur berhasil dibuat dari Penerimaan Barang.');
     }
 
     return back()->with('error', 'Faktur tidak dapat diproses.');

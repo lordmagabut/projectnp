@@ -168,6 +168,24 @@
                         </button>
                     </form>
                     @endif
+                    @php
+                        $totalSisaBelumDifaktur = 0;
+                        foreach($penerimaan->details as $detail) {
+                            $qtyReturApproved = \App\Models\ReturPembelianDetail::where('penerimaan_detail_id', $detail->id)
+                                ->whereHas('retur', function($q){ $q->where('status','approved'); })
+                                ->sum('qty_retur');
+                            $netDiterima = max(0, ($detail->qty_diterima - $qtyReturApproved));
+                            $sisaBelumDifaktur = max(0, ($netDiterima - ($detail->qty_terfaktur ?? 0)));
+                            $totalSisaBelumDifaktur += $sisaBelumDifaktur;
+                        }
+                    @endphp
+                    
+                    @if($penerimaan->status == 'approved' && $totalSisaBelumDifaktur > 0)
+                    <a href="{{ route('faktur.createFromPenerimaan', $penerimaan->id) }}" class="btn btn-success">
+                        <i data-feather="file-text"></i> Buat Faktur
+                    </a>
+                    @endif
+                    
                     <a href="{{ route('retur.create', $penerimaan->id) }}" class="btn btn-warning">
                         <i data-feather="rotate-ccw"></i> Buat Retur
                     </a>
