@@ -155,8 +155,16 @@ document.addEventListener('DOMContentLoaded', function() {
   const poSelect = document.getElementById('po_id');
   const breakdownCard = document.getElementById('um-breakdown-card');
   if (poSelect && poSelect.value) {
-    loadPoTotal(poSelect);
-    loadPoPpnFromSelected(poSelect);
+    const opt = poSelect.options[poSelect.selectedIndex];
+    const ppn = parseFloat(opt?.getAttribute('data-ppn') || 0) || 0;
+    const total = parseFloat(opt?.getAttribute('data-total') || 0) || 0;
+    
+    poPpnPercent = ppn;
+    poTotals[poSelect.value] = total;
+    
+    const rateDisp = document.getElementById('ppn-rate-display');
+    if (rateDisp) rateDisp.textContent = ppn + '%';
+    
     if (breakdownCard) breakdownCard.style.display = 'block';
   }
 
@@ -164,8 +172,16 @@ document.addEventListener('DOMContentLoaded', function() {
   if (poSelect) {
     poSelect.addEventListener('change', function() {
       if (this.value) {
-        loadPoTotal(this);
-        loadPoPpnFromSelected(this);
+        const opt = this.options[this.selectedIndex];
+        const ppn = parseFloat(opt?.getAttribute('data-ppn') || 0) || 0;
+        const total = parseFloat(opt?.getAttribute('data-total') || 0) || 0;
+        
+        poPpnPercent = ppn;
+        poTotals[this.value] = total;
+        
+        const rateDisp = document.getElementById('ppn-rate-display');
+        if (rateDisp) rateDisp.textContent = ppn + '%';
+        
         updateUmBreakdown();
         if (breakdownCard) breakdownCard.style.display = 'block';
       } else {
@@ -203,31 +219,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   updateUmBreakdown();
 });
-
-function loadPoTotal(selectElOrId) {
-  // Prefer reading total from selected option's data-total; fallback to Info PO panel
-  let poId = typeof selectElOrId === 'string' ? selectElOrId : (selectElOrId?.value || '');
-  let total = 0;
-  if (typeof selectElOrId !== 'string' && selectElOrId) {
-    const opt = selectElOrId.options[selectElOrId.selectedIndex];
-    total = parseFloat(opt?.getAttribute('data-total') || 0) || 0;
-  }
-  if (!total) {
-    const poTotalEl = document.getElementById('po-total');
-    if (poTotalEl) {
-      total = parseFloat(poTotalEl.dataset.total || 0) || 0;
-    }
-  }
-  if (poId) poTotals[poId] = total;
-}
-
-function loadPoPpnFromSelected(selectEl) {
-  const opt = selectEl.options[selectEl.selectedIndex];
-  const ppn = parseFloat(opt?.getAttribute('data-ppn') || 0) || 0;
-  poPpnPercent = ppn;
-  const rateDisp = document.getElementById('ppn-rate-display');
-  if (rateDisp) rateDisp.textContent = (poPpnPercent || 0) + '%';
-}
 
 function calculateNominal() {
   const persentase = parseFloat(document.getElementById('persentase').value) || 0;

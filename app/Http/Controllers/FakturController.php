@@ -33,7 +33,8 @@ class FakturController extends Controller
         $suppliers = Supplier::all();
         $perusahaans = Perusahaan::all();
         $proyeks = Proyek::all();
-        return view('faktur.create', compact('suppliers', 'perusahaans', 'proyeks'));
+        $nomorFaktur = Faktur::generateNomorFaktur();
+        return view('faktur.create', compact('suppliers', 'perusahaans', 'proyeks', 'nomorFaktur'));
     }
 
     public function createFromPo($id)
@@ -56,7 +57,8 @@ class FakturController extends Controller
             return redirect()->route('po.index')->with('warning', 'Belum ada penerimaan approved atau semua qty approved sudah difakturkan.');
         }
 
-        return view('faktur.create-from-po', compact('po'));
+        $nomorFaktur = Faktur::generateNomorFaktur();
+        return view('faktur.create-from-po', compact('po', 'nomorFaktur'));
     }
 
     public function createFromPenerimaan($id)
@@ -83,17 +85,21 @@ class FakturController extends Controller
                            ->with('warning', 'Semua qty pada penerimaan ini sudah difakturkan.');
         }
 
-        return view('faktur.create-from-penerimaan', compact('penerimaan'));
+        $nomorFaktur = Faktur::generateNomorFaktur();
+        return view('faktur.create-from-penerimaan', compact('penerimaan', 'nomorFaktur'));
     }
 
     public function store(Request $request)
 {
     $request->validate([
-        'no_faktur'           => 'required',
+        'no_faktur'           => 'nullable|string',
         'tanggal'             => 'required|date',
         'file_path'           => 'nullable|file|mimes:pdf|max:30000',
         'uang_muka_dipakai'   => 'nullable|numeric|min:0',  // NEW: UM amount to use
     ]);
+
+    // Generate nomor faktur otomatis jika tidak diisi
+    $noFaktur = $request->no_faktur ?: Faktur::generateNomorFaktur();
 
     $filePath = null;
     if ($request->hasFile('file_path')) {
@@ -124,7 +130,7 @@ class FakturController extends Controller
         $po = \App\Models\Po::with(['poDetails.barang'])->findOrFail($request->po_id);
 
         $faktur = new \App\Models\Faktur();
-        $faktur->no_faktur      = $request->no_faktur;
+        $faktur->no_faktur      = $noFaktur;
         $faktur->tanggal        = $request->tanggal;
         $faktur->id_po          = $po->id;
         $faktur->id_supplier    = $po->id_supplier;
@@ -286,7 +292,7 @@ class FakturController extends Controller
         $po = $penerimaan->po;
 
         $faktur = new \App\Models\Faktur();
-        $faktur->no_faktur      = $request->no_faktur;
+        $faktur->no_faktur      = $noFaktur;
         $faktur->tanggal        = $request->tanggal;
         $faktur->id_po          = $po->id;
         $faktur->id_supplier    = $po->id_supplier;
@@ -301,11 +307,6 @@ class FakturController extends Controller
         $faktur->total          = 0;
         $faktur->uang_muka_dipakai = $uangMukaDisepakati;  // NEW
         $faktur->uang_muka_id       = $uangMukaId;         // NEW
-        $faktur->save();
-        $faktur->subtotal       = 0;
-        $faktur->total_diskon   = 0;
-        $faktur->total_ppn      = 0;
-        $faktur->total          = 0;
         $faktur->save();
 
         $diskonPersenGlobal = floatval($request->diskon_persen ?? 0);
@@ -627,6 +628,113 @@ public function destroy($id)
         $faktur->save();
 
         return redirect()->route('faktur.index')->with('success', 'Faktur berhasil direvisi. Jurnal telah dihapus.');
+    }
+
+    /**
+     * API: Get PO by Supplier (for faktur create dropdown)
+     */
+    public function getPoBySupplier($supplier_id)
+    {
+        $pos = Po::where('id_supplier', $supplier_id)
+            ->whereIn('status', ['sedang diproses', 'selesai'])
+            ->whereHas('penerimaans', function($q) {
+                $q->where('status', 'approved');
+            })
+            ->with(['details'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function($po) {
+                return [
+                    'id' => $po->id,
+                    'no_po' => $po->no_po,
+                    'tanggal' => $po->tanggal,
+                    'total' => $po->total,
+                    'ppn_persen' => $po->ppn_persen ?? 0,
+                    'diskon_persen' => $po->diskon_persen ?? 0,
+                ];
+            });
+
+        return response()->json($pos);
+    }
+
+    /**
+     * API: Get PO Details with barang info
+     */
+    public function getPoDetail($po_id)
+    {
+        $po = Po::with(['poDetails.barang', 'supplier'])->findOrFail($po_id);
+        
+        $details = $po->poDetails->map(function($detail) {
+            // Calculate qty available for faktur (approved penerimaan - retur - already faktured)
+            $qtyApproved = PenerimaanPembelianDetail::where('po_detail_id', $detail->id)
+                ->whereHas('penerimaan', function ($q) { 
+                    $q->where('status', 'approved'); 
+                })
+                ->sum('qty_diterima');
+                
+            $qtyReturApproved = ReturPembelianDetail::whereHas('retur', function($q){ 
+                    $q->where('status','approved'); 
+                })
+                ->whereHas('penerimaanDetail', function($q) use ($detail){ 
+                    $q->where('po_detail_id', $detail->id); 
+                })
+                ->sum('qty_retur');
+                
+            $netApproved = max(0, $qtyApproved - $qtyReturApproved);
+            $qtyAvailable = max(0, $netApproved - $detail->qty_terfaktur);
+
+            return [
+                'id' => $detail->id,
+                'barang_id' => $detail->id_barang,
+                'barang_nama' => $detail->barang->nama_barang ?? '',
+                'satuan' => $detail->barang->satuan ?? '',
+                'qty_po' => $detail->qty,
+                'qty_available' => $qtyAvailable,
+                'harga' => $detail->harga,
+                'diskon_persen' => $detail->diskon_persen ?? 0,
+                'ppn_persen' => $detail->ppn_persen ?? 0,
+            ];
+        });
+
+        return response()->json([
+            'po' => [
+                'id' => $po->id,
+                'no_po' => $po->no_po,
+                'supplier' => $po->supplier->nama ?? '',
+            ],
+            'details' => $details,
+        ]);
+    }
+
+    /**
+     * API: Get available Uang Muka by Supplier
+     */
+    public function getUangMukaBySupplier($supplier_id)
+    {
+        $uangMukas = UangMukaPembelian::where('id_supplier', $supplier_id)
+            ->where('status', 'approved')
+            ->where('nominal_digunakan', '<', \DB::raw('nominal'))
+            ->with(['po'])
+            ->orderByDesc('tanggal')
+            ->get();
+
+        $result = $uangMukas->map(function($um) {
+            $nominal = floatval($um->nominal);
+            $digunakan = floatval($um->nominal_digunakan);
+            $sisa = $nominal - $digunakan;
+            
+            return [
+                'id' => $um->id,
+                'no_um' => $um->no_uang_muka,
+                'tanggal' => $um->tanggal,
+                'po_no' => $um->po->no_po ?? '-',
+                'nominal' => $nominal,
+                'nominal_digunakan' => $digunakan,
+                'sisa' => $sisa,
+            ];
+        })->values()->toArray();
+
+        return response()->json($result);
     }
 
 }

@@ -128,6 +128,15 @@
                             </div>
                         </div>
                         <div class="col-5">
+@php
+    $dppTotal = max(0, $faktur->subtotal - $faktur->total_diskon);
+    $ppnRate = $dppTotal > 0 ? ($faktur->total_ppn / $dppTotal) : 0;
+    $dppUm = $faktur->uang_muka_dipakai > 0 ? ($faktur->uang_muka_dipakai / (1 + $ppnRate)) : 0;
+    $ppnUm = $faktur->uang_muka_dipakai > 0 ? ($faktur->uang_muka_dipakai - $dppUm) : 0;
+    $ppnSetelahUm = max(0, $faktur->total_ppn - $ppnUm);
+    $grandTotalSetelahUm = max(0, $faktur->total - ($faktur->uang_muka_dipakai ?? 0));
+    $sisaBayar = max(0, ($faktur->total - ($faktur->total_kredit_retur ?? 0) - ($faktur->uang_muka_dipakai ?? 0)) - $faktur->sudah_dibayar);
+@endphp
                             <table class="table table-sm table-borderless text-end fw-bold" style="font-size: 11px;">
                                 <tr>
                                     <td class="text-muted fw-normal">Subtotal:</td>
@@ -146,12 +155,12 @@
                                 </tr>
                                 @endif
                                 <tr>
-                                    <td class="text-muted fw-normal">PPN:</td>
-                                    <td class="text-dark">{{ number_format($faktur->total_ppn, 0, ',', '.') }}</td>
+                                    <td class="text-muted fw-normal">PPN Faktur:</td>
+                                    <td class="text-dark">{{ number_format($ppnSetelahUm, 0, ',', '.') }}</td>
                                 </tr>
                                 <tr style="font-size: 14px; border-top: 2px solid #6571ff;">
-                                    <td class="text-primary pt-1">GRAND TOTAL (Setelah UM):</td>
-                                    <td class="text-primary pt-1">Rp {{ number_format(max(0, $faktur->total - ($faktur->uang_muka_dipakai ?? 0)), 0, ',', '.') }}</td>
+                                    <td class="text-primary pt-1">GRAND TOTAL:</td>
+                                    <td class="text-primary pt-1">Rp {{ number_format($grandTotalSetelahUm, 0, ',', '.') }}</td>
                                 </tr>
                                 @if(($faktur->total_kredit_retur ?? 0) > 0)
                                 <tr>
@@ -165,7 +174,7 @@
                                 </tr>
                                 <tr style="border-top: 1px dashed #ccc;">
                                     <td class="text-dark pt-1">Sisa Bayar (Net):</td>
-                                    <td class="text-dark pt-1">Rp {{ number_format(max(0, ($faktur->total - ($faktur->total_kredit_retur ?? 0) - ($faktur->uang_muka_dipakai ?? 0)) - $faktur->sudah_dibayar), 0, ',', '.') }}</td>
+                                    <td class="text-dark pt-1">Rp {{ number_format($sisaBayar, 0, ',', '.') }}</td>
                                 </tr>
                             </table>
                         </div>

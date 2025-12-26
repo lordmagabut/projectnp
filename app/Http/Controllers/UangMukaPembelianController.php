@@ -65,10 +65,12 @@ class UangMukaPembelianController extends Controller
             }
         }
 
-        // Ambil daftar PO yang eligible untuk Uang Muka: sudah disetujui (sedang diproses) dan belum ada penerimaan
+        // Ambil daftar PO yang eligible untuk Uang Muka: sudah disetujui (sedang diproses atau selesai)
+        // dan belum ada UM yang dibuat untuk PO tersebut
+        $existingUmPoIds = UangMukaPembelian::pluck('po_id')->toArray();
         $pos = Po::with(['supplier', 'details'])
-            ->where('status', 'sedang diproses')
-            ->whereDoesntHave('penerimaans')
+            ->whereIn('status', ['sedang diproses', 'selesai'])
+            ->whereNotIn('id', $existingUmPoIds)
             ->orderBy('tanggal', 'desc')
             ->get();
 

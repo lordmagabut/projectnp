@@ -78,4 +78,27 @@ class Faktur extends Model
     {
         return $this->belongsTo(UangMukaPembelian::class, 'uang_muka_id');
     }
+
+    /**
+     * Generate nomor faktur otomatis: FK-YYMMDD-XXX
+     */
+    public static function generateNomorFaktur()
+    {
+        $tanggal = now()->format('ymd'); // YYMMDD
+        $prefix = 'FK-' . $tanggal;
+
+        // Ambil nomor terakhir dengan prefix yang sama
+        $last = self::where('no_faktur', 'like', $prefix . '%')
+            ->orderBy('no_faktur', 'desc')
+            ->first();
+
+        if ($last) {
+            $lastNumber = intval(substr($last->no_faktur, -3));
+            $nextNumber = $lastNumber + 1;
+        } else {
+            $nextNumber = 1;
+        }
+
+        return $prefix . '-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+    }
 }

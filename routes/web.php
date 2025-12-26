@@ -138,6 +138,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/uang-muka-pembelian/{id}/bkk', [UangMukaPembelianController::class, 'storeBkk'])->name('uang-muka-pembelian.bkk.store');
 
     // ========== Faktur Pembelian ==========
+    // API routes for dynamic dropdowns
+    Route::get('/api/po-by-supplier/{supplier_id}', [FakturController::class, 'getPoBySupplier'])->name('api.po-by-supplier');
+    Route::get('/api/po-detail/{po_id}', [FakturController::class, 'getPoDetail'])->name('api.po-detail');
+    Route::get('/api/uang-muka-by-supplier/{supplier_id}', [FakturController::class, 'getUangMukaBySupplier'])->name('api.uang-muka-by-supplier');
+    
     Route::get('/faktur/create-from-po/{po}', [FakturController::class, 'createFromPo'])->name('faktur.createFromPo');
     Route::get('/faktur/create-from-penerimaan/{penerimaan}', [FakturController::class, 'createFromPenerimaan'])->name('faktur.createFromPenerimaan');
     Route::get('/faktur/create',              [FakturController::class, 'create'])->name('faktur.create');

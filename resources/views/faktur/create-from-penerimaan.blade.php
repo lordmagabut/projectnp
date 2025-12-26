@@ -34,8 +34,9 @@
               <input type="date" name="tanggal" class="form-control" value="{{ now()->format('Y-m-d') }}" required>
             </div>
             <div class="col-md-4">
-              <label class="form-label">No. Faktur <span class="text-danger">*</span></label>
-              <input type="text" name="no_faktur" class="form-control" placeholder="Misal: INV-001" required>
+              <label class="form-label">No. Faktur</label>
+              <input type="text" name="no_faktur" class="form-control bg-light" value="{{ $nomorFaktur }}" readonly>
+              <small class="text-muted">Nomor otomatis sistem</small>
             </div>
           </div>
 

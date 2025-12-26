@@ -23,11 +23,12 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Tanggal Faktur</label>
-                            <input type="date" name="tanggal" class="form-control" value="{{ $po->tanggal }}" required value="{{ date('Y-m-d') }}">
+                            <input type="date" name="tanggal" class="form-control" value="{{ date('Y-m-d') }}" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">No. Faktur</label>
-                            <input type="text" name="no_faktur" class="form-control" value="{{ $po->no_po }}" required>
+                            <input type="text" name="no_faktur" class="form-control bg-light" value="{{ $nomorFaktur }}" readonly>
+                            <small class="text-muted">Nomor otomatis sistem</small>
                         </div>
                     </div>
 

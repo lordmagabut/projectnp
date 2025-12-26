@@ -43,6 +43,17 @@ class Po extends Model
         }
     }
 
+    public function getDiskonPersenAttribute()
+    {
+        // Diskon disimpan di PoDetail sebagai nilai global per PO
+        try {
+            $detail = $this->relationLoaded('details') ? $this->details->first() : $this->details()->select('diskon_persen')->first();
+            return (float)($detail->diskon_persen ?? 0);
+        } catch (\Throwable $e) {
+            return 0.0;
+        }
+    }
+
     public function perusahaan()
     {
         return $this->belongsTo(Perusahaan::class, 'id_perusahaan');
