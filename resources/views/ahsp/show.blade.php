@@ -145,12 +145,24 @@
                     @endforeach
                 </tbody>
                 <tfoot>
+                    @php
+                        $totalMaterial = $ahsp->details->where('tipe', 'material')->sum('subtotal');
+                        $totalUpah = $ahsp->details->where('tipe', 'upah')->sum('subtotal');
+                    @endphp
+                    <tr class="table-light">
+                        <th colspan="5" class="text-end">Total Material</th>
+                        <th class="text-end">Rp {{ number_format($totalMaterial, 0, ',', '.') }}</th>
+                    </tr>
+                    <tr class="table-light">
+                        <th colspan="5" class="text-end">Total Upah</th>
+                        <th class="text-end">Rp {{ number_format($totalUpah, 0, ',', '.') }}</th>
+                    </tr>
                     <tr>
-                        <th colspan="4" class="text-end">Total Harga Sebenarnya</th>
+                        <th colspan="5" class="text-end">Total Harga Sebenarnya</th>
                         <th class="text-end fw-bold">Rp {{ number_format($ahsp->total_harga, 0, ',', '.') }}</th>
                     </tr>
                     <tr>
-                        <th colspan="4" class="text-end">Total Harga Pembulatan</th>
+                        <th colspan="5" class="text-end">Total Harga Pembulatan</th>
                         <th class="text-end fw-bold text-primary">Rp {{ number_format($ahsp->total_harga_pembulatan ?? 0, 0, ',', '.') }}</th>
                     </tr>
                 </tfoot>
