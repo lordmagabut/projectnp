@@ -432,6 +432,15 @@ public function destroy($id)
 {
     $faktur = Faktur::with('details')->findOrFail($id);
 
+    // Return UM if faktur used it
+    if ($faktur->uang_muka_dipakai > 0 && $faktur->uang_muka_id) {
+        $uangMuka = \App\Models\UangMukaPembelian::find($faktur->uang_muka_id);
+        if ($uangMuka) {
+            $uangMuka->nominal_digunakan = max(0, $uangMuka->nominal_digunakan - $faktur->uang_muka_dipakai);
+            $uangMuka->save();
+        }
+    }
+
     foreach ($faktur->details as $detail) {
         if ($detail->po_detail_id) {
             $poDetail = \App\Models\PoDetail::find($detail->po_detail_id);
