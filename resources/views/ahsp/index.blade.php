@@ -281,6 +281,7 @@
           <table id="tableAhsp" class="table table-hover align-middle display nowrap" style="width:100%">
             <thead>
               <tr>
+                <th class="text-nowrap">AHSP ID</th>
                 <th class="text-nowrap">Kode</th>
                 <th class="text-nowrap">Nama Pekerjaan</th>
                 <th class="text-nowrap">Kategori</th>
@@ -294,6 +295,7 @@
             <tbody>
               @forelse($ahsps as $a)
               <tr>
+                <td>{{ $a->id }}</td>
                 <td>{{ $a->kode_pekerjaan }}</td>
                 <td>{{ $a->nama_pekerjaan }}</td>
                 <td>{{ $a->kategori->nama ?? '-' }}</td>
@@ -346,7 +348,7 @@
                 </td>
               </tr>
               @empty
-              <tr><td colspan="8" class="text-center py-4">Belum ada data AHSP.</td></tr>
+              <tr><td colspan="9" class="text-center py-4">Belum ada data AHSP.</td></tr>
               @endforelse
             </tbody>
           </table>
