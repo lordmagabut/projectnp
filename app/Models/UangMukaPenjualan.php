@@ -18,11 +18,14 @@ class UangMukaPenjualan extends Model
         'metode_pembayaran',
         'keterangan',
         'status',
+        'payment_status',
+        'tanggal_bayar',
         'created_by',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
+        'tanggal_bayar' => 'date',
         'nominal' => 'decimal:2',
         'nominal_digunakan' => 'decimal:2',
     ];

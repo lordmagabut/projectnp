@@ -35,7 +35,12 @@ class UangMukaPenjualanController extends Controller
         $salesOrders = SalesOrder::with('penawaran.proyek')
             ->doesntHave('uangMuka')
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function($so) {
+                $so->persen_dp = optional($so->penawaran)->proyek->persen_dp ?? 0;
+                $so->nominal_dp = $so->total * ($so->persen_dp / 100);
+                return $so;
+            });
 
         $proyeks = Proyek::orderBy('nama_proyek')->get();
         
@@ -50,15 +55,14 @@ class UangMukaPenjualanController extends Controller
         $data = $request->validate([
             'sales_order_id' => 'required|exists:sales_orders,id|unique:uang_muka_penjualan,sales_order_id',
             'proyek_id'      => 'required|exists:proyek,id',
-            'nomor_bukti'    => 'required|string|max:255|unique:uang_muka_penjualan,nomor_bukti',
             'tanggal'        => 'required|date',
             'nominal'        => 'required|numeric|min:0',
-            'metode_pembayaran' => 'nullable|string|max:100',
             'keterangan'     => 'nullable|string',
         ]);
 
         $data['created_by'] = auth()->id();
         $data['status'] = 'diterima';
+        $data['payment_status'] = 'belum_dibayar';
         $data['nominal_digunakan'] = 0;
 
         UangMukaPenjualan::create($data);
@@ -115,5 +119,66 @@ class UangMukaPenjualanController extends Controller
         $um->delete();
 
         return redirect()->route('uang-muka-penjualan.index')->with('success', 'Uang Muka Penjualan berhasil dihapus.');
+    }
+
+    public function pay($id)
+    {
+        $um = UangMukaPenjualan::with('salesOrder.penawaran.proyek', 'proyek')->findOrFail($id);
+
+        if ($um->payment_status === 'dibayar') {
+            return back()->with('error', 'Uang Muka sudah dibayar.');
+        }
+
+        return view('uang-muka-penjualan.pay', compact('um'));
+    }
+
+    public function processPay(Request $request, $id)
+    {
+        $um = UangMukaPenjualan::findOrFail($id);
+
+        if ($um->payment_status === 'dibayar') {
+            return back()->with('error', 'Uang Muka sudah dibayar.');
+        }
+
+        $data = $request->validate([
+            'tanggal_bayar' => 'required|date',
+            'metode_pembayaran' => 'required|string|max:100',
+            'keterangan_bayar' => 'nullable|string',
+        ]);
+
+        $um->update([
+            'payment_status' => 'dibayar',
+            'tanggal_bayar' => $data['tanggal_bayar'],
+            'metode_pembayaran' => $data['metode_pembayaran'],
+            'keterangan' => ($um->keterangan ? $um->keterangan . "\n" : '') . ($data['keterangan_bayar'] ?? ''),
+        ]);
+
+        // TODO: Create GL Journal Entry here
+
+        return redirect()->route('uang-muka-penjualan.show', $um->id)
+            ->with('success', 'Pembayaran Uang Muka berhasil dicatat.');
+    }
+
+    public function unpay($id)
+    {
+        $um = UangMukaPenjualan::findOrFail($id);
+
+        if ($um->payment_status !== 'dibayar') {
+            return back()->with('error', 'Uang Muka belum dibayar.');
+        }
+
+        if ($um->nominal_digunakan > 0) {
+            return back()->with('error', 'Tidak dapat membatalkan pembayaran. Uang Muka sudah digunakan.');
+        }
+
+        $um->update([
+            'payment_status' => 'belum_dibayar',
+            'tanggal_bayar' => null,
+        ]);
+
+        // TODO: Delete GL Journal Entry here
+
+        return redirect()->route('uang-muka-penjualan.show', $um->id)
+            ->with('success', 'Pembayaran Uang Muka berhasil dibatalkan.');
     }
 }

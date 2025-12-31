@@ -5,7 +5,23 @@
   <div class="card-header d-flex justify-content-between align-items-center">
     <h5 class="mb-0">Detail Uang Muka Penjualan</h5>
     <div class="d-flex gap-2">
-      <a href="{{ route('uang-muka-penjualan.edit', $um->id) }}" class="btn btn-primary btn-sm">Edit</a>
+      @if($um->payment_status === 'belum_dibayar')
+        <a href="{{ route('uang-muka-penjualan.pay', $um->id) }}" class="btn btn-success btn-sm">
+          <i class="fas fa-money-bill-wave me-1"></i> Bayar
+        </a>
+      @elseif($um->payment_status === 'dibayar' && $um->nominal_digunakan == 0)
+        <form action="{{ route('uang-muka-penjualan.unpay', $um->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Batalkan pembayaran UM ini?');">
+          @csrf
+          <button type="submit" class="btn btn-warning btn-sm">
+            <i class="fas fa-undo me-1"></i> Batalkan Pembayaran
+          </button>
+        </form>
+      @endif
+      
+      @if($um->payment_status === 'dibayar' && $um->nominal_digunakan == 0)
+        <a href="{{ route('uang-muka-penjualan.edit', $um->id) }}" class="btn btn-primary btn-sm">Edit</a>
+      @endif
+      
       <form action="{{ route('uang-muka-penjualan.destroy', $um->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus UM ini?');">
         @csrf
         @method('DELETE')
@@ -56,6 +72,22 @@
           @endif
         </td>
       </tr>
+      <tr>
+        <th>Status Pembayaran</th>
+        <td>
+          @if($um->payment_status == 'dibayar')
+            <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Sudah Dibayar</span>
+          @else
+            <span class="badge bg-warning"><i class="fas fa-clock me-1"></i> Belum Dibayar</span>
+          @endif
+        </td>
+      </tr>
+      @if($um->payment_status == 'dibayar')
+        <tr>
+          <th>Tanggal Pembayaran</th>
+          <td>{{ optional($um->tanggal_bayar)->format('d/m/Y') }}</td>
+        </tr>
+      @endif
       <tr>
         <th>Metode Pembayaran</th>
         <td>{{ $um->metode_pembayaran ?? '-' }}</td>

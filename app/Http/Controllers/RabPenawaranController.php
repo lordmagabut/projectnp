@@ -1056,10 +1056,23 @@ class RabPenawaranController extends Controller
         $request->validate([
             'approval_files'   => 'required',
             'approval_files.*' => 'file|mimes:pdf|max:5120', // 5 MB tiap file
+            'no_spk'           => 'required|string|max:100',
+            'tanggal_mulai'    => 'required|date',
+            'tanggal_selesai'  => 'required|date|after_or_equal:tanggal_mulai',
+            'persen_dp'        => 'required|numeric|min:0|max:100',
+            'persen_retensi'   => 'required|numeric|min:0|max:100',
+            'durasi_retensi'   => 'required|integer|min:0',
         ], [
             'approval_files.required'   => 'Unggah minimal 1 file PDF.',
             'approval_files.*.mimes'    => 'Semua file harus berformat PDF.',
             'approval_files.*.max'      => 'Ukuran maksimal setiap file 5 MB.',
+            'no_spk.required'           => 'Nomor SPK harus diisi.',
+            'tanggal_mulai.required'    => 'Tanggal mulai proyek harus diisi.',
+            'tanggal_selesai.required'  => 'Tanggal selesai proyek harus diisi.',
+            'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus setelah atau sama dengan tanggal mulai.',
+            'persen_dp.required'        => 'Persentase DP harus diisi.',
+            'persen_retensi.required'   => 'Persentase Retensi harus diisi.',
+            'durasi_retensi.required'   => 'Durasi Retensi harus diisi.',
         ]);
 
         $files = $request->file('approval_files', []);
@@ -1082,6 +1095,17 @@ class RabPenawaranController extends Controller
         $penawaran->approved_at = now();
         $penawaran->status = 'final';
         $penawaran->save();
+
+        // Update proyek dengan data tanggal, DP, dan retensi
+        $proyek = $penawaran->proyek;
+        $proyek->update([
+            'no_spk'           => $request->no_spk,
+            'tanggal_mulai'    => $request->tanggal_mulai,
+            'tanggal_selesai'  => $request->tanggal_selesai,
+            'persen_dp'        => $request->persen_dp,
+            'persen_retensi'   => $request->persen_retensi,
+            'durasi_retensi'   => $request->durasi_retensi,
+        ]);
 
         // Buat Sales Order ringkasan otomatis ketika penawaran disetujui.
         try {
@@ -1139,6 +1163,50 @@ class RabPenawaranController extends Controller
         return redirect()
             ->route('proyek.penawaran.show', [$penawaran->proyek_id, $penawaran->id])
             ->with('success', 'Penawaran telah difinalkan dan dokumen berhasil diunggah.');
+    }
+
+    public function unapprove($proyekId, $penawaranId)
+    {
+        $penawaran = \App\Models\RabPenawaranHeader::where('proyek_id', $proyekId)->findOrFail($penawaranId);
+
+        // Cek apakah ada Sales Order terkait
+        $salesOrder = $penawaran->salesOrder;
+        
+        if ($salesOrder) {
+            // Cek apakah Sales Order sudah memiliki Uang Muka
+            if ($salesOrder->uangMuka) {
+                return redirect()
+                    ->route('proyek.penawaran.show', [$penawaran->proyek_id, $penawaran->id])
+                    ->with('error', 'Tidak dapat membatalkan persetujuan. Sales Order sudah memiliki Uang Muka Penjualan.');
+            }
+            
+            // Hapus Sales Order Lines terlebih dahulu
+            $salesOrder->lines()->delete();
+            
+            // Hapus Sales Order
+            $salesOrder->delete();
+        }
+
+        // Hapus file SPK yang sudah diupload
+        $docs = collect($penawaran->approval_doc_paths ?? [])
+            ->when(empty($penawaran->approval_doc_paths ?? null) && !empty($penawaran->approval_doc_path ?? null),
+                fn($c)=>$c->push($penawaran->approval_doc_path));
+        
+        foreach ($docs as $path) {
+            if (\Storage::disk('public')->exists($path)) {
+                \Storage::disk('public')->delete($path);
+            }
+        }
+
+        // Reset status ke draft
+        $penawaran->status = 'draft';
+        $penawaran->approved_at = null;
+        $penawaran->approval_doc_paths = [];
+        $penawaran->save();
+
+        return redirect()
+            ->route('proyek.penawaran.show', [$penawaran->proyek_id, $penawaran->id])
+            ->with('success', 'Penawaran dikembalikan ke status Draft. Sales Order dan dokumen SPK telah dihapus.');
     }
 
     public function generatePdfMixed(Proyek $proyek, RabPenawaranHeader $penawaran)

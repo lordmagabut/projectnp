@@ -143,6 +143,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/uang-muka-penjualan/{id}/edit', [UangMukaPenjualanController::class, 'edit'])->name('uang-muka-penjualan.edit');
     Route::put('/uang-muka-penjualan/{id}', [UangMukaPenjualanController::class, 'update'])->name('uang-muka-penjualan.update');
     Route::delete('/uang-muka-penjualan/{id}', [UangMukaPenjualanController::class, 'destroy'])->name('uang-muka-penjualan.destroy');
+    Route::get('/uang-muka-penjualan/{id}/pay', [UangMukaPenjualanController::class, 'pay'])->name('uang-muka-penjualan.pay');
+    Route::post('/uang-muka-penjualan/{id}/process-pay', [UangMukaPenjualanController::class, 'processPay'])->name('uang-muka-penjualan.processPay');
+    Route::post('/uang-muka-penjualan/{id}/unpay', [UangMukaPenjualanController::class, 'unpay'])->name('uang-muka-penjualan.unpay');
     Route::get('/uang-muka-pembelian/{id}/bkk', [UangMukaPembelianController::class, 'printBkk'])->name('uang-muka-pembelian.bkk');
     Route::get('/uang-muka-pembelian/{id}/bkk/create', [UangMukaPembelianController::class, 'createBkk'])->name('uang-muka-pembelian.bkk.create');
     Route::post('/uang-muka-pembelian/{id}/bkk', [UangMukaPembelianController::class, 'storeBkk'])->name('uang-muka-pembelian.bkk.store');
@@ -214,6 +217,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Approve & Snapshot schedule penawaran
         Route::post('/{penawaran}/approve',  [RabPenawaranController::class, 'approve'])->name('approve');
+        Route::post('/{penawaran}/unapprove',  [RabPenawaranController::class, 'unapprove'])->name('unapprove');
         Route::post('/{penawaran}/snapshot', [RabScheduleController::class,   'snapshot'])->name('snapshot');
     });
 

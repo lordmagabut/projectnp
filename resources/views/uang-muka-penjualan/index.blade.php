@@ -60,6 +60,7 @@
             <th class="text-end">Digunakan</th>
             <th class="text-end">Sisa</th>
             <th class="text-center">Status</th>
+            <th class="text-center">Pembayaran</th>
             <th class="text-center" style="width:220px">Aksi</th>
           </tr>
         </thead>
@@ -83,11 +84,17 @@
                 @endif
               </td>
               <td class="text-center">
+                @if($row->payment_status == 'dibayar')
+                  <span class="badge bg-success"><i class="fas fa-check me-1"></i> Dibayar</span>
+                @else
+                  <span class="badge bg-warning"><i class="fas fa-clock me-1"></i> Belum Bayar</span>
+                @endif
+              </td>
+              <td class="text-center">
                 <a href="{{ route('uang-muka-penjualan.show', $row->id) }}" class="btn btn-sm btn-outline-secondary me-1">Detail</a>
-                <a href="{{ route('uang-muka-penjualan.edit', $row->id) }}" class="btn btn-sm btn-outline-primary me-1">Edit</a>
-                <form action="{{ route('uang-muka-penjualan.destroy', $row->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus UM ini?');">
-                  @csrf
-                  @method('DELETE')
+                @if($row->payment_status === 'belum_dibayar')
+                  <a href="{{ route('uang-muka-penjualan.pay', $row->id) }}" class="btn btn-sm btn-outline-success">Bayar</a>
+                @endif
                   <button type="submit" class="btn btn-sm btn-outline-danger" {{ $row->nominal_digunakan > 0 ? 'disabled' : '' }}>Hapus</button>
                 </form>
               </td>

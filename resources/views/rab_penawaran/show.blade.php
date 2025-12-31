@@ -139,6 +139,29 @@
               @endif
             </td>
           </tr>
+          @if($penawaran->status === 'final')
+            @php
+              $docs = collect($penawaran->approval_doc_paths ?? [])
+                ->when(empty($penawaran->approval_doc_paths ?? null) && !empty($penawaran->approval_doc_path ?? null),
+                  fn($c)=>$c->push($penawaran->approval_doc_path));
+            @endphp
+            @if($docs->isNotEmpty())
+              <tr>
+                <th>Dokumen SPK/PO</th>
+                <td>:
+                  <ul class="mb-0 ps-3">
+                    @foreach($docs as $idx => $p)
+                      <li>
+                        <a href="{{ route('proyek.penawaran.approval.download', [$proyek->id, $penawaran->id, base64_encode($p)]) }}" target="_blank" class="text-primary">
+                          <i class="fas fa-file-pdf me-1"></i> Dokumen {{ $idx + 1 }}
+                        </a>
+                      </li>
+                    @endforeach
+                  </ul>
+                </td>
+              </tr>
+            @endif
+          @endif
         </tbody>
       </table>
     </div>
@@ -478,10 +501,20 @@
         <i class="fas fa-file-excel me-1"></i> Export Excel
       </a>
 
-      {{-- SETUJUI → buka modal upload PDF --}}
-      <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#approveModal">
-        <i class="fas fa-check-circle me-1"></i> Setujui
-      </button>
+      @if($isFinal)
+        {{-- Tombol untuk kembalikan ke Draft --}}
+        <form method="POST" action="{{ route('proyek.penawaran.unapprove', [$proyek->id, $penawaran->id]) }}" class="d-inline" onsubmit="return confirm('Yakin mengembalikan penawaran ini ke status Draft?');">
+          @csrf
+          <button type="submit" class="btn btn-warning btn-sm">
+            <i class="fas fa-undo me-1"></i> Batalkan Persetujuan
+          </button>
+        </form>
+      @else
+        {{-- SETUJUI → buka modal upload PDF --}}
+        <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#approveModal">
+          <i class="fas fa-check-circle me-1"></i> Setujui
+        </button>
+      @endif
 
       {{-- Bobot (hanya aktif jika FINAL) --}}
       @if($isFinal)
@@ -610,7 +643,7 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
 
 {{-- Modal Setujui (Multi PDF) --}}
 <div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <form action="{{ route('proyek.penawaran.approve', [$proyek->id, $penawaran->id]) }}" method="POST" enctype="multipart/form-data">
         @csrf
@@ -622,8 +655,8 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
         </div>
 
         <div class="modal-body">
-          <p class="mb-2">
-            Unggah <strong>minimal 1 dokumen</strong> <strong>PO/WO/SPK</strong> berformat <strong>PDF</strong>. Setelah final, Anda bisa membuat <em>Bobot</em> dan <em>RAB Schedule</em>.
+          <p class="mb-3">
+            Unggah <strong>minimal 1 dokumen</strong> <strong>PO/WO/SPK</strong> berformat <strong>PDF</strong> dan lengkapi data proyek.
           </p>
 
           <div class="mb-3">
@@ -643,6 +676,77 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
             <div class="form-text">Pilih satu atau beberapa file (PDF, maks 5 MB per file).</div>
           </div>
 
+          <hr>
+
+          <h6 class="mb-3"><i class="fas fa-calendar-alt me-2"></i>Data Proyek</h6>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Nomor SPK <span class="text-danger">*</span></label>
+              <input type="text" name="no_spk" class="form-control @error('no_spk') is-invalid @enderror"
+                     value="{{ old('no_spk', $proyek->no_spk) }}" placeholder="Nomor Surat Perintah Kerja" required>
+              @error('no_spk')
+                <div class="invalid-feedback">{{ $message }}</div>
+              @enderror
+            </div>
+
+            <div class="col-md-6 mb-3">
+              <label class="form-label">&nbsp;</label>
+              <div class="alert alert-info mb-0">
+                <small><i class="fas fa-info-circle me-1"></i>Masukkan nomor SPK/WO/PO dari klien</small>
+              </div>
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Tanggal Mulai Proyek <span class="text-danger">*</span></label>
+              <input type="date" name="tanggal_mulai" class="form-control @error('tanggal_mulai') is-invalid @enderror" 
+                     value="{{ old('tanggal_mulai', $proyek->tanggal_mulai) }}" required>
+              @error('tanggal_mulai')
+                <div class="invalid-feedback">{{ $message }}</div>
+              @enderror
+            </div>
+
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Tanggal Selesai Proyek <span class="text-danger">*</span></label>
+              <input type="date" name="tanggal_selesai" class="form-control @error('tanggal_selesai') is-invalid @enderror"
+                     value="{{ old('tanggal_selesai', $proyek->tanggal_selesai) }}" required>
+              @error('tanggal_selesai')
+                <div class="invalid-feedback">{{ $message }}</div>
+              @enderror
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Persentase DP (%) <span class="text-danger">*</span></label>
+              <input type="number" step="0.01" name="persen_dp" class="form-control @error('persen_dp') is-invalid @enderror"
+                     value="{{ old('persen_dp', $proyek->persen_dp ?? 0) }}" min="0" max="100" required>
+              @error('persen_dp')
+                <div class="invalid-feedback">{{ $message }}</div>
+              @enderror
+            </div>
+
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Persentase Retensi (%) <span class="text-danger">*</span></label>
+              <input type="number" step="0.01" name="persen_retensi" class="form-control @error('persen_retensi') is-invalid @enderror"
+                     value="{{ old('persen_retensi', $proyek->persen_retensi ?? 0) }}" min="0" max="100" required>
+              @error('persen_retensi')
+                <div class="invalid-feedback">{{ $message }}</div>
+              @enderror
+            </div>
+
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Durasi Retensi (Hari) <span class="text-danger">*</span></label>
+              <input type="number" name="durasi_retensi" class="form-control @error('durasi_retensi') is-invalid @enderror"
+                     value="{{ old('durasi_retensi', $proyek->durasi_retensi ?? 0) }}" min="0" required>
+              @error('durasi_retensi')
+                <div class="invalid-feedback">{{ $message }}</div>
+              @enderror
+            </div>
+          </div>
+
           @php
             $docs = collect($penawaran->approval_doc_paths ?? [])
               ->when(empty($penawaran->approval_doc_paths ?? null) && !empty($penawaran->approval_doc_path ?? null),
@@ -650,11 +754,12 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
           @endphp
 
           @if($docs->isNotEmpty())
+            <hr>
             <div class="border rounded p-2">
               <div class="small text-muted mb-1"><i class="fas fa-paperclip me-1"></i>Dokumen yang tersimpan:</div>
               <ul class="mb-0">
                 @foreach($docs as $p)
-                  <li><a target="_blank" href="{{ Storage::disk('public')->url($p) }}">Lihat PDF</a></li>
+                  <li><a target="_blank" href="{{ route('proyek.penawaran.approval.download', [$proyek->id, $penawaran->id, base64_encode($p)]) }}">Lihat PDF</a></li>
                 @endforeach
               </ul>
             </div>

@@ -11,11 +11,16 @@
       <div class="row g-3">
         <div class="col-md-6">
           <label class="form-label">Sales Order</label>
-          <select class="form-select @error('sales_order_id') is-invalid @enderror" name="sales_order_id" id="sales_order_id" required onchange="updateProyekFromSO()">
+          <select class="form-select @error('sales_order_id') is-invalid @enderror" name="sales_order_id" id="sales_order_id" required onchange="updateProyekAndNominal()">
             <option value="">-- Pilih Sales Order --</option>
             @foreach($salesOrders as $so)
-              <option value="{{ $so->id }}" data-proyek-id="{{ optional($so->penawaran)->proyek_id }}" @if($prefillSoId == $so->id) selected @endif>
-                {{ $so->nomor ?? 'SO #' . $so->id }} - {{ optional($so->penawaran)->proyek->nama_proyek ?? 'Proyek' }}
+              <option value="{{ $so->id }}" 
+                      data-proyek-id="{{ optional($so->penawaran)->proyek_id }}" 
+                      data-total="{{ $so->total }}"
+                      data-persen-dp="{{ $so->persen_dp }}"
+                      data-nominal-dp="{{ $so->nominal_dp }}"
+                      @if($prefillSoId == $so->id) selected @endif>
+                {{ $so->nomor ?? 'SO #' . $so->id }} - {{ optional($so->penawaran)->proyek->nama_proyek ?? 'Proyek' }} (Total: Rp {{ number_format($so->total, 0, ',', '.') }})
               </option>
             @endforeach
           </select>
@@ -38,14 +43,6 @@
         </div>
 
         <div class="col-md-6">
-          <label class="form-label">Nomor Bukti Uang Muka</label>
-          <input type="text" class="form-control @error('nomor_bukti') is-invalid @enderror" name="nomor_bukti" value="{{ old('nomor_bukti') }}" required>
-          @error('nomor_bukti')
-            <span class="invalid-feedback">{{ $message }}</span>
-          @enderror
-        </div>
-
-        <div class="col-md-6">
           <label class="form-label">Tanggal</label>
           <input type="date" class="form-control @error('tanggal') is-invalid @enderror" name="tanggal" value="{{ old('tanggal', now()->toDateString()) }}" required>
           @error('tanggal')
@@ -54,19 +51,19 @@
         </div>
 
         <div class="col-md-6">
-          <label class="form-label">Nominal Uang Muka</label>
-          <input type="number" step="0.01" class="form-control @error('nominal') is-invalid @enderror" name="nominal" value="{{ old('nominal') }}" required>
-          @error('nominal')
-            <span class="invalid-feedback">{{ $message }}</span>
-          @enderror
+          <label class="form-label">Persentase DP (%)</label>
+          <input type="number" step="0.01" class="form-control bg-light" id="persen_dp" value="0" readonly>
+          <small class="text-muted">Diambil dari persentase DP proyek</small>
         </div>
 
         <div class="col-md-6">
-          <label class="form-label">Metode Pembayaran</label>
-          <input type="text" class="form-control @error('metode_pembayaran') is-invalid @enderror" name="metode_pembayaran" value="{{ old('metode_pembayaran') }}" placeholder="Transfer, Tunai, Cek, dll">
-          @error('metode_pembayaran')
+          <label class="form-label">Nominal Uang Muka (Otomatis)</label>
+          <input type="text" class="form-control bg-light" id="nominal_display" value="Rp 0" readonly>
+          <input type="number" step="0.01" class="form-control bg-light @error('nominal') is-invalid @enderror" name="nominal" id="nominal" value="{{ old('nominal') }}" hidden required>
+          @error('nominal')
             <span class="invalid-feedback">{{ $message }}</span>
           @enderror
+          <small class="text-muted">Dihitung otomatis: Total SO × Persentase DP</small>
         </div>
 
         <div class="col-md-12">
@@ -89,15 +86,43 @@
 
 @push('custom-scripts')
 <script>
-  function updateProyekFromSO() {
+  function updateProyekAndNominal() {
     const select = document.getElementById('sales_order_id');
     const proyekSelect = document.getElementById('proyek_id');
+    const nominalInput = document.getElementById('nominal');
+    const nominalDisplay = document.getElementById('nominal_display');
+    const persenDpDisplay = document.getElementById('persen_dp');
     const selectedOption = select.options[select.selectedIndex];
+    
     const proyekId = selectedOption.getAttribute('data-proyek-id');
+    const nominalDp = parseFloat(selectedOption.getAttribute('data-nominal-dp')) || 0;
+    const persenDp = parseFloat(selectedOption.getAttribute('data-persen-dp')) || 0;
     
     if (proyekId) {
       proyekSelect.value = proyekId;
     }
+    
+    if (nominalDp) {
+      nominalInput.value = nominalDp.toFixed(2);
+      nominalDisplay.value = 'Rp ' + nominalDp.toLocaleString('id-ID', {maximumFractionDigits: 0});
+    } else {
+      nominalInput.value = '';
+      nominalDisplay.value = 'Rp 0';
+    }
+    
+    if (persenDp) {
+      persenDpDisplay.value = persenDp.toFixed(2);
+    } else {
+      persenDpDisplay.value = '0.00';
+    }
   }
+  
+  // Trigger on page load if SO is pre-selected
+  document.addEventListener('DOMContentLoaded', function() {
+    const soSelect = document.getElementById('sales_order_id');
+    if (soSelect.value) {
+      updateProyekAndNominal();
+    }
+  });
 </script>
 @endpush
