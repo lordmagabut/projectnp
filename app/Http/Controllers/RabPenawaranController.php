@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use iio\libmergepdf\Merger;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
+use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\Concerns\FromView;
 
 use App\Models\Proyek;
 use App\Models\RabHeader;
@@ -40,6 +43,7 @@ class RabPenawaranController extends Controller
             ->select([
                 'id',
                 'proyek_id',
+                'nomor_penawaran',       // nomor otomatis DKD/tahun/urut
                 'nama_penawaran',          // ✔ ada di DB
                 'tanggal_penawaran',       // ✔ ada di DB
                 'final_total_penawaran',   // ✔ ada di DB
@@ -50,7 +54,7 @@ class RabPenawaranController extends Controller
             ->addIndexColumn() // DT_RowIndex
             ->addColumn('proyek_nama', fn($row) => $row->proyek->nama_proyek ?? '-')
             // Biar kunci-kunci yang dipakai di Blade ada semua:
-            ->addColumn('kode', fn($row) => $row->nama_penawaran) // alias "kode" ke nama_penawaran
+            ->addColumn('kode', fn($row) => $row->nomor_penawaran ?? $row->nama_penawaran) // nomor prioritas, fallback nama
             ->addColumn('total', fn($row) => $row->final_total_penawaran)
             ->toJson();
     }
@@ -58,12 +62,16 @@ class RabPenawaranController extends Controller
     // Menampilkan form untuk membuat penawaran baru
     public function create(Request $request, Proyek $proyek)
     {
+        $priceMode = $proyek->penawaran_price_mode ?? 'pisah';
+
         $rabHeaders = RabHeader::where('proyek_id', $proyek->id)
                                ->whereNull('parent_id')
                                ->orderBy('kode_sort')
                                ->get();
     
         $flatRabHeaders = $this->generateFlatHeadersForDropdown($rabHeaders);
+
+        $nomorPenawaran = $this->previewNomorPenawaran();
     
         $preloadedRabData = [];
         $preloadedArea = null; // Inisialisasi variabel untuk area yang dimuat
@@ -118,10 +126,12 @@ class RabPenawaranController extends Controller
             // karena tidak ada satu RabDetail tunggal yang mewakili seluruh proyek.
         }
     
-        return view('rab_penawaran.create', compact('proyek', 'rabHeaders', 'flatRabHeaders', 'preloadedRabData', 'preloadedArea', 'preloadedSpesifikasi'));
+        return view('rab_penawaran.create', compact('proyek', 'rabHeaders', 'flatRabHeaders', 'preloadedRabData', 'preloadedArea', 'preloadedSpesifikasi', 'nomorPenawaran', 'priceMode'));
     }    
     public function store(Request $request, Proyek $proyek)
     {
+        $priceMode = $proyek->penawaran_price_mode ?? 'pisah';
+
         DB::beginTransaction();
         try {
             $request->validate([
@@ -145,8 +155,11 @@ class RabPenawaranController extends Controller
 
             $totalPenawaranBruto = 0.0;
 
+            $nomorPenawaran = $this->lockAndGenerateNomorPenawaran();
+
             $penawaranHeader = RabPenawaranHeader::create([
                 'proyek_id'              => $proyek->id,
+                'nomor_penawaran'        => $nomorPenawaran,
                 'nama_penawaran'         => $request->nama_penawaran,
                 'tanggal_penawaran'      => $request->tanggal_penawaran,
                 'versi'                  => 1,
@@ -185,10 +198,18 @@ class RabPenawaranController extends Controller
                         $volume    = (float)($itemData['volume'] ?? $rabDetail->volume ?? 0);
 
                         // Material & upah dasar (AHSP → fallback kolom rab_detail)
-                        [$matDasar, $upahDasar] = $this->deriveMaterialUpahFromDetail($rabDetail);
+                        [$matDasar, $upahDasar, $roundedBase] = $this->deriveMaterialUpahFromDetail($rabDetail, $priceMode);
 
-                        // Harga satuan dasar: rab_detail->harga_satuan atau (material+upah)
-                        $hargaSatuanDasar = (float)($rabDetail->harga_satuan ?? ($matDasar + $upahDasar));
+                        // Harga satuan dasar: gunakan pembulatan saat mode gabung
+                        $hargaSatuanDasar = (float)($priceMode === 'gabung'
+                            ? ($roundedBase ?? $rabDetail->harga_satuan ?? ($matDasar + $upahDasar))
+                            : ($rabDetail->harga_satuan ?? ($matDasar + $upahDasar)));
+
+                        // Mode gabung: treat all as satu kolom harga
+                        if ($priceMode === 'gabung') {
+                            $matDasar = $hargaSatuanDasar;
+                            $upahDasar = 0.0;
+                        }
 
                         // Mark-up koef
                         $koef = 1 + ($profitPercentage / 100) + ($overheadPercentage / 100);
@@ -198,8 +219,8 @@ class RabPenawaranController extends Controller
                         $hargaSatuanPenawaran  = $hargaSatuanCalculated;
                         $totalItem             = $hargaSatuanPenawaran * $volume;
 
-                        $matCalc  = $matDasar  * $koef;
-                        $upahCalc = $upahDasar * $koef;
+                        $matCalc  = $priceMode === 'gabung' ? $hargaSatuanPenawaran : $matDasar  * $koef;
+                        $upahCalc = $priceMode === 'gabung' ? 0.0                   : $upahDasar * $koef;
 
                         RabPenawaranItem::create([
                             'rab_penawaran_section_id'       => $newSection->id,
@@ -257,35 +278,12 @@ class RabPenawaranController extends Controller
     // Menampilkan detail penawaran
     public function show(Proyek $proyek, RabPenawaranHeader $penawaran)
     {
-        // Eager load semua relasi yang diperlukan untuk tampilan
-        $penawaran->load([
-            'sections' => function($query) {
-                $query->with([
-                    'rabHeader', // Untuk mendapatkan deskripsi RAB Header asli
-                    'items' => function($query) {
-                        $query->with('rabDetail'); // Untuk mendapatkan detail RAB asli jika diperlukan
-                    }
-                ])->orderBy('id'); // Urutkan section berdasarkan ID atau urutan logis lainnya
-            }
-        ]);
-
-        return view('rab_penawaran.show', compact('proyek', 'penawaran'));
+        return $this->renderPenawaranDetail($proyek, $penawaran);
     }
 
     public function showGab(Proyek $proyek, RabPenawaranHeader $penawaran)
     {
-        // Eager load semua relasi yang diperlukan untuk tampilan
-        $penawaran->load([
-            'sections' => function($query) {
-                $query->with([
-                    'rabHeader', // Untuk mendapatkan deskripsi RAB Header asli
-                    'items' => function($query) {
-                        $query->with('rabDetail'); // Untuk mendapatkan detail RAB asli jika diperlukan
-                    }
-                ])->orderBy('id'); // Urutkan section berdasarkan ID atau urutan logis lainnya
-            }
-        ]);
-        return view('rab_penawaran.show-gab', compact('proyek', 'penawaran'));
+        return $this->renderPenawaranDetail($proyek, $penawaran, 'rab_penawaran.show-gab');
     }
     // Menampilkan form untuk mengedit penawaran
     public function edit(Proyek $proyek, RabPenawaranHeader $penawaran)
@@ -311,6 +309,8 @@ class RabPenawaranController extends Controller
     // Memperbarui penawaran
     public function update(Request $request, Proyek $proyek, RabPenawaranHeader $penawaran)
     {
+        $priceMode = $proyek->penawaran_price_mode ?? 'pisah';
+
         DB::beginTransaction();
         try {
             // Validasi header + (opsional) sections
@@ -376,17 +376,24 @@ class RabPenawaranController extends Controller
                             $satuan    = $itemData['satuan']    ?? $rabDetail->satuan ?? 'LS';
                             $volume    = (float)($itemData['volume'] ?? $rabDetail->volume ?? 0);
 
-                            [$matDasar, $upahDasar] = $this->deriveMaterialUpahFromDetail($rabDetail);
+                            [$matDasar, $upahDasar, $roundedBase] = $this->deriveMaterialUpahFromDetail($rabDetail, $priceMode);
 
-                            $hargaSatuanDasar = (float)($rabDetail->harga_satuan ?? ($matDasar + $upahDasar));
+                            $hargaSatuanDasar = (float)($priceMode === 'gabung'
+                                ? ($roundedBase ?? $rabDetail->harga_satuan ?? ($matDasar + $upahDasar))
+                                : ($rabDetail->harga_satuan ?? ($matDasar + $upahDasar)));
+                            if ($priceMode === 'gabung') {
+                                $matDasar = $hargaSatuanDasar;
+                                $upahDasar = 0.0;
+                            }
+
                             $koef              = 1 + ($profitPercentage / 100) + ($overheadPercentage / 100);
 
                             $hargaSatuanCalculated = $hargaSatuanDasar * $koef;
                             $hargaSatuanPenawaran  = $hargaSatuanCalculated;
                             $totalItem             = $hargaSatuanPenawaran * $volume;
 
-                            $matCalc  = $matDasar  * $koef;
-                            $upahCalc = $upahDasar * $koef;
+                            $matCalc  = $priceMode === 'gabung' ? $hargaSatuanPenawaran : $matDasar  * $koef;
+                            $upahCalc = $priceMode === 'gabung' ? 0.0                   : $upahDasar * $koef;
 
                             RabPenawaranItem::create([
                                 'rab_penawaran_section_id'       => $newSection->id,
@@ -482,6 +489,55 @@ class RabPenawaranController extends Controller
     
     
     /**
+     * Hitung nomor penawaran berikutnya tanpa lock (hanya untuk pratinjau di form create).
+     */
+    private function previewNomorPenawaran(): string
+    {
+        $year = Carbon::now()->year;
+        $prefix = "DKD/{$year}/";
+
+        $latest = RabPenawaranHeader::whereNotNull('nomor_penawaran')
+            ->where('nomor_penawaran', 'like', $prefix.'%')
+            ->orderBy('nomor_penawaran', 'desc')
+            ->value('nomor_penawaran');
+
+        $next = $this->nextSequenceNumber($latest);
+
+        return $prefix . str_pad($next, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Generate nomor penawaran dengan lock di dalam transaksi agar unik dan berurutan.
+     */
+    private function lockAndGenerateNomorPenawaran(): string
+    {
+        $year = Carbon::now()->year;
+        $prefix = "DKD/{$year}/";
+
+        $latest = RabPenawaranHeader::where('nomor_penawaran', 'like', $prefix.'%')
+            ->orderBy('nomor_penawaran', 'desc')
+            ->lockForUpdate()
+            ->value('nomor_penawaran');
+
+        $next = $this->nextSequenceNumber($latest);
+
+        return $prefix . str_pad($next, 3, '0', STR_PAD_LEFT);
+    }
+
+    private function nextSequenceNumber(?string $latest): int
+    {
+        if (!$latest) {
+            return 1;
+        }
+
+        if (preg_match('/(\d+)$/', $latest, $match)) {
+            return ((int) $match[1]) + 1;
+        }
+
+        return 1;
+    }
+
+    /**
      * Membangun struktur data RAB yang dimuat sebelumnya untuk form penawaran.
      * Ini akan secara rekursif memuat RAB Details dari RabHeader dan anak-anaknya.
      *
@@ -576,9 +632,9 @@ class RabPenawaranController extends Controller
     }
 
     // letakkan di dalam class RabPenawaranController
-    private function deriveMaterialUpahFromDetail(?RabDetail $detail): array
+    private function deriveMaterialUpahFromDetail(?RabDetail $detail, string $priceMode = 'pisah'): array
     {
-        if (!$detail) return [0.0, 0.0];
+        if (!$detail) return [0.0, 0.0, null];
 
         // 1) Jika punya AHSP → jumlahkan dari AHSP details
         if ($detail->relationLoaded('ahsp') ? $detail->ahsp : $detail->ahsp()->with('details')->first()) {
@@ -591,14 +647,36 @@ class RabPenawaranController extends Controller
                 ->where('tipe', 'upah')
                 ->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan);
 
-            return [(float)$material, (float)$upah];
+            $rounded = $priceMode === 'gabung' ? (float)($ahsp->total_harga_pembulatan ?? 0) : null;
+
+            return [(float)$material, (float)$upah, $rounded ?: null];
         }
 
         // 2) Tidak punya AHSP → pakai kolom di rab_detail jika ada (atau 0)
         $material = (float)($detail->harga_material ?? 0);
         $upah     = (float)($detail->harga_upah ?? 0);
 
-        return [$material, $upah];
+        return [$material, $upah, null];
+    }
+
+    private function renderPenawaranDetail(Proyek $proyek, RabPenawaranHeader $penawaran, ?string $forcedView = null)
+    {
+        $penawaran->load([
+            'sections' => function($query) {
+                $query->with([
+                    'rabHeader',
+                    'items' => function($query) {
+                        $query->with('rabDetail');
+                    }
+                ])->orderBy('id');
+            }
+        ]);
+
+        $view = $forcedView ?? (($proyek->penawaran_price_mode ?? 'pisah') === 'gabung'
+            ? 'rab_penawaran.show-gab'
+            : 'rab_penawaran.show');
+
+        return view($view, compact('proyek', 'penawaran'));
     }
 
 
@@ -634,6 +712,7 @@ class RabPenawaranController extends Controller
     {
         $search = $request->input('search');
         $rabHeaderId = $request->input('rab_header_id');
+        $priceMode = optional(Proyek::find($proyekId))->penawaran_price_mode ?? 'pisah';
     
         $query = \App\Models\RabDetail::query()
             ->where('proyek_id', $proyekId)
@@ -645,12 +724,17 @@ class RabPenawaranController extends Controller
             ->with('ahsp');
     
         $results = $query->limit(20)->get();
-    
-        return response()->json($results->map(function ($item) {
+
+        return response()->json($results->map(function ($item) use ($priceMode) {
+            $rounded = optional($item->ahsp)->total_harga_pembulatan;
+            $basePrice = $priceMode === 'gabung'
+                ? ($rounded ?? $item->harga_satuan ?? (($item->harga_material ?? 0) + ($item->harga_upah ?? 0)))
+                : ($item->harga_satuan ?? (($item->harga_material ?? 0) + ($item->harga_upah ?? 0)));
+
             return [
                 'id' => $item->id,
                 'text' => "{$item->kode} - {$item->deskripsi} ({$item->satuan})",
-                'harga_satuan' => $item->harga_satuan,
+                'harga_satuan' => $basePrice,
                 'volume' => $item->volume,
                 'ahsp_id' => $item->ahsp_id,
                 'area' => $item->area, // Sertakan area
@@ -661,6 +745,10 @@ class RabPenawaranController extends Controller
 
    public function generatePdf(Proyek $proyek, RabPenawaranHeader $penawaran)
     {
+        if (($proyek->penawaran_price_mode ?? 'pisah') === 'gabung') {
+            return $this->generatePdfSinglePrice($proyek, $penawaran);
+        }
+
         // Eager load semua relasi yang diperlukan untuk tampilan PDF
         $penawaran->load([
             'sections' => function($query) {
@@ -1121,6 +1209,98 @@ class RabPenawaranController extends Controller
         return response($final)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', 'inline; filename="'.$filename.'"');
+    }
+
+    public function exportExcel(Request $request, Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        $mode = $request->query('mode', $proyek->penawaran_price_mode ?? 'pisah');
+        $mode = ($mode === 'gab') ? 'gab' : 'pisah';
+
+        $penawaran->load([
+            'sections' => function($q){
+                $q->with(['rabHeader', 'items.rabDetail'])->orderBy('id');
+            }
+        ]);
+
+        // kalkulasi diskon + pajak agar sejajar dengan PDF
+        $sumMaterial = 0.0; $sumJasa = 0.0;
+        foreach ($penawaran->sections as $sec) {
+            foreach (($sec->items ?? []) as $it) {
+                $vol = (float)($it->volume ?? 0);
+                $sumMaterial += (float)($it->harga_material_penawaran_item ?? 0) * $vol;
+                $sumJasa     += (float)($it->harga_upah_penawaran_item     ?? 0) * $vol;
+            }
+        }
+
+        $discPct   = (float)($penawaran->discount_percentage ?? 0);
+        $discCoef  = max(0, 1 - ($discPct / 100));
+        $matNet    = $sumMaterial * $discCoef;
+        $jasaNet   = $sumJasa     * $discCoef;
+        $subtotal  = $matNet + $jasaNet;
+
+        $tax       = optional($proyek->taxProfileAktif);
+        $isTaxable = (int)($tax->is_taxable ?? 1) === 1;
+        $ppnMode   = $tax->ppn_mode ?? 'exclude';
+        $ppnRate   = (float)($tax->ppn_rate ?? 11.0);
+        $applyPph  = (int)($tax->apply_pph ?? 0) === 1;
+        $pphRate   = (float)($tax->pph_rate ?? 2.0);
+        $pphBaseKind = (string)($tax->pph_base ?? 'dpp');
+        $extraOpts = is_array($tax->extra_options ?? null) ? $tax->extra_options : [];
+        $pphDppSource = (string)($extraOpts['pph_dpp_source'] ?? 'jasa');
+
+        if (!$isTaxable) {
+            $dpp = $subtotal; $ppn = 0.0; $totalPlusPpn = $subtotal;
+        } elseif ($ppnMode === 'include') {
+            $dpp = $subtotal / (1 + $ppnRate/100);
+            $ppn = $subtotal - $dpp;
+            $totalPlusPpn = $subtotal;
+        } else {
+            $dpp = $subtotal;
+            $ppn = $dpp * ($ppnRate/100);
+            $totalPlusPpn = $dpp + $ppn;
+        }
+
+        $jasaDpp = ($isTaxable && $ppnMode === 'include') ? ($jasaNet / (1 + $ppnRate/100)) : $jasaNet;
+
+        if ($applyPph) {
+            if ($pphDppSource === 'material_jasa') {
+                $pphBaseAmount = ($pphBaseKind === 'dpp') ? $dpp : $subtotal;
+            } else {
+                $pphBaseAmount = ($pphBaseKind === 'dpp') ? $jasaDpp : $jasaNet;
+            }
+            $pph = $pphBaseAmount * ($pphRate/100);
+        } else {
+            $pph = 0.0;
+        }
+
+        $totalDibayar = $totalPlusPpn - $pph;
+
+        $calc = compact(
+            'discPct','discCoef','sumMaterial','sumJasa','matNet','jasaNet','subtotal',
+            'isTaxable','ppnMode','ppnRate','ppn','dpp','totalPlusPpn','applyPph','pphRate',
+            'pphBaseKind','pphDppSource','pph','totalDibayar'
+        );
+
+        $safeName = preg_replace('/[^A-Za-z0-9_-]+/', '_', (string)($penawaran->nomor_penawaran ?? $penawaran->nama_penawaran ?? 'penawaran'));
+        $fileName = 'Penawaran_'.$safeName.'_'.$mode.'_'.Carbon::now()->format('Ymd_His').'.xlsx';
+
+        $export = new class($proyek, $penawaran, $mode, $calc) implements FromView {
+            private $proyek; private $penawaran; private $mode; private $calc;
+            public function __construct($proyek, $penawaran, $mode, $calc){
+                $this->proyek = $proyek; $this->penawaran = $penawaran; $this->mode = $mode; $this->calc = $calc;
+            }
+            public function view(): \Illuminate\Contracts\View\View
+            {
+                return view('rab_penawaran.export_excel', [
+                    'proyek'    => $this->proyek,
+                    'penawaran' => $this->penawaran,
+                    'mode'      => $this->mode,
+                    'calc'      => $this->calc,
+                ]);
+            }
+        };
+
+        return Excel::download($export, $fileName);
     }
 
     public function updateKeterangan(

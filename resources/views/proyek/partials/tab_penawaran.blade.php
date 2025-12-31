@@ -76,7 +76,10 @@
       { data: 'kode', name: 'nama_penawaran',
         render: function(data, type, row){
           const url = `{{ url('proyek/'.$proyek->id.'/penawaran') }}/${row.id}`;
-          return `<a href="${url}" class="text-decoration-none fw-semibold">${data ?? '-'}</a>`;
+          const nomor = row.nomor_penawaran ?? data ?? '-';
+          const nama = row.nama_penawaran ?? '';
+          const namaLine = nama ? `<div class="text-muted small">${nama}</div>` : '';
+          return `<a href="${url}" class="text-decoration-none fw-semibold">${nomor}</a>${namaLine}`;
         }
       },
       { data: 'proyek_nama', name: 'proyek_nama' },

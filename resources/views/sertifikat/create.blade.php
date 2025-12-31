@@ -55,6 +55,19 @@
           <label class="form-label">Uang Muka %</label>
           <input type="number" step="0.01" class="form-control" name="uang_muka_persen" id="uang_muka_persen" required>
         </div>
+
+        <!-- Hidden field for uang_muka_penjualan_id -->
+        <input type="hidden" name="uang_muka_penjualan_id" id="uang_muka_penjualan_id">
+
+        <!-- UM Info display -->
+        <div class="col-md-12" id="um_info_container" style="display: none;">
+          <div class="alert alert-info">
+            <strong>Info Uang Muka Penjualan:</strong><br>
+            Nominal: <span id="um_nominal">-</span> | 
+            Digunakan: <span id="um_digunakan">-</span> | 
+            Sisa: <span id="um_sisa">-</span>
+          </div>
+        </div>
         <div class="col-md-3">
           <label class="form-label">Pemotongan UM % (= % progress)</label>
           <input type="number" step="0.01" class="form-control" name="pemotongan_um_persen" id="pemotongan_um_persen" required>
@@ -127,6 +140,31 @@
 
     set('pemotongan_um_persen', d.persen_progress); // = % progress
     set('termin_ke',         d.termin_ke);
+
+    // Uang Muka Penjualan
+    if (d.uang_muka_penjualan_id) {
+      set('uang_muka_penjualan_id', d.uang_muka_penjualan_id);
+      const infoCtr = el('um_info_container');
+      if (infoCtr) {
+        infoCtr.style.display = 'block';
+        el('um_nominal').textContent = formatRupiah(d.uang_muka_nominal || 0);
+        el('um_digunakan').textContent = formatRupiah(d.uang_muka_digunakan || 0);
+        el('um_sisa').textContent = formatRupiah((d.uang_muka_nominal || 0) - (d.uang_muka_digunakan || 0));
+      }
+    } else {
+      const infoCtr = el('um_info_container');
+      if (infoCtr) infoCtr.style.display = 'none';
+      set('uang_muka_penjualan_id', '');
+    }
+  }
+
+  function formatRupiah(num) {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(num);
   }
 
   el('bapp_id').addEventListener('change', function(){

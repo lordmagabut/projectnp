@@ -132,6 +132,26 @@
 
           <div class="row g-3 mt-1">
             <div class="col-md-4">
+              <label class="form-label">Tipe Harga Penawaran</label>
+              @php $pm = old('penawaran_price_mode', $proyek->penawaran_price_mode ?? 'pisah'); @endphp
+              <select name="penawaran_price_mode" class="form-select" required>
+                <option value="pisah" {{ $pm==='pisah'?'selected':'' }}>Pisah Material + Jasa (default)</option>
+                <option value="gabung" {{ $pm==='gabung'?'selected':'' }}>Gabung (Harga Pembulatan AHSP)</option>
+              </select>
+              <small class="text-muted">Gabung memakai harga pembulatan AHSP dan hanya satu kolom harga.</small>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Mode Pemotongan Uang Muka</label>
+              @php $umMode = old('uang_muka_mode', $proyek->uang_muka_mode ?? 'proporsional'); @endphp
+              <select name="uang_muka_mode" class="form-select" required>
+                <option value="proporsional" {{ $umMode==='proporsional'?'selected':'' }}>Proporsional (ikut progress BAPP)</option>
+                <option value="utuh" {{ $umMode==='utuh'?'selected':'' }}>Utuh (dipotong penuh di sertifikat/invoice)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-md-4">
               <label for="status" class="form-label">Status</label>
               <select name="status" class="form-select" required>
                 @php $statusVal = old('status', $proyek->status ?? 'perencanaan'); @endphp

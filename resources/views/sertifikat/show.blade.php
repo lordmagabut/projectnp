@@ -40,6 +40,24 @@
         <th>Nilai WO Total</th>
         <td>Rp {{ number_format($sp->nilai_wo_total, 2, ',', '.') }}</td>
       </tr>
+
+      @if($sp->uangMukaPenjualan)
+      <tr style="background-color: #f9f9f9;">
+        <th>Uang Muka Penjualan</th>
+        <td>
+          <strong>{{ optional($sp->uangMukaPenjualan)->nomor_bukti ?? '-' }}</strong><br>
+          Nominal: Rp {{ number_format(optional($sp->uangMukaPenjualan)->nominal, 2, ',', '.') }}<br>
+          Digunakan: Rp {{ number_format(optional($sp->uangMukaPenjualan)->nominal_digunakan, 2, ',', '.') }}<br>
+          Sisa: Rp {{ number_format(optional($sp->uangMukaPenjualan)->getSisaUangMuka(), 2, ',', '.') }}<br>
+          Status: <span class="badge bg-info">{{ optional($sp->uangMukaPenjualan)->status ?? 'diterima' }}</span>
+        </td>
+      </tr>
+      @endif
+
+      <tr>
+        <th>Pemotongan UM</th>
+        <td>Rp {{ number_format($sp->pemotongan_um_nilai, 2, ',', '.') }}</td>
+      </tr>
       <tr>
         <th>Total Dibayar (sebelum PPN)</th>
         <td>Rp {{ number_format($sp->total_dibayar, 2, ',', '.') }}</td>

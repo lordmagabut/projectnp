@@ -6,13 +6,18 @@
     body { font-family:'DejaVu Sans',sans-serif; font-size:10px; line-height:1.4; color:#333; }
     @page landscape { size: A4 landscape; margin: 12mm; }
     .landscape { page: landscape; }
+    .landscape table { font-size:9.5px; }
+    .landscape th, .landscape td { padding:4px 6px; }
     .nowrap { white-space: nowrap; }
     .desc { font-size: 9.5px; }
     .spec { display: block; margin-top: 3px; font-size: 9px; color: #666; white-space: normal; }
-    .row-subheader td { background:#f7fbff; font-weight:600; }
+    .row-subheader td { background:#f7fbff; font-weight:bold; }
     .row-area td { background:#eef8ff; font-weight:600; font-style:italic; }
     table { width:100%; border-collapse:collapse; margin-bottom:14px; }
     th,td { border:1px solid #ddd; padding:6px; vertical-align:top; }
+    /* Ringankan baris seperti versi detail multi-bagian */
+    .tbl-detail { font-size:9.5px; }
+    .tbl-detail th, .tbl-detail td { padding:4px 6px; line-height:1.15; }
     th { background:#f2f2f2; font-weight:bold; color:#555; }
     .text-end { text-align:right; }
     .fw-bold { font-weight:bold; }
@@ -25,6 +30,14 @@
   </style>
 </head>
 <body class="landscape">
+  <table style="margin-bottom:8px;">
+    <tr>
+      <th style="width:18%; text-align:left;">Nomor Penawaran</th>
+      <td>{{ $penawaran->nomor_penawaran ?? '—' }}</td>
+      <th style="width:14%; text-align:left;">Tanggal</th>
+      <td>{{ optional(\Carbon\Carbon::parse($penawaran->tanggal_penawaran ?? now()))->translatedFormat('d F Y') }}</td>
+    </tr>
+  </table>
 
   <h3>Detail Bagian Penawaran</h3>
 

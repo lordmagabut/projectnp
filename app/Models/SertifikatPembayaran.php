@@ -9,7 +9,7 @@ class SertifikatPembayaran extends Model
     protected $table = 'sertifikat_pembayaran';
 
     protected $fillable = [
-        'bapp_id','tanggal','termin_ke',
+        'bapp_id','uang_muka_penjualan_id','tanggal','termin_ke',
         'persen_progress','persen_progress_prev','persen_progress_delta',
 
         'nilai_wo_material','nilai_wo_jasa','nilai_wo_total',
@@ -170,5 +170,10 @@ class SertifikatPembayaran extends Model
                 );
             }
         });
+    }
+
+    public function uangMukaPenjualan()
+    {
+        return $this->belongsTo(UangMukaPenjualan::class, 'uang_muka_penjualan_id');
     }
 }

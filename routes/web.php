@@ -38,6 +38,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AccountMappingController;
 use App\Http\Controllers\OpeningBalanceController;
 use App\Http\Controllers\UangMukaPembelianController;
+use App\Http\Controllers\UangMukaPenjualanController;
 
 
 // =========================
@@ -133,6 +134,15 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/uang-muka-pembelian/{id}/update-paid', [UangMukaPembelianController::class, 'updatePaid'])->name('uang-muka-pembelian.update-paid');
     Route::post('/uang-muka-pembelian/{id}/cancel-payment', [UangMukaPembelianController::class, 'cancelPayment'])->name('uang-muka-pembelian.cancel-payment');
     Route::delete('/uang-muka-pembelian/{id}', [UangMukaPembelianController::class, 'destroy'])->name('uang-muka-pembelian.destroy');
+
+    // ========== Uang Muka Penjualan ==========
+    Route::get('/uang-muka-penjualan', [UangMukaPenjualanController::class, 'index'])->name('uang-muka-penjualan.index');
+    Route::get('/uang-muka-penjualan/create', [UangMukaPenjualanController::class, 'create'])->name('uang-muka-penjualan.create');
+    Route::post('/uang-muka-penjualan/store', [UangMukaPenjualanController::class, 'store'])->name('uang-muka-penjualan.store');
+    Route::get('/uang-muka-penjualan/{id}', [UangMukaPenjualanController::class, 'show'])->name('uang-muka-penjualan.show');
+    Route::get('/uang-muka-penjualan/{id}/edit', [UangMukaPenjualanController::class, 'edit'])->name('uang-muka-penjualan.edit');
+    Route::put('/uang-muka-penjualan/{id}', [UangMukaPenjualanController::class, 'update'])->name('uang-muka-penjualan.update');
+    Route::delete('/uang-muka-penjualan/{id}', [UangMukaPenjualanController::class, 'destroy'])->name('uang-muka-penjualan.destroy');
     Route::get('/uang-muka-pembelian/{id}/bkk', [UangMukaPembelianController::class, 'printBkk'])->name('uang-muka-pembelian.bkk');
     Route::get('/uang-muka-pembelian/{id}/bkk/create', [UangMukaPembelianController::class, 'createBkk'])->name('uang-muka-pembelian.bkk.create');
     Route::post('/uang-muka-pembelian/{id}/bkk', [UangMukaPembelianController::class, 'storeBkk'])->name('uang-muka-pembelian.bkk.store');
@@ -199,6 +209,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{penawaran}/pdf',        [RabPenawaranController::class, 'generatePdf'])->name('generatePdf');
         Route::get('/{penawaran}/pdf-split',  [RabPenawaranController::class, 'generatePdfSplit'])->name('generatePdfSplit');
         Route::get('/{penawaran}/PdfSinglePrice',  [RabPenawaranController::class, 'generatePdfSinglePrice'])->name('generatePdfSinglePrice');
+        Route::get('/{penawaran}/export-excel', [RabPenawaranController::class, 'exportExcel'])->name('exportExcel');
         Route::get('/{penawaran}/show-gab',   [RabPenawaranController::class, 'showGab'])->name('showGab');
 
         // Approve & Snapshot schedule penawaran
@@ -234,11 +245,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/',            [SertifikatPembayaranController::class,'index'])->name('index');
         Route::get('/create',      [SertifikatPembayaranController::class,'create'])->name('create');
         Route::post('/',           [SertifikatPembayaranController::class,'store'])->name('store');
+        Route::get('/{id}/edit',   [SertifikatPembayaranController::class,'edit'])->name('edit');
         Route::get('/{id}',        [SertifikatPembayaranController::class,'show'])->name('show');
         Route::get('/{id}/cetak',  [SertifikatPembayaranController::class,'cetak'])->name('cetak'); // PDF portrait
-        Route::resource('sertifikat', SertifikatPembayaranController::class);
-        Route::get('sertifikat/{id}/pdf', [SertifikatPembayaranController::class, 'generatePdf'])
-    ->name('sertifikat.pdf');
+        Route::put('/{id}',        [SertifikatPembayaranController::class,'update'])->name('update');
+        Route::delete('/{id}',     [SertifikatPembayaranController::class,'destroy'])->name('destroy');
 
 
     });

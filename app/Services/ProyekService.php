@@ -15,6 +15,12 @@ class ProyekService
             'nilai_spk' => 'nullable|numeric',
             'tanggal_mulai' => 'nullable|date',
             'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
+            'status' => 'required|in:perencanaan,berjalan,selesai',
+            'lokasi' => 'required|string|max:255',
+            'jenis_proyek' => 'required|in:kontraktor,cost and fee,office',
+            'penawaran_price_mode' => 'required|in:pisah,gabung',
+            'uang_muka_mode' => 'required|in:proporsional,utuh',
+            'file_spk' => 'nullable|file|mimes:pdf|max:10240',
         ]);
     }
 
@@ -33,6 +39,8 @@ class ProyekService
             'diskon_rab' => 'nullable|numeric|min:0',
             'file_spk' => 'nullable|file|mimes:pdf|max:10240',
             'file_gambar_kerja' => 'nullable|file|mimes:pdf,jpg,jpeg|max:10240', // Max 10MB
+            'penawaran_price_mode' => 'required|in:pisah,gabung',
+            'uang_muka_mode' => 'required|in:proporsional,utuh',
         ]);
     }
 

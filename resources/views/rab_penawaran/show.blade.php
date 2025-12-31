@@ -119,6 +119,7 @@
     <div class="table-responsive mb-4">
       <table class="table table-borderless table-sm detail-table">
         <tbody>
+          <tr><th>Nomor Penawaran</th><td>: {{ $penawaran->nomor_penawaran ?? '—' }}</td></tr>
           <tr><th>Nama Penawaran</th><td>: {{ $penawaran->nama_penawaran }}</td></tr>
           <tr><th>Tanggal Penawaran</th><td>: {{ \Carbon\Carbon::parse($penawaran->tanggal_penawaran)->format('d-m-Y') }}</td></tr>
           <tr><th>Proyek</th><td>: {{ $proyek->nama_proyek }} - {{ $proyek->pemberiKerja->nama_pemberi_kerja ?? '' }}</td></tr>
@@ -428,17 +429,19 @@
             <th style="width:10%">Area</th>
             <th class="text-end" style="width:10%">Volume</th>
             <th style="width:8%">Sat</th>
-            <th class="text-end" style="width:12%">Total Material</th>
-            <th class="text-end" style="width:12%">Total Jasa</th>
-            <th class="text-end" style="width:12%">Total (Mat+Jasa)</th>
+            <th class="text-end" style="width:11%">Hrg Sat Material</th>
+            <th class="text-end" style="width:11%">Hrg Sat Jasa</th>
+            <th class="text-end" style="width:11%">Total Material</th>
+            <th class="text-end" style="width:11%">Total Jasa</th>
+            <th class="text-end" style="width:11%">Total (Mat+Jasa)</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td colspan="8" class="text-center text-muted py-3">Ketik kata kunci untuk menampilkan hasil…</td></tr>
+          <tr><td colspan="10" class="text-center text-muted py-3">Ketik kata kunci untuk menampilkan hasil…</td></tr>
         </tbody>
         <tfoot class="table-light">
           <tr>
-            <td colspan="5" class="text-end fw-semibold">TOTAL HASIL</td>
+            <td colspan="7" class="text-end fw-semibold">TOTAL HASIL</td>
             <td class="text-end fw-semibold" id="excelLikeTotMat">Rp 0</td>
             <td class="text-end fw-semibold" id="excelLikeTotJasa">Rp 0</td>
             <td class="text-end fw-bold"     id="excelLikeTotAll">Rp 0</td>
@@ -469,6 +472,10 @@
 
       <a target="_blank" class="btn btn-outline-primary btn-sm" href="{{ route('proyek.penawaran.pdf-mixed', [$proyek->id, $penawaran->id]) }}">
         PDF (Material + Jasa)
+      </a>
+
+      <a class="btn btn-outline-success btn-sm" href="{{ route('proyek.penawaran.exportExcel', [$proyek->id, $penawaran->id, 'mode' => 'pisah']) }}">
+        <i class="fas fa-file-excel me-1"></i> Export Excel
       </a>
 
       {{-- SETUJUI → buka modal upload PDF --}}
@@ -724,8 +731,10 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
       if (!ok) return;
 
       const coef = useDisc ? DISC_COEF : 1.0;
-      const tMat = (it.tot_mat || 0) * coef;
-      const tJas = (it.tot_jasa || 0) * coef;
+      const uMat = (it.unit_mat || 0) * coef;
+      const uJas = (it.unit_jasa || 0) * coef;
+      const tMat = uMat * (it.volume || 0);
+      const tJas = uJas * (it.volume || 0);
       const tAll = tMat + tJas;
 
       sumM += tMat; sumJ += tJas; sumA += tAll;
@@ -740,6 +749,8 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
           <td>${mark(it.area, tokens)}</td>
           <td class="text-end">${(it.volume ?? 0).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
           <td>${esc(it.satuan)}</td>
+          <td class="text-end">${fmtRp(uMat)}</td>
+          <td class="text-end">${fmtRp(uJas)}</td>
           <td class="text-end">${fmtRp(tMat)}</td>
           <td class="text-end">${fmtRp(tJas)}</td>
           <td class="text-end fw-semibold">${fmtRp(tAll)}</td>
@@ -747,7 +758,7 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
       `);
     });
 
-    tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="8" class="text-center text-muted py-3">Tidak ada item yang cocok.</td></tr>';
+    tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="10" class="text-center text-muted py-3">Tidak ada item yang cocok.</td></tr>';
     totM.textContent = fmtRp(sumM);
     totJ.textContent = fmtRp(sumJ);
     totA.textContent = fmtRp(sumA);

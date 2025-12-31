@@ -18,6 +18,7 @@ class SalesOrderController extends Controller
         if ($q = $request->get('q')) {
             $query->where(function($s) use ($q) {
                 $s->where('nama_penawaran', 'like', "%{$q}%")
+                  ->orWhere('nomor_penawaran', 'like', "%{$q}%")
                   ->orWhereHas('proyek', function($p) use ($q){
                       $p->where('nama_proyek', 'like', "%{$q}%");
                   });

@@ -67,7 +67,14 @@ body { font-family:'DejaVu Sans',sans-serif; font-size:10px; line-height:1.4; co
   </style>
 </head>
 <body>
-
+  <table style="margin-bottom:8px;">
+    <tr>
+      <th style="width:18%; text-align:left;">Nomor Penawaran</th>
+      <td>{{ $penawaran->nomor_penawaran ?? '—' }}</td>
+      <th style="width:14%; text-align:left;">Tanggal</th>
+      <td>{{ optional(\Carbon\Carbon::parse($penawaran->tanggal_penawaran ?? now()))->translatedFormat('d F Y') }}</td>
+    </tr>
+  </table>
   <h3>Detail Bagian Penawaran</h3>
 
   @php

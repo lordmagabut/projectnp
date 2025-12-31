@@ -18,6 +18,36 @@ class SertifikatPembayaranController extends Controller
         return view('sertifikat.index', compact('list'));
     }
 
+    public function edit($id)
+    {
+        $sp = SertifikatPembayaran::with('bapp.proyek')->findOrFail($id);
+        return view('sertifikat.edit', compact('sp'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $sp = SertifikatPembayaran::findOrFail($id);
+
+        $data = $request->validate([
+            'nomor'       => 'required|string|max:255',
+            'tanggal'     => 'required|date',
+            'termin_ke'   => 'required|integer|min:1',
+        ]);
+
+        $sp->fill($data);
+        $sp->save();
+
+        return redirect()->route('sertifikat.index')->with('success', 'Sertifikat diperbarui.');
+    }
+
+    public function destroy($id)
+    {
+        $sp = SertifikatPembayaran::findOrFail($id);
+        $sp->delete();
+
+        return redirect()->route('sertifikat.index')->with('success', 'Sertifikat dihapus.');
+    }
+
     public function create(Request $r)
     {
         // Hanya BAPP yang approved
@@ -29,6 +59,8 @@ class SertifikatPembayaranController extends Controller
         // Siapkan payload JSON untuk autofill
         $payload = $bapps->map(function($b){
             $nilaiMaterial = 0; $nilaiUpah = 0; $nilaiTotal = 0;
+            $uangMukaPersenFromSO = 0;
+            $uangMukaIdFromSO = null;
 
             if ($b->penawaran) {
                 // Hitung split Material & Upah dari rab_penawaran_items × volume
@@ -44,6 +76,26 @@ class SertifikatPembayaranController extends Controller
                 $nilaiMaterial = (float)($sum->mat ?? 0);
                 $nilaiUpah     = (float)($sum->uph ?? 0);
                 $nilaiTotal    = (float)($sum->tot ?? 0);
+
+                // Cari SO & UM penjualan dari penawaran
+                $so = \App\Models\SalesOrder::where('penawaran_id', $b->penawaran->id)->first();
+                if ($so) {
+                    $uangMukaPersenFromSO = (float)($so->uang_muka_persen ?? 0);
+                    if ($so->uangMuka) {
+                        $uangMukaIdFromSO = $so->uangMuka->id;
+                    }
+                }
+            }
+
+            // Get UM penjualan details if exist
+            $umNominal = 0;
+            $umDigunakan = 0;
+            if ($uangMukaIdFromSO) {
+                $um = \App\Models\UangMukaPenjualan::find($uangMukaIdFromSO);
+                if ($um) {
+                    $umNominal = (float)($um->nominal ?? 0);
+                    $umDigunakan = (float)($um->nominal_digunakan ?? 0);
+                }
             }
 
             $label = sprintf(
@@ -59,7 +111,10 @@ class SertifikatPembayaranController extends Controller
                 'nilai_wo_material'     => round($nilaiMaterial,2),
                 'nilai_wo_jasa'         => round($nilaiUpah,2),
                 'final_total'           => round($nilaiTotal,2),
-                'uang_muka_persen'      => 0,
+                'uang_muka_persen'      => $uangMukaPersenFromSO,
+                'uang_muka_penjualan_id' => $uangMukaIdFromSO,
+                'uang_muka_nominal'     => $umNominal,
+                'uang_muka_digunakan'   => $umDigunakan,
                 'retensi_persen'        => 5,
                 'ppn_persen'            => 11,
                 'persen_progress'       => (float)($b->total_now_pct ?? 0),       // kumulatif
@@ -95,6 +150,7 @@ class SertifikatPembayaranController extends Controller
 {
     $data = $request->validate([
         'bapp_id'               => 'required|exists:bapps,id',
+        'uang_muka_penjualan_id' => 'nullable|exists:uang_muka_penjualan,id',
         'tanggal'               => 'required|date',
         'termin_ke'             => 'required|integer|min:1',
         'persen_progress'       => 'required|numeric|min:0',   // KUMULATIF
@@ -116,15 +172,21 @@ class SertifikatPembayaranController extends Controller
     $bapp = Bapp::with(['proyek','penawaran'])->findOrFail($data['bapp_id']);
     $proyekId    = optional($bapp->proyek)->id;
     $penawaranId = optional($bapp->penawaran)->id;
+    $umMode      = (string) (optional($bapp->proyek)->uang_muka_mode ?? 'proporsional');
 
     // Cari progress kumulatif sebelumnya untuk kontrak yang sama
     // (ambil SP ber-tanggal < tanggal ini; kalau mau lebih ketat, batasi ke status "approved")
-    $prevPct = (float) SertifikatPembayaran::whereHas('bapp', function($q) use ($proyekId, $penawaranId) {
-                        $q->where('proyek_id', $proyekId)
-                          ->where('penawaran_id', $penawaranId);
-                    })
-                    ->where('tanggal', '<', $data['tanggal'])
-                    ->max('persen_progress');
+    $spQuery = SertifikatPembayaran::whereHas('bapp', function($q) use ($proyekId, $penawaranId) {
+        $q->where('proyek_id', $proyekId)
+            ->where('penawaran_id', $penawaranId);
+    });
+
+    $prevPct = (float) (clone $spQuery)
+        ->where('tanggal', '<', $data['tanggal'])
+        ->max('persen_progress');
+    $prevUmCutTotal = (float) (clone $spQuery)
+        ->where('tanggal', '<', $data['tanggal'])
+        ->sum('pemotongan_um_nilai');
 
     // Progress kumulatif sekarang & delta periode ini
     $currPct  = (float) $data['persen_progress'];           // kumulatif
@@ -185,6 +247,33 @@ class SertifikatPembayaranController extends Controller
     $um_cut_J_cum_prev= round($uang_muka_J * $prevPct/100, 2);
     $um_cut_J_now     = $um_cut_J_cum_now - $um_cut_J_cum_prev;
 
+    // ---- Override jika mode UM utuh (potong penuh di sertifikat/invoice) ----
+    if ($umMode === 'utuh') {
+        $umCutPrevCapped = round(min($uang_muka_total, $prevUmCutTotal), 2);
+
+        $um_cut_cum_prev = $umCutPrevCapped;
+        $um_cut_cum_now  = round($uang_muka_total, 2);
+        $pemotongan_um_nilai = round(max(0, $uang_muka_total - $umCutPrevCapped), 2);
+
+        $subtotal_cum_now  = $progress_cum_now - $um_cut_cum_now - $retensi_cum_now;
+        $subtotal_cum_prev = $progress_cum_prev - $um_cut_cum_prev - $retensi_cum_prev;
+        $nilai_progress_rp = $progress_cum_now - $progress_cum_prev;
+        $retensi_nilai     = $retensi_cum_now - $retensi_cum_prev;
+        $total_dibayar     = $subtotal_cum_now - $subtotal_cum_prev;
+
+        $ratioM = $uang_muka_total > 0 ? $uang_muka_M / $uang_muka_total : 0.0;
+        $ratioJ = $uang_muka_total > 0 ? $uang_muka_J / $uang_muka_total : 0.0;
+
+        $um_cut_M_cum_prev = round(min($uang_muka_M, $um_cut_cum_prev * $ratioM), 2);
+        $um_cut_J_cum_prev = round(min($uang_muka_J, $um_cut_cum_prev * $ratioJ), 2);
+        $um_cut_M_cum_now  = round($uang_muka_M, 2);
+        $um_cut_J_cum_now  = round($uang_muka_J, 2);
+
+        $um_cut_M_now = round(max(0, $um_cut_M_cum_now - $um_cut_M_cum_prev), 2);
+        $um_cut_J_now = round(max(0, $um_cut_J_cum_now - $um_cut_J_cum_prev), 2);
+    }
+
+    // ---- DPP material / jasa (periode ini) ----
     $dpp_material = max(0, round($progress_M_now - $um_cut_M_now - $retensi_M_now, 2));
     $dpp_jasa     = max(0, round($progress_J_now - $um_cut_J_now - $retensi_J_now, 2));
 
@@ -263,13 +352,19 @@ class SertifikatPembayaranController extends Controller
     ]);
 
     $sp = SertifikatPembayaran::create($payload);
-
+    // Track UM penjualan usage
+    if (!empty($data['uang_muka_penjualan_id'])) {
+        $umPenjualan = \App\Models\UangMukaPenjualan::find($data['uang_muka_penjualan_id']);
+        if ($umPenjualan) {
+            $umPenjualan->updateNominalDigunakan($pemotongan_um_nilai);
+        }
+    }
     return redirect()->route('sertifikat.show', $sp->id)->with('success','Sertifikat tersimpan (delta).');
 }
 
     public function show($id)
     {
-        $sp = SertifikatPembayaran::with('bapp.proyek')->findOrFail($id);
+        $sp = SertifikatPembayaran::with('bapp.proyek', 'uangMukaPenjualan')->findOrFail($id);
         return view('sertifikat.show', compact('sp'));
     }
 

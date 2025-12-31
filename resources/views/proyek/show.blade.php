@@ -128,6 +128,24 @@
                   <td>{{ $proyek->jenis_proyek }}</td>
                 </tr>
                 <tr>
+                  <th><i data-feather="tag" class="me-2 text-muted"></i> Mode Harga Penawaran</th>
+                  <td>
+                    @php $pmode = $proyek->penawaran_price_mode ?? 'pisah'; @endphp
+                    <span class="badge bg-outline-primary text-primary border">{{ strtoupper($pmode) }}</span>
+                    <span class="text-muted ms-2">{{ $pmode === 'gabung' ? 'Harga gabungan pakai pembulatan AHSP' : 'Pisah material + jasa' }}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th><i data-feather="credit-card" class="me-2 text-muted"></i> Kebijakan Uang Muka</th>
+                  <td>
+                    @php $umMode = $proyek->uang_muka_mode ?? 'proporsional'; @endphp
+                    <span class="badge bg-outline-primary text-primary border">{{ strtoupper($umMode) }}</span>
+                    <span class="text-muted ms-2">
+                      {{ $umMode === 'utuh' ? 'Dipulihkan utuh pada sertifikat/invoice pertama' : 'Dipulihkan proporsional mengikuti progres BAPP' }}
+                    </span>
+                  </td>
+                </tr>
+                <tr>
                   <th><i data-feather="check-circle" class="me-2 text-muted"></i> Status</th>
                   <td>
                     @if($proyek->status == 'aktif')
@@ -777,9 +795,22 @@
               <a href="{{ route('sertifikat.show', $s->id) }}" class="btn btn-sm btn-outline-teal me-1">
                 <i data-feather="eye" class="me-1"></i> Detail
               </a>
+              <a href="{{ route('sertifikat.edit', $s->id) }}" class="btn btn-sm btn-outline-primary me-1">
+                <i data-feather="edit" class="me-1"></i> Edit
+              </a>
+              <a href="{{ route('sertifikat.create', ['bapp_id' => $s->bapp_id]) }}" class="btn btn-sm btn-outline-warning me-1">
+                <i data-feather="refresh-ccw" class="me-1"></i> Revisi
+              </a>
               <a href="{{ route('sertifikat.cetak', $s->id) }}" class="btn btn-sm btn-outline-primary">
                 <i data-feather="download" class="me-1"></i> PDF
               </a>
+              <form action="{{ route('sertifikat.destroy', $s->id) }}" method="POST" class="d-inline ms-1" onsubmit="return confirm('Hapus sertifikat ini?');">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i data-feather="trash-2" class="me-1"></i> Hapus
+                </button>
+              </form>
             </td>
           </tr>
         @empty

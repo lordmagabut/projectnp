@@ -15,7 +15,16 @@
         <a href="{{ route('so.index') }}" class="btn btn-outline-secondary">
           <i data-feather="arrow-left" class="icon-sm"></i> Kembali
         </a>
-        <div class="d-flex align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          @if(!$so->uangMuka)
+            <a href="{{ route('uang-muka-penjualan.create', ['sales_order_id' => $so->id]) }}" class="btn btn-success text-white me-2">
+              <i data-feather="plus" class="icon-sm"></i> Buat UM Penjualan
+            </a>
+          @else
+            <a href="{{ route('uang-muka-penjualan.show', $so->uangMuka->id) }}" class="btn btn-info text-white me-2">
+              <i data-feather="eye" class="icon-sm"></i> Lihat UM
+            </a>
+          @endif
           <button onclick="window.print()" class="btn btn-info text-white me-2"><i data-feather="printer" class="icon-sm"></i> Cetak</button>
           <span class="badge bg-primary py-2 px-3">SO</span>
         </div>

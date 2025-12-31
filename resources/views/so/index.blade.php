@@ -45,6 +45,15 @@
                     <a href="{{ route('so.show', $p->salesOrder->id) }}" class="btn btn-xs btn-outline-info me-1" title="Detail SO">
                       <i data-feather="eye" class="icon-sm"></i>
                     </a>
+                    @if(!$p->salesOrder->uangMuka)
+                      <a href="{{ route('uang-muka-penjualan.create', ['sales_order_id' => $p->salesOrder->id]) }}" class="btn btn-xs btn-outline-success me-1" title="Buat UM Penjualan">
+                        <i data-feather="plus" class="icon-sm"></i> UM
+                      </a>
+                    @else
+                      <a href="{{ route('uang-muka-penjualan.show', $p->salesOrder->uangMuka->id) }}" class="btn btn-xs btn-outline-warning me-1" title="Lihat UM Penjualan">
+                        <i data-feather="eye" class="icon-sm"></i> UM
+                      </a>
+                    @endif
                   @else
                     <a href="{{ route('proyek.penawaran.show', ['proyek' => $p->proyek_id, 'penawaran' => $p->id]) }}" class="btn btn-xs btn-outline-secondary me-1" title="Detail Penawaran">
                       <i data-feather="file-text" class="icon-sm"></i>

@@ -11,6 +11,7 @@ class RabPenawaranHeader extends Model
 
     protected $fillable = [
         'proyek_id',
+        'nomor_penawaran',
         'nama_penawaran',
         'tanggal_penawaran',
         'versi',

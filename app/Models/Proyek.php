@@ -25,7 +25,9 @@ class Proyek extends Model
         'lokasi',
         'file_spk',
         'file_gambar_kerja',
-        'jenis_proyek'     
+        'jenis_proyek',
+        'penawaran_price_mode',
+        'uang_muka_mode'
     ];
 
     public function pemberiKerja()

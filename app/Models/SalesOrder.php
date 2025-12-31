@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class SalesOrder extends Model
 {
     protected $fillable = [
-        'proyek_id', 'penawaran_id', 'no_so', 'tanggal', 'total', 'created_by'
+        'proyek_id', 'penawaran_id', 'no_so', 'tanggal', 'total', 'uang_muka_persen', 'created_by'
     ];
 
     public function lines()
@@ -28,5 +28,10 @@ class SalesOrder extends Model
     public function creator()
     {
         return $this->belongsTo(\App\Models\User::class, 'created_by');
+    }
+
+    public function uangMuka()
+    {
+        return $this->hasOne(UangMukaPenjualan::class, 'sales_order_id');
     }
 }

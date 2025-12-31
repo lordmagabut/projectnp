@@ -33,6 +33,11 @@
         <h5 class="mb-3 text-primary">Informasi Penawaran</h5>
         <div class="row g-3">
           <div class="col-md-6">
+            <label class="form-label">Nomor Penawaran</label>
+            <input type="text" class="form-control" value="{{ $penawaran->nomor_penawaran ?? 'Belum ada' }}" readonly>
+            <small class="text-muted">Format otomatis DKD/tahun/urut.</small>
+          </div>
+          <div class="col-md-6">
             <label for="nama_penawaran" class="form-label">Nama Penawaran <span class="text-danger">*</span></label>
             <input type="text" name="nama_penawaran" id="nama_penawaran"
                    class="form-control @error('nama_penawaran') is-invalid @enderror"
@@ -61,6 +66,15 @@
                       class="form-control @error('spesifikasi') is-invalid @enderror">{{ old('spesifikasi', $penawaran->spesifikasi) }}</textarea>
             @error('spesifikasi') <div class="invalid-feedback">{{ $message }}</div> @enderror
           </div>
+        </div>
+      </div>
+
+      @php $pmode = $proyek->penawaran_price_mode ?? 'pisah'; @endphp
+      <div class="alert alert-info d-flex align-items-center gap-2">
+        <i data-feather="info"></i>
+        <div>
+          Mode harga penawaran: <strong class="text-uppercase">{{ $pmode }}</strong>.
+          {{ $pmode === 'gabung' ? 'Menggunakan harga pembulatan AHSP, hanya satu kolom harga.' : 'Memisahkan material dan jasa seperti biasa.' }}
         </div>
       </div>
 
@@ -241,22 +255,9 @@ function updateItemRowCalculations(row) {
     // PERUBAHAN LOGIKA PERHITUNGAN DIMULAI DI SINI
     // ===============================================
     
-    // Total persentase margin yang ditargetkan (diasumsikan sebagai persentase dari Harga Penawaran)
-    const totalMarginPercentage = (profitPercentage + overheadPercentage) / 100; // Contoh: (15 + 10) / 100 = 0.25
-
-    // Persentase Harga Dasar relatif terhadap Harga Penawaran
-    const penyebut = 1 - totalMarginPercentage; // Contoh: 1 - 0.25 = 0.75 (75%)
-
-    let hargaPenawaran = 0;
-    
-    if (penyebut > 0) {
-        // Harga Penawaran = Harga Dasar / (1 - Total Margin)
-        hargaPenawaran = hargaDasar / penyebut;
-    } else {
-        // Jika total margin 100% atau lebih, Harga Penawaran tidak terdefinisi atau tak hingga
-        hargaPenawaran = 0; 
-        console.error("Total Profit + Overhead mencapai 100% atau lebih. Harga Penawaran tidak valid.");
-    }
+    // Samakan dengan backend: harga_penawaran = harga_dasar * (1 + profit + overhead)
+    const koef = 1 + (profitPercentage/100) + (overheadPercentage/100);
+    const hargaPenawaran = hargaDasar * koef;
     
     // ===============================================
     // PERHITUNGAN LANJUTAN

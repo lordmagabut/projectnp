@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <style>
-    @page { size: A4 portrait; margin: 45mm 12mm 15mm; }
+    @page { size: A4 portrait; margin: 50mm 12mm 15mm; }
     body { font-family:'DejaVu Sans', sans-serif; font-size:10px; line-height:1.4; color:#333; }
     table{ width:100%; border-collapse:collapse; }
     th,td{ border:1px solid #ddd; padding:6px; }
@@ -11,7 +11,7 @@
     .text-end{ text-align:right; }
     .currency{ white-space:nowrap; }
     .fw-bold{ font-weight:bold; }
-    .pdf-header{ position: fixed; top: -37mm; left: 0; right: 0; }
+    .pdf-header{ position: fixed; top: -45mm; left: 0; right: 0; }
     .pdf-header table{ border-collapse: collapse; width: 100%; }
     .pdf-header th, .pdf-header td{ border:1px solid #ddd; padding:4px 6px; }
     .pdf-header th{ width:22%; text-align:left; background:#f2f2f2; white-space:nowrap; }
@@ -28,6 +28,7 @@
       <tr><th>KONTRAKTOR</th><td>: {{ $company->nama_perusahaan ?? ($proyek->kontraktor ?? '—') }}</td></tr>
       <tr><th>LOKASI</th><td>: {{ $proyek->lokasi ?? '—' }}</td></tr>
       <tr><th>PEKERJAAN</th><td>: {{ $proyek->jenis_pekerjaan ?? ($penawaran->nama_penawaran ?? '—') }}</td></tr>
+      <tr><th>NOMOR PENAWARAN</th><td>: {{ $penawaran->nomor_penawaran ?? '—' }}</td></tr>
       <tr><th>TANGGAL</th><td>: {{ optional(\Carbon\Carbon::parse($penawaran->tanggal_penawaran ?? now()))->translatedFormat('d F Y') }}</td></tr>
     </table>
   </div>

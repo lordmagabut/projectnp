@@ -211,22 +211,26 @@
         </div>
       </li>
 
-      <li class="nav-item {{ active_class(['so/*']) }}">
+      <li class="nav-item {{ active_class(['so/*', 'uang-muka-penjualan*']) }}">
         <a class="nav-link" data-bs-toggle="collapse" href="#soMenu" role="button"
-          aria-expanded="{{ is_active_route(['so/*']) }}" aria-controls="soMenu">
+          aria-expanded="{{ is_active_route(['so/*', 'uang-muka-penjualan*']) }}" aria-controls="soMenu">
           <i class="link-icon" data-feather="shopping-bag"></i>
           <span class="link-title">Penjualan</span>
           <i class="link-arrow" data-feather="chevron-down"></i>
         </a>
-        <div class="collapse {{ show_class(['so/*']) }}" id="soMenu">
+        <div class="collapse {{ show_class(['so/*', 'uang-muka-penjualan*']) }}" id="soMenu">
           <ul class="nav sub-menu">
             <li class="nav-item">
               <a href="{{ route('so.index') }}"
                 class="nav-link {{ active_class(['so']) }}">Daftar SO</a>
             </li>
+            <li class="nav-item">
+              <a href="{{ route('uang-muka-penjualan.index') }}"
+                class="nav-link {{ active_class(['uang-muka-penjualan*']) }}">Uang Muka</a>
+            </li>
           </ul>
         </div>
-      </li>   
+      </li>
       
       <li class="nav-item nav-category">AKUNTING</li>
       <li class="nav-item {{ active_class(['saldo-awal*']) }}">
