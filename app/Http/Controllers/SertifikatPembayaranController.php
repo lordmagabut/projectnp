@@ -73,21 +73,41 @@ class SertifikatPembayaranController extends Controller
             $nilaiMaterial = 0; $nilaiUpah = 0; $nilaiTotal = 0;
             $uangMukaPersenFromSO = 0;
             $uangMukaIdFromSO = null;
+            $priceMode = 'pisah'; // default: pisah (material + upah terpisah)
 
             if ($b->penawaran) {
-                // Hitung split Material & Upah dari rab_penawaran_items × volume
-                $sum = DB::table('rab_penawaran_items as i')
-                    ->join('rab_penawaran_sections as s','s.id','=','i.rab_penawaran_section_id')
-                    ->where('s.rab_penawaran_header_id', $b->penawaran->id)
-                    ->selectRaw('
-                        SUM(COALESCE(i.harga_material_penawaran_item,0) * COALESCE(i.volume,0)) as mat,
-                        SUM(COALESCE(i.harga_upah_penawaran_item,0) * COALESCE(i.volume,0)) as uph,
-                        SUM(COALESCE(i.total_penawaran_item,0)) as tot
-                    ')
-                    ->first();
-                $nilaiMaterial = (float)($sum->mat ?? 0);
-                $nilaiUpah     = (float)($sum->uph ?? 0);
-                $nilaiTotal    = (float)($sum->tot ?? 0);
+                // Tentukan price mode dari proyek
+                $priceMode = (string) (optional($b->proyek)->penawaran_price_mode ?? 'pisah');
+
+                if ($priceMode === 'gabung') {
+                    // Mode GABUNG: semua harga ada di material, upah = 0
+                    // Gunakan total_penawaran_item untuk nilai sebenarnya
+                    $sum = DB::table('rab_penawaran_items as i')
+                        ->join('rab_penawaran_sections as s','s.id','=','i.rab_penawaran_section_id')
+                        ->where('s.rab_penawaran_header_id', $b->penawaran->id)
+                        ->selectRaw('
+                            SUM(COALESCE(i.total_penawaran_item,0)) as tot
+                        ')
+                        ->first();
+                    $nilaiTotal = (float)($sum->tot ?? 0);
+                    // Bagi 50:50 untuk sertifikat (karena sistem hitungnya via material & jasa terpisah)
+                    $nilaiMaterial = $nilaiTotal / 2;
+                    $nilaiUpah = $nilaiTotal / 2;
+                } else {
+                    // Mode PISAH: material dan upah terpisah
+                    $sum = DB::table('rab_penawaran_items as i')
+                        ->join('rab_penawaran_sections as s','s.id','=','i.rab_penawaran_section_id')
+                        ->where('s.rab_penawaran_header_id', $b->penawaran->id)
+                        ->selectRaw('
+                            SUM(COALESCE(i.harga_material_penawaran_item,0) * COALESCE(i.volume,0)) as mat,
+                            SUM(COALESCE(i.harga_upah_penawaran_item,0) * COALESCE(i.volume,0)) as uph,
+                            SUM(COALESCE(i.total_penawaran_item,0)) as tot
+                        ')
+                        ->first();
+                    $nilaiMaterial = (float)($sum->mat ?? 0);
+                    $nilaiUpah     = (float)($sum->uph ?? 0);
+                    $nilaiTotal    = (float)($sum->tot ?? 0);
+                }
 
                 // Cari SO & UM penjualan dari penawaran
                 $so = \App\Models\SalesOrder::where('penawaran_id', $b->penawaran->id)->first();
@@ -117,9 +137,25 @@ class SertifikatPembayaranController extends Controller
                 optional($b->tanggal_bapp)->format('Y-m-d') ?? $b->tanggal_bapp
             );
 
+            // Ambil ppn_persen dari ProyekTaxProfile yang aktif
+            $ppnPersen = 0;
+            $proyekId = optional($b->proyek)->id;
+            if ($proyekId) {
+                $taxProfile = \App\Models\ProyekTaxProfile::where('proyek_id', $proyekId)
+                    ->where('aktif', 1)
+                    ->first();
+                if ($taxProfile) {
+                    $ppnPersen = (float)($taxProfile->ppn_rate ?? 0);
+                }
+            }
+
+            // Ambil retensi_persen dari proyek
+            $retensiPersen = (float)(optional($b->proyek)->persen_retensi ?? 0);
+
             return [
                 'id'                    => $b->id,
                 'label'                 => $label,
+                'price_mode'            => $priceMode,
                 'uang_muka_mode'        => (string) (optional($b->proyek)->uang_muka_mode ?? 'proporsional'),
                 'nilai_wo_material'     => round($nilaiMaterial,2),
                 'nilai_wo_jasa'         => round($nilaiUpah,2),
@@ -128,8 +164,8 @@ class SertifikatPembayaranController extends Controller
                 'uang_muka_penjualan_id' => $uangMukaIdFromSO,
                 'uang_muka_nominal'     => $umNominal,
                 'uang_muka_digunakan'   => $umDigunakan,
-                'retensi_persen'        => 5,
-                'ppn_persen'            => 11,
+                'retensi_persen'        => $retensiPersen,
+                'ppn_persen'            => $ppnPersen,
                 'persen_progress'       => (float)($b->total_now_pct ?? 0),       // kumulatif
                 'persen_progress_delta' => (float)($b->total_delta_pct ?? 0),     // periode ini
                 // Termin selalu urut berdasarkan jumlah sertifikat yang sudah ada (approved/draft)
@@ -187,6 +223,7 @@ class SertifikatPembayaranController extends Controller
         'uang_muka_persen'      => 'required|numeric|min:0',
         'retensi_persen'        => 'required|numeric|min:0',
         'ppn_persen'            => 'required|numeric|min:0',
+        'price_mode'            => 'nullable|in:pisah,gabung',
         // pihak terkait (opsional)
         'pemberi_tugas_nama'        => 'nullable|string',
         'pemberi_tugas_jabatan'     => 'nullable|string',
@@ -199,7 +236,7 @@ class SertifikatPembayaranController extends Controller
     // ---- Ambil konteks kontrak via BAPP (proyek + penawaran) ----
     $bapp = Bapp::with(['proyek','penawaran'])->findOrFail($data['bapp_id']);
     $proyekId    = optional($bapp->proyek)->id;
-    $penawaranId = optional($bapp->penawaran)->id;
+    $penawaranId = $bapp->penawaran_id;  // Ambil langsung dari kolom, bukan dari relation
     $umMode      = strtolower((string) (optional($bapp->proyek)->uang_muka_mode ?? 'proporsional'));
 
     // Termin harus berurutan berdasarkan sertifikat yang sudah ada (tidak tergantung minggu progress)
@@ -231,18 +268,44 @@ class SertifikatPembayaranController extends Controller
         ])->withInput();
     }
 
-    // Cari progress kumulatif sebelumnya untuk kontrak yang sama
-    // (ambil SP ber-tanggal < tanggal ini; kalau mau lebih ketat, batasi ke status "approved")
-    $spQuery = SertifikatPembayaran::whereHas('bapp', function($q) use ($proyekId, $penawaranId) {
-        $q->where('proyek_id', $proyekId)
-            ->where('penawaran_id', $penawaranId);
-    });
-
-    $prevPct = (float) (clone $spQuery)
-        ->where('tanggal', '<', $data['tanggal'])
-        ->max('persen_progress');
-    $prevUmCutTotal = (float) (clone $spQuery)
-        ->where('tanggal', '<', $data['tanggal'])
+    // Cari progress kumulatif sebelumnya untuk penawaran yang sama
+    // Gunakan termin_ke untuk memastikan urutan yang benar
+    $currentTermin = (int)$data['termin_ke'];
+    
+    $prevSpQuery = SertifikatPembayaran::query();
+    
+    if ($penawaranId) {
+        // Jika ada penawaran_id, cari dari penawaran yang sama
+        $prevSpQuery->where('penawaran_id', $penawaranId);
+    } else {
+        // Jika tidak ada penawaran_id, fallback ke BAPP dari proyek yang sama
+        $prevSpQuery->whereHas('bapp', function($q) use ($proyekId) {
+            $q->where('proyek_id', $proyekId);
+        });
+    }
+    
+    // Ambil SP dengan termin sebelumnya (termin_ke < current)
+    $prevSp = $prevSpQuery
+        ->where('termin_ke', '<', $currentTermin)
+        ->orderBy('termin_ke', 'desc')
+        ->orderBy('tanggal', 'desc')
+        ->first();
+    
+    $prevPct = $prevSp ? (float)$prevSp->persen_progress : 0.0;
+    
+    // Hitung total UM yang sudah dipotong sebelumnya  
+    $prevUmQuery = SertifikatPembayaran::query();
+    
+    if ($penawaranId) {
+        $prevUmQuery->where('penawaran_id', $penawaranId);
+    } else {
+        $prevUmQuery->whereHas('bapp', function($q) use ($proyekId) {
+            $q->where('proyek_id', $proyekId);
+        });
+    }
+    
+    $prevUmCutTotal = $prevUmQuery
+        ->where('termin_ke', '<', $currentTermin)
         ->sum('pemotongan_um_nilai');
 
     // Progress kumulatif sekarang & delta periode ini
@@ -389,6 +452,7 @@ class SertifikatPembayaranController extends Controller
     $payload = array_merge($data, [
         'nomor'               => $this->generateNomor(),
         'nilai_wo_total'      => $nilai_wo_total,
+        'penawaran_id'        => $penawaranId,  // Simpan penawaran_id untuk tracking lintas BAPP
         // progress/UM/retensi PERIODE INI
         'nilai_progress_rp'   => $nilai_progress_rp,   // progress delta
         'pemotongan_um_nilai' => $pemotongan_um_nilai, // UM delta
@@ -521,6 +585,8 @@ class SertifikatPembayaranController extends Controller
     public function cetak($id)
     {
         $sp = SertifikatPembayaran::with('bapp.proyek')->findOrFail($id);
+        // Force fresh data dari database (clear any cache)
+        $sp->refresh();
     
         // Pastikan locale Indonesia konsisten di proses PDF
         \Carbon\Carbon::setLocale('id');

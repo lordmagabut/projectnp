@@ -9,7 +9,7 @@ class SertifikatPembayaran extends Model
     protected $table = 'sertifikat_pembayaran';
 
     protected $fillable = [
-        'bapp_id','uang_muka_penjualan_id','tanggal','termin_ke',
+        'bapp_id','penawaran_id','uang_muka_penjualan_id','tanggal','termin_ke',
         'persen_progress','persen_progress_prev','persen_progress_delta',
 
         'nilai_wo_material','nilai_wo_jasa','nilai_wo_total',
@@ -31,6 +31,9 @@ class SertifikatPembayaran extends Model
         // identitas dokumen
         'nomor','terbilang','dibuat_oleh_id',
         'status','disetujui_oleh_id',
+
+        // informasi penawaran
+        'price_mode',
 
         // opsional: dipakai di view PDF (aman sekalipun kolomnya belum ada)
         'po_wo_spk_no','po_wo_spk_tanggal',

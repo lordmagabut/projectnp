@@ -391,6 +391,7 @@ public function update(Request $request, $id)
 
         if ($selectedId && $hasScheduleSelected && $selectedMeta) {
             $metaStart = \Carbon\Carbon::parse($selectedMeta->start_date)->startOfDay();
+            $metaEnd = \Carbon\Carbon::parse($selectedMeta->end_date)->startOfDay();
 
             $schedRows = RabSchedule::where('proyek_id', $id)
                 ->where('penawaran_id', $selectedId)
@@ -418,7 +419,14 @@ public function update(Request $request, $id)
                     ?? '';
 
                 $start = (clone $metaStart)->addWeeks(max(0, (int) $row->minggu_ke - 1));
-                $end   = (clone $start)->addWeeks(max(1, (int) $row->durasi))->subDay();
+                // Durasi adalah jumlah minggu, jadi jika durasi 5 minggu, berarti 5 minggu penuh
+                $end   = (clone $start)->addWeeks((int) $row->durasi)->subDay();
+                
+                // Pastikan tidak melebihi tanggal akhir proyek
+                if ($end->gt($metaEnd)) {
+                    $end = clone $metaEnd;
+                }
+                
                 $endExclusive = (clone $end)->addDay();
 
                 $calendarEvents[] = [
@@ -660,6 +668,7 @@ public function update(Request $request, $id)
                     fn($q)=>$q->where('penawaran_id',$penawaranId))
                 ->first();
             $metaStart = $meta ? Carbon::parse($meta->start_date)->startOfDay() : null;
+            $metaEnd = $meta ? Carbon::parse($meta->end_date)->startOfDay() : null;
 
             $details = RabDetail::where('proyek_id', $proyekId)
                 ->whereIn('id', $detailIds)
@@ -699,11 +708,20 @@ public function update(Request $request, $id)
                        '</tr>';
             };
 
-            $rowItem = function($key,$parentKey,$kode,$nama,$wmin,$wdur,?Carbon $metaStart) use ($esc){
+            $rowItem = function($key,$parentKey,$kode,$nama,$wmin,$wdur,?Carbon $metaStart,?Carbon $metaEnd) use ($esc){
                 $tgl1='—'; $tgl2='—';
                 if ($metaStart) {
                     $start = (clone $metaStart)->addWeeks(max(0,$wmin-1));
-                    $end   = (clone $start)->addWeeks(max(1,$wdur))->subDay();
+                    // Durasi adalah jumlah minggu, jadi jika durasi 5 minggu, berarti 5 minggu penuh
+                    // Dari minggu_ke sampai (minggu_ke + durasi - 1)
+                    // Contoh: minggu_ke=1, durasi=5 -> minggu 1,2,3,4,5 (5 minggu penuh)
+                    $end   = (clone $start)->addWeeks($wdur)->subDay();
+                    
+                    // Jika ada metaEnd, pastikan tidak melebihi tanggal akhir proyek
+                    if ($metaEnd && $end->gt($metaEnd)) {
+                        $end = clone $metaEnd;
+                    }
+                    
                     $tgl1 = $start->format('d-m-Y');
                     $tgl2 = $end->format('d-m-Y');
                 }
@@ -733,14 +751,14 @@ public function update(Request $request, $id)
 
                     foreach ($items as $it) {
                         $agg = $aggByDetail[(int)$it->id] ?? ['wmin'=>1,'wdur'=>1];
-                        $html .= $rowItem('IT-'.$it->id, $keyL2, (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart);
+                        $html .= $rowItem('IT-'.$it->id, $keyL2, (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart, $metaEnd);
                     }
                 }
 
                 if ($itemsUnderL1Direct->isNotEmpty()) {
                     foreach ($itemsUnderL1Direct->sortBy('kode', SORT_NATURAL|SORT_FLAG_CASE) as $it) {
                         $agg = $aggByDetail[(int)$it->id] ?? ['wmin'=>1,'wdur'=>1];
-                        $html .= $rowItem('IT-'.$it->id, $keyL1, (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart);
+                        $html .= $rowItem('IT-'.$it->id, $keyL1, (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart, $metaEnd);
                     }
                 }
             }
@@ -748,7 +766,7 @@ public function update(Request $request, $id)
             if ($html === '') {
                 foreach ($details->sortBy('kode', SORT_NATURAL|SORT_FLAG_CASE) as $it) {
                     $agg = $aggByDetail[(int)$it->id] ?? ['wmin'=>1,'wdur'=>1];
-                    $html .= $rowItem('IT-'.$it->id, '', (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart);
+                    $html .= $rowItem('IT-'.$it->id, '', (string)$it->kode, (string)$it->uraian, (int)$agg['wmin'], (int)$agg['wdur'], $metaStart, $metaEnd);
                 }
             }
 

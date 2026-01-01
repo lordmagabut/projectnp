@@ -1058,6 +1058,7 @@ class RabPenawaranController extends Controller
             'approval_files.*' => 'file|mimes:pdf|max:5120', // 5 MB tiap file
             'no_spk'           => 'required|string|max:100',
             'tanggal_mulai'    => 'required|date',
+            'durasi_minggu'    => 'required|integer|min:1',
             'tanggal_selesai'  => 'required|date|after_or_equal:tanggal_mulai',
             'persen_dp'        => 'nullable|numeric|min:0|max:100',
             'persen_retensi'   => 'nullable|numeric|min:0|max:100',
@@ -1071,6 +1072,8 @@ class RabPenawaranController extends Controller
             'approval_files.*.max'      => 'Ukuran maksimal setiap file 5 MB.',
             'no_spk.required'           => 'Nomor SPK harus diisi.',
             'tanggal_mulai.required'    => 'Tanggal mulai proyek harus diisi.',
+            'durasi_minggu.required'    => 'Durasi proyek harus diisi.',
+            'durasi_minggu.min'         => 'Durasi proyek minimal 1 minggu.',
             'tanggal_selesai.required'  => 'Tanggal selesai proyek harus diisi.',
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus setelah atau sama dengan tanggal mulai.',
             'pph_dipungut.required'     => 'PPh pemotongan harus dipilih.',
@@ -1209,6 +1212,24 @@ class RabPenawaranController extends Controller
             }
         }
 
+        // Hapus Bobot (Snapshot dari penawaran)
+        \App\Models\RabPenawaranWeight::where('penawaran_id', $penawaran->id)->delete();
+
+        // Hapus RAB Schedule yang sudah dibuat untuk penawaran ini
+        \App\Models\RabScheduleDetail::where('penawaran_id', $penawaran->id)->delete();
+        \App\Models\RabScheduleMeta::where('penawaran_id', $penawaran->id)->delete();
+        \App\Models\RabSchedule::where('penawaran_id', $penawaran->id)->delete();
+
+        // Hapus Progress yang sudah dibuat untuk penawaran ini
+        $progressIds = \App\Models\RabProgress::where('penawaran_id', $penawaran->id)
+            ->pluck('id')
+            ->toArray();
+        
+        if (!empty($progressIds)) {
+            \App\Models\RabProgressDetail::whereIn('rab_progress_id', $progressIds)->delete();
+            \App\Models\RabProgress::where('penawaran_id', $penawaran->id)->delete();
+        }
+
         // Reset status ke draft
         $penawaran->status = 'draft';
         $penawaran->approved_at = null;
@@ -1217,7 +1238,7 @@ class RabPenawaranController extends Controller
 
         return redirect()
             ->route('proyek.penawaran.show', [$penawaran->proyek_id, $penawaran->id])
-            ->with('success', 'Penawaran dikembalikan ke status Draft. Sales Order dan dokumen SPK telah dihapus.');
+            ->with('success', 'Penawaran dikembalikan ke status Draft. Bobot, Schedule, Progress, Sales Order dan dokumen SPK telah dihapus.');
     }
 
     public function generatePdfMixed(Proyek $proyek, RabPenawaranHeader $penawaran)

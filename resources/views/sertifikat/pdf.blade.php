@@ -125,10 +125,10 @@
   $umMode     = strtolower(optional($proyek)->uang_muka_mode ?? 'proporsional');
 
   // ====== CARI KUMULATIF SEBELUMNYA (fallback di VIEW kalau controller belum supply) ======
-  $pctPrev = 0.0;
-  if (property_exists($sp, 'persen_progress_prev') && $sp->persen_progress_prev !== null) {
+    $pctPrev = 0.0;
+    if (isset($sp->persen_progress_prev)) {
       $pctPrev = (float)$sp->persen_progress_prev;
-  } else {
+    } else {
       try {
           $prevQuery = \App\Models\SertifikatPembayaran::query()
               ->where('id','!=',$sp->id)
@@ -149,7 +149,7 @@
   }
 
   // Delta periode ini
-  $pctNowRaw = (property_exists($sp,'persen_progress_delta') && $sp->persen_progress_delta !== null)
+  $pctNowRaw = isset($sp->persen_progress_delta)
                 ? (float)$sp->persen_progress_delta
                 : ($pctCum - $pctPrev);
   $pctNow = max(0, round($pctNowRaw, 4)); // jaga-jaga tidak negatif
@@ -202,12 +202,12 @@
   $subMat = ($dppM_db !== null) ? $dppM_db : $dppMat_fallback;
   $subJas = ($dppJ_db !== null) ? $dppJ_db : $dppJas_fallback;
 
-  // Dari DPP + potongan UM turunkan Progress PERIODE INI → progress = (DPP + UM) / (1 - retensi%)
-  $den = $gunakanRetensi_pdf ? max(0.0001, (1 - $retPct/100)) : 1; // hindari div/0
-  $prgMat = round(($subMat + $umCutMat) / $den, 2);
-  $prgJas = round(($subJas + $umCutJas) / $den, 2);
+  // Progress PERIODE INI: gunakan nilai dari DB (nilai_progress_rp sudah benar = delta)
+  // Jangan hitung balik dari DPP untuk menghindari kesalahan pembulatan
+  $prgMat = $fallbackPrgMat;
+  $prgJas = $fallbackPrgJas;
 
-  // Retensi PERIODE INI hasil turunan (agar identitas 2−3=4 pas)
+  // Retensi PERIODE INI dari progress periode ini
   $retMat = $gunakanRetensi_pdf ? round($prgMat * $retPct/100, 2) : 0;
   $retJas = $gunakanRetensi_pdf ? round($prgJas * $retPct/100, 2) : 0;
 
@@ -264,6 +264,23 @@
   $fmt = fn($n)=> number_format((float)$n, 0, ',', '.');
   $pct = fn($n,$d=2)=> rtrim(rtrim(number_format((float)$n,$d,',','.'),'0'),',');
 
+  // Generate terbilang dari netAll (nilai yang benar-benar ditampilkan)
+  function terbilangRupiah($angka) {
+      $angka = abs($angka);
+      $huruf = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
+      if ($angka < 12) return $huruf[$angka];
+      if ($angka < 20) return terbilangRupiah($angka - 10) . ' Belas';
+      if ($angka < 100) return terbilangRupiah($angka / 10) . ' Puluh ' . terbilangRupiah($angka % 10);
+      if ($angka < 200) return 'Seratus ' . terbilangRupiah($angka - 100);
+      if ($angka < 1000) return terbilangRupiah($angka / 100) . ' Ratus ' . terbilangRupiah($angka % 100);
+      if ($angka < 2000) return 'Seribu ' . terbilangRupiah($angka - 1000);
+      if ($angka < 1000000) return terbilangRupiah($angka / 1000) . ' Ribu ' . terbilangRupiah($angka % 1000);
+      if ($angka < 1000000000) return terbilangRupiah($angka / 1000000) . ' Juta ' . terbilangRupiah($angka % 1000000);
+      if ($angka < 1000000000000) return terbilangRupiah($angka / 1000000000) . ' Milyar ' . terbilangRupiah(fmod($angka, 1000000000));
+      return terbilangRupiah($angka / 1000000000000) . ' Triliun ' . terbilangRupiah(fmod($angka, 1000000000000));
+  }
+  $terbilangPDF = trim(terbilangRupiah($netAll));
+
   // UM Penjualan audit info
   $umAfter  = isset($sp->sisa_uang_muka) ? (float)$sp->sisa_uang_muka : ($umPenj ? $umPenj->getSisaUangMuka() : 0);
   $umCutNow = $umCutTotal;
@@ -287,7 +304,7 @@
     <tr><td class="label">Tanggal</td><td class="sep">:</td><td class="val">{{ $tglSP }}</td></tr>
     <tr><td class="label">NO PO / WO / SPK</td><td class="sep">:</td><td class="val">{{ $noPOWO }}</td></tr>
     <tr><td class="label">Termin</td><td class="sep">:</td>
-        <td class="val">Kumulatif {{ $pct($pctCum,2) }}% (delta {{ $pct($pctNow,2) }}%)</td>
+        <td class="val">Kumulatif {{ $pct($pctCum,2) }}% (periode ini {{ $pct($pctNow,2) }}%)</td>
     </tr>
   </table>
 
@@ -323,7 +340,7 @@
   <p style="margin-top:12px;">
     Berdasarkan data & rincian terlampir, Pihak Kedua berhak menerima pembayaran termin ke-{{ $terminKe }}
     sebesar <span class="money fw-bold" style="font-size: 14px;">Rp.&nbsp;{{ $fmt($netAll) }}</span>,
-    {{ $sp->terbilang }}.
+    {{ $terbilangPDF }} Rupiah.
   </p>
 
   <p style="margin-top: 14px;">
@@ -383,13 +400,7 @@
     </tr>
     <tr class="subrow">
       <td></td>
-      <td style="padding-left:22px">
-        Pemotongan Uang Muka (Mode {{ $umModeLabel }}, {{ $pct($umCutPct,2) }}%)<br>
-        @if($umPenj)
-          UM Penjualan: {{ $umPenj->nomor_bukti ?? '-' }}<br>
-          Sisa sebelum: Rp.&nbsp;{{ $fmt($umBefore) }} | Sisa sesudah: Rp.&nbsp;{{ $fmt($umAfter) }}
-        @endif
-      </td>
+      <td style="padding-left:22px">Pemotongan Uang Muka {{ $pct($umCutPct,2) }}%</td>
       <td class="right money">Rp.&nbsp;{{ $fmt($umCutMat) }}</td>
       <td class="right money">Rp.&nbsp;{{ $fmt($umCutJas) }}</td>
       <td class="right money">Rp.&nbsp;{{ $fmt($umCutMat + $umCutJas) }}</td>
@@ -409,36 +420,45 @@
       <td class="right money fw-bold">Rp.&nbsp;{{ $fmt($subMat + $subJas) }}</td>
     </tr>
 
-    {{-- 5. PPN PERIODE INI --}}
+    {{-- 5. PPN PERIODE INI (hanya jika ada PPN) --}}
+    @if($ppnPct > 0)
     <tr>
       <td class="center">5</td><td>Pajak (PPN {{ $pct($ppnPct,2) }}%)</td>
       <td class="right money">Rp.&nbsp;{{ $fmt($ppnMat) }}</td>
       <td class="right money">Rp.&nbsp;{{ $fmt($ppnJas) }}</td>
       <td class="right money">Rp.&nbsp;{{ $fmt($ppnMat + $ppnJas) }}</td>
     </tr>
+    @endif
 
     {{-- 6. TOTAL + PPN PERIODE INI --}}
     <tr class="subrow">
-      <td class="center fw-bold" style="background:#eee;">6</td>
-      <td class="fw-bold" style="background:#eee;">TOTAL + PPN (4 + 5) — PERIODE INI</td>
+      <td class="center fw-bold" style="background:#eee;">{{ $ppnPct > 0 ? '6' : '5' }}</td>
+      <td class="fw-bold" style="background:#eee;">{{ $ppnPct > 0 ? 'TOTAL + PPN (4 + 5)' : 'TOTAL TAGIHAN (sama dengan 4)' }} — PERIODE INI</td>
       <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($totMat) }}</td>
       <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($totJas) }}</td>
       <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($totMat + $totJas) }}</td>
     </tr>
 
-    {{-- 7. PPh PERIODE INI (dipotong) --}}
+    {{-- 7. PPh PERIODE INI (dipotong) - hanya jika dipungut --}}
+    @if($pphDipungut)
     <tr>
-      <td class="center">7</td>
+      <td class="center">{{ $ppnPct > 0 ? '7' : '6' }}</td>
       <td>PPh {{ $pphRate > 0 ? (rtrim(rtrim(number_format($pphRate,3,',','.'),'0'),',')) : '0' }}% — Sumber {{ $pphSource === 'material_jasa' ? 'Material + Jasa' : 'Jasa saja' }}, Basis {{ strtoupper($pphBaseKind) }}</td>
       <td class="right money">- Rp.&nbsp;{{ $fmt($pphMat) }}</td>
       <td class="right money">- Rp.&nbsp;{{ $fmt($pphJas) }}</td>
       <td class="right money">- Rp.&nbsp;{{ $fmt($pphMat + $pphJas) }}</td>
     </tr>
+    @endif
 
     {{-- 8. TOTAL NETT PERIODE INI --}}
     <tr class="subrow">
-      <td class="center fw-bold" style="background:#eee;">8</td>
-      <td class="fw-bold" style="background:#eee;">TOTAL DIBAYARKAN (6 − 7) — PERIODE INI</td>
+      @php
+        $lastRowNum = ($ppnPct > 0 ? 6 : 5) + ($pphDipungut ? 1 : 0) + 1;
+        $prevRowNum = $lastRowNum - 1;
+        $formulaLabel = $pphDipungut ? "($prevRowNum - 1)" : "sama dengan $prevRowNum";
+      @endphp
+      <td class="center fw-bold" style="background:#eee;">{{ $lastRowNum }}</td>
+      <td class="fw-bold" style="background:#eee;">TOTAL DIBAYARKAN {{ $pphDipungut ? '(' . ($ppnPct > 0 ? '6' : '5') . ' − ' . ($ppnPct > 0 ? '7' : '6') . ')' : '(sama dengan ' . ($ppnPct > 0 ? '6' : '5') . ')' }} — PERIODE INI</td>
       <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netMat) }}</td>
       <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netJas) }}</td>
       <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netAll) }}</td>

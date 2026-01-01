@@ -23,7 +23,7 @@
       <i data-feather="calendar" class="me-2"></i>
       Atur Schedule — {{ $penawaran->nama_penawaran }}
     </h4>
-    <a href="{{ route('rabSchedule.index', $proyek->id) }}" class="btn btn-light btn-sm">
+    <a href="{{ route('proyek.show', $proyek->id) }}#schedule" class="btn btn-light btn-sm">
       <i data-feather="arrow-left" class="me-1"></i> Kembali
     </a>
   </div>

@@ -64,6 +64,11 @@ class FakturPenjualan extends Model
         return $this->hasMany(PenerimaanPenjualan::class, 'faktur_penjualan_id');
     }
 
+    public function penerimaanPenjualanDetails()
+    {
+        return $this->hasMany(PenerimaanPenjualanDetail::class, 'faktur_penjualan_id');
+    }
+
     public static function generateNomorFaktur()
     {
         $tanggal = now()->format('ymd'); // YYMMDD

@@ -40,7 +40,7 @@
                         <tr>
                             <th style="width: 100px">No. Bukti</th>
                             <th style="width: 80px">Tanggal</th>
-                            <th>No. Faktur</th>
+                            <th>Faktur Dibayar</th>
                             <th style="width: 120px" class="text-right">Nominal</th>
                             <th style="width: 100px">Metode</th>
                             <th style="width: 80px">Status</th>
@@ -55,9 +55,22 @@
                             </td>
                             <td>{{ $item->tanggal->format('d/m/Y') }}</td>
                             <td>
-                                <a href="{{ route('faktur-penjualan.show', $item->fakturPenjualan->id) }}" target="_blank">
-                                    {{ $item->fakturPenjualan->no_faktur }}
-                                </a>
+                                @php
+                                    $fakturLabels = $item->details->map(function($d){
+                                        return $d->faktur?->no_faktur;
+                                    })->filter();
+                                    if ($fakturLabels->isEmpty() && $item->fakturPenjualan) {
+                                        $fakturLabels = collect([$item->fakturPenjualan->no_faktur]);
+                                    }
+                                @endphp
+                                @if ($fakturLabels->count() === 1)
+                                    <a href="{{ route('faktur-penjualan.show', $item->details->first()?->faktur?->id ?? $item->fakturPenjualan?->id) }}" target="_blank">
+                                        {{ $fakturLabels->first() }}
+                                    </a>
+                                @else
+                                    <span class="badge bg-info">{{ $fakturLabels->count() }} faktur</span>
+                                    <div class="small text-muted">{{ $fakturLabels->join(', ') }}</div>
+                                @endif
                             </td>
                             <td class="text-right">
                                 Rp {{ number_format($item->nominal, 2, ',', '.') }}

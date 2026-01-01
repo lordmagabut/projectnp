@@ -576,7 +576,7 @@
       ?? optional($finalPenawarans->last())->id;
 
   // ambil daftar BAPP untuk proyek (dan filter penawaran bila dipilih)
-  $bapps = \App\Models\Bapp::with('penawaran')
+  $bapps = \App\Models\Bapp::with(['penawaran', 'sertifikatPembayaran'])
       ->where('proyek_id', $proyek->id)
       ->when($bappPenawaranId, fn($q)=>$q->where('penawaran_id', $bappPenawaranId))
       ->orderByDesc('tanggal_bapp')->orderByDesc('id')
@@ -711,7 +711,7 @@
                 </form>
               @endif
 
-              @if($b->status === 'approved')
+              @if($b->status === 'approved' && $b->sertifikatPembayaran->isEmpty())
                 <a class="btn btn-sm btn-success" href="{{ route('sertifikat.create') }}?bapp_id={{ $b->id }}">
                   Buat Sertifikat Pembayaran
                 </a>
@@ -845,7 +845,6 @@
               @else
                 <form action="{{ route('sertifikat.approve', $s->id) }}" method="POST" class="d-inline">
                   @csrf
-                  @method('PUT')
                   <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Setujui sertifikat pembayaran ini?');">
                     <i data-feather="check-circle" class="me-1"></i> Setujui
                   </button>

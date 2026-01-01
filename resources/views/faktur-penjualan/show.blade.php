@@ -8,6 +8,9 @@
       <small class="text-muted">Auto-dibuat dari Sertifikat Pembayaran</small>
     </div>
     <div class="gap-2 d-flex">
+      <button type="button" class="btn btn-info btn-sm text-white" onclick="window.print()">
+        <i class="fas fa-print"></i> Cetak
+      </button>
       @if($faktur->status_pembayaran !== 'lunas')
         <a href="{{ route('penerimaan-penjualan.create') }}?faktur_penjualan_id={{ $faktur->id }}" class="btn btn-success btn-sm">
           <i class="fas fa-coins"></i> Terima Pembayaran
@@ -80,4 +83,58 @@
     </table>
   </div>
 </div>
+
+<div class="print-container mt-4 d-print-block">
+  <div class="faktur-print-box p-4 border rounded">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <h4 class="text-primary fw-bolder mb-1">FAKTUR PENJUALAN</h4>
+        <div class="text-muted" style="font-size:12px;">No: {{ $faktur->no_faktur }}</div>
+        <div class="text-muted" style="font-size:12px;">Tanggal: {{ optional($faktur->tanggal)->format('d/m/Y') }}</div>
+        <div class="text-muted" style="font-size:12px;">Proyek: {{ optional($faktur->proyek)->nama_proyek ?? '-' }}</div>
+      </div>
+      <div class="text-end">
+        <div class="mb-2">
+          <img src="{{ company_logo_url($faktur->perusahaan) }}" alt="Logo" style="max-height:70px; max-width:200px; object-fit:contain;">
+        </div>
+        <div class="fw-bold">{{ $faktur->perusahaan->nama_perusahaan ?? 'Perusahaan' }}</div>
+        <div class="text-muted" style="font-size:11px; line-height:1.2; max-width:220px;">{{ $faktur->perusahaan->alamat ?? '' }}</div>
+      </div>
+    </div>
+
+    <table class="table table-sm table-borderless" style="font-size:12px;">
+      <tr><td width="45%" class="text-muted">Subtotal (DPP)</td><td class="fw-bold">Rp {{ number_format($faktur->subtotal, 2, ',', '.') }}</td></tr>
+      <tr><td class="text-muted">PPN</td><td class="fw-bold">Rp {{ number_format($faktur->total_ppn, 2, ',', '.') }}</td></tr>
+      @if($faktur->retensi_nilai > 0)
+      <tr><td class="text-muted">Retensi</td><td class="fw-bold">Rp {{ number_format($faktur->retensi_nilai, 2, ',', '.') }}</td></tr>
+      @endif
+      @if($faktur->pph_nilai > 0)
+      <tr><td class="text-muted">PPh</td><td class="fw-bold">Rp {{ number_format($faktur->pph_nilai, 2, ',', '.') }}</td></tr>
+      @endif
+      <tr><td class="text-muted">Total Tagihan</td><td class="fw-bold fs-5">Rp {{ number_format($faktur->total, 2, ',', '.') }}</td></tr>
+      @if($faktur->uang_muka_dipakai > 0)
+      <tr><td class="text-muted">Uang Muka Dipakai</td><td class="fw-bold">(Rp {{ number_format($faktur->uang_muka_dipakai, 2, ',', '.') }})</td></tr>
+      @endif
+    </table>
+
+    <div class="row text-center mt-5" style="font-size:12px;">
+      <div class="col-6">
+        <p class="mb-4">Diterima Oleh,</p>
+        <div class="mx-auto border-bottom border-dark" style="width:80%; height:24px;"></div>
+      </div>
+      <div class="col-6">
+        <p class="mb-4">Disetujui Oleh,</p>
+        <div class="mx-auto border-bottom border-dark" style="width:80%; height:24px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@media print {
+  body { background: #fff; }
+  .card, .page-breadcrumb, .navbar, .sidebar { display: none !important; }
+  .print-container { display: block !important; }
+}
+</style>
 @endsection

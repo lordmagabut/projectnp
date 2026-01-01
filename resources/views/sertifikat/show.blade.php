@@ -45,13 +45,13 @@
         <td>{{ optional(optional($sp->bapp)->proyek)->nama_proyek ?? '-' }}</td>
       </tr>
       <tr>
-        <th>Mode Harga Penawaran</th>
-        <td>{{ strtoupper(optional(optional($sp->bapp)->proyek)->penawaran_price_mode ?? 'PISAH') }}</td>
-      </tr>
-      <tr>
         <th>Termin / Progress</th>
-        <td>Ke-{{ $sp->termin_ke }} — {{ rtrim(rtrim(number_format($sp->persen_progress,4,',','.'),'0'),',') }}%</td>
+        <td>Ke-{{ $sp->termin_ke }} — Kumulatif {{ rtrim(rtrim(number_format($sp->persen_progress,4,',','.'),'0'),',') }}% — Periode ini {{ rtrim(rtrim(number_format($sp->persen_progress_delta,4,',','.'),'0'),',') }}%</td>
       </tr>
+      @php
+        $priceMode = strtolower(optional(optional($sp->bapp)->proyek)->penawaran_price_mode ?? 'pisah');
+      @endphp
+      @if($priceMode !== 'gabung')
       <tr>
         <th>WO Material</th>
         <td>Rp {{ number_format($sp->nilai_wo_material, 2, ',', '.') }}</td>
@@ -60,6 +60,7 @@
         <th>WO Upah</th>
         <td>Rp {{ number_format($sp->nilai_wo_jasa, 2, ',', '.') }}</td>
       </tr>
+      @endif
       <tr>
         <th>Nilai WO Total</th>
         <td>Rp {{ number_format($sp->nilai_wo_total, 2, ',', '.') }}</td>
@@ -112,11 +113,10 @@
       </div>
       <div class="card-body">
         @php
-          $pctNow = property_exists($sp,'persen_progress_delta') && $sp->persen_progress_delta !== null 
-                    ? (float)$sp->persen_progress_delta 
-                    : 0;
+          // Persen progress periode ini (delta)
+          $pctNow = (float)($sp->persen_progress_delta ?? 0);
           
-          // Nilai progress periode ini
+          // Nilai progress periode ini (total)
           $nilaiProgress = (float)($sp->nilai_progress_rp ?? 0);
           
           // Check toggle uang muka & retensi
@@ -125,9 +125,33 @@
           $gunakanRetensi = (bool)($proyek->gunakan_retensi ?? false);
           $pphDipungut = ($proyek->pph_dipungut ?? 'ya') === 'ya';
           
+          // Hitung breakdown progress Material & Jasa periode ini dari nilai_progress_rp
+          $woMat = (float)$sp->nilai_wo_material;
+          $woJas = (float)$sp->nilai_wo_jasa;
+          $woTot = (float)$sp->nilai_wo_total;
+          $woTotSafe = $woTot > 0 ? $woTot : 0.0001;
+          
+          $progressMat = round($nilaiProgress * ($woMat / $woTotSafe), 2);
+          $progressJas = round($nilaiProgress * ($woJas / $woTotSafe), 2);
+          
           // Potongan periode ini
           $potUM = $gunakanUM ? (float)($sp->pemotongan_um_nilai ?? 0) : 0;
           $potRetensi = $gunakanRetensi ? (float)($sp->retensi_nilai ?? 0) : 0;
+          
+          // Split UM periode ini sesuai proporsi
+          $umTotal = (float)($sp->uang_muka_nilai ?? 0);
+          $umPct = $woTotSafe > 0 ? round($umTotal / $woTotSafe * 100, 4) : 0;
+          $umMatTotal = round($woMat * $umPct/100, 2);
+          $umJasTotal = round($woJas * $umPct/100, 2);
+          $ratioM = $umTotal > 0 ? round($umMatTotal / $umTotal, 6) : 0.0;
+          $ratioJ = $umTotal > 0 ? round($umJasTotal / $umTotal, 6) : 0.0;
+          $potUMMat = round($potUM * $ratioM, 2);
+          $potUMJas = round($potUM * $ratioJ, 2);
+          
+          // Split retensi periode ini
+          $retPct = (float)$sp->retensi_persen;
+          $potRetensiMat = $gunakanRetensi ? round($progressMat * $retPct/100, 2) : 0;
+          $potRetensiJas = $gunakanRetensi ? round($progressJas * $retPct/100, 2) : 0;
           
           // DPP (Dasar Pengenaan Pajak)
           $dppMaterial = (float)($sp->dpp_material ?? 0);
@@ -161,6 +185,19 @@
               <td class="text-end">{{ number_format($nilaiProgress, 2, ',', '.') }}</td>
             </tr>
             
+            @if($priceMode === 'pisah')
+            <tr>
+              <td></td>
+              <td style="padding-left: 30px;">- Progress Material</td>
+              <td class="text-end">{{ number_format($progressMat, 2, ',', '.') }}</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td style="padding-left: 30px;">- Progress Jasa</td>
+              <td class="text-end">{{ number_format($progressJas, 2, ',', '.') }}</td>
+            </tr>
+            @endif
+            
             <tr class="table-secondary">
               <td class="text-center">2</td>
               <td colspan="2"><strong>Pengurangan:</strong></td>
@@ -172,6 +209,19 @@
               <td style="padding-left: 30px;">a. Pemotongan Uang Muka</td>
               <td class="text-end text-danger">-{{ number_format($potUM, 2, ',', '.') }}</td>
             </tr>
+            
+            @if($priceMode === 'pisah')
+            <tr>
+              <td></td>
+              <td style="padding-left: 50px;">· UM Material</td>
+              <td class="text-end text-danger">-{{ number_format($potUMMat, 2, ',', '.') }}</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td style="padding-left: 50px;">· UM Jasa</td>
+              <td class="text-end text-danger">-{{ number_format($potUMJas, 2, ',', '.') }}</td>
+            </tr>
+            @endif
             @endif
             
             @if($gunakanRetensi)
@@ -180,6 +230,19 @@
               <td style="padding-left: 30px;">{{ $gunakanUM ? 'b' : 'a' }}. Retensi {{ $fmtPct($sp->retensi_persen) }}%</td>
               <td class="text-end text-danger">-{{ number_format($potRetensi, 2, ',', '.') }}</td>
             </tr>
+            
+            @if($priceMode === 'pisah')
+            <tr>
+              <td></td>
+              <td style="padding-left: 50px;">· Retensi Material</td>
+              <td class="text-end text-danger">-{{ number_format($potRetensiMat, 2, ',', '.') }}</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td style="padding-left: 50px;">· Retensi Jasa</td>
+              <td class="text-end text-danger">-{{ number_format($potRetensiJas, 2, ',', '.') }}</td>
+            </tr>
+            @endif
             @endif
             
             @if(!$gunakanUM && !$gunakanRetensi)
@@ -256,8 +319,33 @@
           </tbody>
         </table>
         
+        @php
+          // Hitung total diterima yang sebenarnya untuk terbilang
+          $totalDiterima = $totalTagihan;
+          if ($applyPph && $pphRate > 0 && $pphDipungut) {
+            $totalDiterima = $totalTagihan - ($totalDibayar * $pphRate / 100);
+          }
+          
+          // Fungsi terbilang
+          function terbilangRupiah($angka) {
+              $angka = abs($angka);
+              $huruf = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
+              if ($angka < 12) return $huruf[$angka];
+              if ($angka < 20) return terbilangRupiah($angka - 10) . ' Belas';
+              if ($angka < 100) return terbilangRupiah($angka / 10) . ' Puluh ' . terbilangRupiah($angka % 10);
+              if ($angka < 200) return 'Seratus ' . terbilangRupiah($angka - 100);
+              if ($angka < 1000) return terbilangRupiah($angka / 100) . ' Ratus ' . terbilangRupiah($angka % 100);
+              if ($angka < 2000) return 'Seribu ' . terbilangRupiah($angka - 1000);
+              if ($angka < 1000000) return terbilangRupiah($angka / 1000) . ' Ribu ' . terbilangRupiah($angka % 1000);
+              if ($angka < 1000000000) return terbilangRupiah($angka / 1000000) . ' Juta ' . terbilangRupiah($angka % 1000000);
+              if ($angka < 1000000000000) return terbilangRupiah($angka / 1000000000) . ' Milyar ' . terbilangRupiah(fmod($angka, 1000000000));
+              return terbilangRupiah($angka / 1000000000000) . ' Triliun ' . terbilangRupiah(fmod($angka, 1000000000000));
+          }
+          $terbilangShow = trim(terbilangRupiah($totalDiterima));
+        @endphp
+        
         <div class="alert alert-info mt-3 mb-0">
-          <strong>Terbilang:</strong> {{ $sp->terbilang }}
+          <strong>Terbilang:</strong> {{ $terbilangShow }} Rupiah
         </div>
       </div>
     </div>

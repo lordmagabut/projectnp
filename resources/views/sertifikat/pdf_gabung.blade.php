@@ -63,7 +63,7 @@
 	$noPOWO = $sp->po_wo_spk_no ?? ($proyek->no_spk ?? '-');
 	$tglPOWO = $sp->po_wo_spk_tanggal ?? ($proyek->tanggal_spk ?? null); $tglPOWOFmt = $tglPOWO ? \Carbon\Carbon::parse($tglPOWO)->translatedFormat('d F Y') : '-';
 	$terminKe = (int)$sp->termin_ke; $pctCum = (float)$sp->persen_progress; $umMode = strtolower(optional($proyek)->uang_muka_mode ?? 'proporsional');
-	$pctPrev = property_exists($sp,'persen_progress_prev') && $sp->persen_progress_prev !== null ? (float)$sp->persen_progress_prev : 0.0;
+	$pctPrev = isset($sp->persen_progress_prev) ? (float)$sp->persen_progress_prev : 0.0;
 	if ($pctPrev === 0.0) {
 			try {
 					$prevSP = \App\Models\SertifikatPembayaran::query()
@@ -75,7 +75,10 @@
 					if ($prevSP) $pctPrev = (float)$prevSP->persen_progress;
 			} catch (\Throwable $e) { $pctPrev = 0.0; }
 	}
-	$pctNow = max(0, round((property_exists($sp,'persen_progress_delta') && $sp->persen_progress_delta !== null) ? (float)$sp->persen_progress_delta : ($pctCum - $pctPrev), 4));
+	// PENTING: Ambil langsung dari persen_progress_delta yang sudah dihitung controller
+	$pctNow = isset($sp->persen_progress_delta)
+		? (float)$sp->persen_progress_delta 
+		: max(0, round($pctCum - $pctPrev, 4));
 	$umTotal = isset($sp->uang_muka_nilai) ? (float)$sp->uang_muka_nilai : ($umPenj ? (float)$umPenj->nominal : 0.0);
 	$woTotSafe = (float)$sp->nilai_wo_total ?: 0.0001; $umPct = $woTotSafe > 0 ? round($umTotal / $woTotSafe * 100, 4) : 0;
 	$retPct = (float)$sp->retensi_persen; $ppnPct = (float)$sp->ppn_persen;
@@ -98,8 +101,8 @@
 	$fallbackRetJas = $gunakanRetensi_pdf ? round($fallbackPrgJas * $retPct/100, 2) : 0;
 	$dppMat_fallback = $fallbackPrgMat - $umCutMat - $fallbackRetMat; $dppJas_fallback = $fallbackPrgJas - $umCutJas - $fallbackRetJas;
 	$subMat = ($dppM_db !== null) ? $dppM_db : $dppMat_fallback; $subJas = ($dppJ_db !== null) ? $dppJ_db : $dppJas_fallback;
-	$den = $gunakanRetensi_pdf ? max(0.0001, (1 - $retPct/100)) : 1;
-	$prgMat = round(($subMat + $umCutMat) / $den, 2); $prgJas = round(($subJas + $umCutJas) / $den, 2);
+	// Progress PERIODE INI: gunakan nilai dari DB (nilai_progress_rp sudah benar = delta)
+	$prgMat = $fallbackPrgMat; $prgJas = $fallbackPrgJas;
 	$retMat = $gunakanRetensi_pdf ? round($prgMat * $retPct/100, 2) : 0; 
 	$retJas = $gunakanRetensi_pdf ? round($prgJas * $retPct/100, 2) : 0;
 	$ppnMat = round($subMat * $ppnPct/100, 2); $ppnJas = round($subJas * $ppnPct/100, 2);
@@ -116,6 +119,9 @@
 	$netMat = $totMat - $pphMat; $netJas = $totJas - $pphJas; $netAll = round($netMat + $netJas, 2);
 	$fmt = fn($n)=> number_format((float)$n, 0, ',', '.');
 	$pct = fn($n,$d=2)=> rtrim(rtrim(number_format((float)$n,$d,',','.'),'0'),',');
+	// Generate terbilang dari netAll
+	function terbilangRupiah($angka) { $angka = abs($angka); $huruf = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas']; if ($angka < 12) return $huruf[$angka]; if ($angka < 20) return terbilangRupiah($angka - 10) . ' Belas'; if ($angka < 100) return terbilangRupiah($angka / 10) . ' Puluh ' . terbilangRupiah($angka % 10); if ($angka < 200) return 'Seratus ' . terbilangRupiah($angka - 100); if ($angka < 1000) return terbilangRupiah($angka / 100) . ' Ratus ' . terbilangRupiah($angka % 100); if ($angka < 2000) return 'Seribu ' . terbilangRupiah($angka - 1000); if ($angka < 1000000) return terbilangRupiah($angka / 1000) . ' Ribu ' . terbilangRupiah($angka % 1000); if ($angka < 1000000000) return terbilangRupiah($angka / 1000000) . ' Juta ' . terbilangRupiah($angka % 1000000); if ($angka < 1000000000000) return terbilangRupiah($angka / 1000000000) . ' Milyar ' . terbilangRupiah(fmod($angka, 1000000000)); return terbilangRupiah($angka / 1000000000000) . ' Triliun ' . terbilangRupiah(fmod($angka, 1000000000000)); }
+	$terbilangPDF = trim(terbilangRupiah($netAll));
 	$umAfter = isset($sp->sisa_uang_muka) ? (float)$sp->sisa_uang_muka : ($umPenj ? $umPenj->getSisaUangMuka() : 0);
 	$umCutNow = $umCutTotal; $umBefore = max(0, round($umAfter + $umCutNow, 2)); $umModeLabel = strtoupper($umMode);
 	$umCutPct = ($umMode === 'utuh') ? 100 : (isset($sp->pemotongan_um_persen) ? (float)$sp->pemotongan_um_persen : $pctCum);
@@ -130,7 +136,7 @@
 		<tr><td class="label">Proyek</td><td class="sep">:</td><td class="val">{{ $namaProyek }}</td></tr>
 		<tr><td class="label">Tanggal</td><td class="sep">:</td><td class="val">{{ $tglSP }}</td></tr>
 		<tr><td class="label">NO PO / WO / SPK</td><td class="sep">:</td><td class="val">{{ $noPOWO }}</td></tr>
-		<tr><td class="label">Termin</td><td class="sep">:</td><td class="val">Kumulatif {{ $pct($pctCum,2) }}% (delta {{ $pct($pctNow,2) }}%)</td></tr>
+		<tr><td class="label">Termin</td><td class="sep">:</td><td class="val">Kumulatif {{ $pct($pctCum,2) }}% (periode ini {{ $pct($pctNow,2) }}%)</td></tr>
 	</table>
 	<p class="lead">Pada hari ini {{ \Carbon\Carbon::parse($sp->tanggal)->translatedFormat('l') }}, tanggal {{ $tglSP }}, kami yang bertanda tangan di bawah ini:</p>
 	<table class="meta">
@@ -145,7 +151,7 @@
 		<tr><td class="label">Jabatan</td><td class="sep">:</td><td class="val">{{ $sp->penerima_tugas_jabatan }}</td></tr>
 	</table>
 	<p>Selaku <strong>Penerima Tugas</strong> (Pihak Kedua), berdasarkan Berita Acara Progress Pekerjaan No: {{ $bapp->nomor_bapp ?? '-' }} telah mencapai progress pekerjaan kumulatif sebesar <strong>{{ $pct($pctCum,2) }}%</strong>.</p>
-	<p style="margin-top:12px;">Berdasarkan data & rincian terlampir, Pihak Kedua berhak menerima pembayaran termin ke-{{ $terminKe }} sebesar <span class="money fw-bold" style="font-size: 14px;">Rp.&nbsp;{{ $fmt($netAll) }}</span>, {{ $sp->terbilang }}.</p>
+	<p style="margin-top:12px;">Berdasarkan data & rincian terlampir, Pihak Kedua berhak menerima pembayaran termin ke-{{ $terminKe }} sebesar <span class="money fw-bold" style="font-size: 14px;">Rp.&nbsp;{{ $fmt($netAll) }}</span>, {{ $terbilangPDF }} Rupiah.</p>
 	<p style="margin-top: 14px;">Demikian sertifikat pembayaran ini dibuat dengan sesungguhnya untuk digunakan sebagaimana mestinya.</p>
 </div>
 
@@ -164,13 +170,20 @@
 		<tr><td class="center">1</td><td>Nilai PO / WO / SPK (Informasi kontrak)</td><td class="right money">Rp.&nbsp;{{ $fmt($woTot) }}</td></tr>
 		<tr><td class="center">2</td><td>Progress Pekerjaan yang Ditagihkan ({{ $pct($pctNow,2) }}% periode ini)</td><td class="right money">Rp.&nbsp;{{ $fmt($prgMat + $prgJas) }}</td></tr>
 		<tr><td class="center">3</td><td>Pengurangan</td><td style="text-align:left; background:#f6f6f6; font-style: italic;">(Rincian Potongan Periode Ini)</td></tr>
-		<tr class="subrow"><td></td><td style="padding-left:22px">Pemotongan Uang Muka (Mode {{ $umModeLabel }}, {{ $pct($umCutPct,2) }}%)<br>@if($umPenj) UM Penjualan: {{ $umPenj->nomor_bukti ?? '-' }}<br>Sisa sebelum: Rp.&nbsp;{{ $fmt($umBefore) }} | Sisa sesudah: Rp.&nbsp;{{ $fmt($umAfter) }} @endif</td><td class="right money">Rp.&nbsp;{{ $fmt($umCutMat + $umCutJas) }}</td></tr>
+		<tr class="subrow"><td></td><td style="padding-left:22px">Pemotongan Uang Muka {{ $pct($umCutPct,2) }}%</td><td class="right money">Rp.&nbsp;{{ $fmt($umCutMat + $umCutJas) }}</td></tr>
 		<tr class="subrow"><td></td><td style="padding-left:22px">Retensi {{ $pct($retPct,2) }}% dari Progress periode ini</td><td class="right money">Rp.&nbsp;{{ $fmt($retMat + $retJas) }}</td></tr>
 		<tr><td class="center">4</td><td class="fw-bold">Nilai Dasar Tagihan (2 − 3)</td><td class="right money fw-bold">Rp.&nbsp;{{ $fmt($subMat + $subJas) }}</td></tr>
+		@if($ppnPct > 0)
 		<tr><td class="center">5</td><td>Pajak (PPN {{ $pct($ppnPct,2) }}%)</td><td class="right money">Rp.&nbsp;{{ $fmt($ppnMat + $ppnJas) }}</td></tr>
-		<tr class="subrow"><td class="center fw-bold" style="background:#eee;">6</td><td class="fw-bold" style="background:#eee;">TOTAL + PPN (4 + 5) — PERIODE INI</td><td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($totMat + $totJas) }}</td></tr>
-		<tr><td class="center">7</td><td>PPh {{ $pphRate > 0 ? (rtrim(rtrim(number_format($pphRate,3,',','.'),'0'),',')) : '0' }}% — Sumber {{ $pphSource === 'material_jasa' ? 'Material + Jasa' : 'Jasa saja' }}, Basis {{ strtoupper($pphBaseKind) }}</td><td class="right money">- Rp.&nbsp;{{ $fmt($pphMat + $pphJas) }}</td></tr>
-		<tr class="subrow"><td class="center fw-bold" style="background:#eee;">8</td><td class="fw-bold" style="background:#eee;">TOTAL DIBAYARKAN (6 − 7) — PERIODE INI</td><td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netAll) }}</td></tr>
+		@endif
+		<tr class="subrow"><td class="center fw-bold" style="background:#eee;">{{ $ppnPct > 0 ? '6' : '5' }}</td><td class="fw-bold" style="background:#eee;">{{ $ppnPct > 0 ? 'TOTAL + PPN (4 + 5)' : 'TOTAL TAGIHAN (sama dengan 4)' }} — PERIODE INI</td><td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($totMat + $totJas) }}</td></tr>
+		@if($pphDipungut_pdf)
+		<tr><td class="center">{{ $ppnPct > 0 ? '7' : '6' }}</td><td>PPh {{ $pphRate > 0 ? (rtrim(rtrim(number_format($pphRate,3,',','.'),'0'),',')) : '0' }}% — Sumber {{ $pphSource === 'material_jasa' ? 'Material + Jasa' : 'Jasa saja' }}, Basis {{ strtoupper($pphBaseKind) }}</td><td class="right money">- Rp.&nbsp;{{ $fmt($pphMat + $pphJas) }}</td></tr>
+		@endif
+		@php
+			$finalRowNum = ($ppnPct > 0 ? 6 : 5) + ($pphDipungut_pdf ? 1 : 0) + 1;
+		@endphp
+		<tr class="subrow"><td class="center fw-bold" style="background:#eee;">{{ $finalRowNum }}</td><td class="fw-bold" style="background:#eee;">TOTAL DIBAYARKAN {{ $pphDipungut_pdf ? '(' . ($ppnPct > 0 ? '6' : '5') . ' − ' . ($ppnPct > 0 ? '7' : '6') . ')' : '(sama dengan ' . ($ppnPct > 0 ? '6' : '5') . ')' }} — PERIODE INI</td><td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netAll) }}</td></tr>
 	</table>
 	<table class="sign">
 		<tr>

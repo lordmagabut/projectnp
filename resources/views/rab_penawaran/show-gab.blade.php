@@ -659,7 +659,7 @@
                                         <div class="row">
                                             <div class="col-md-6 mb-3">
                                                 <label class="form-label">Tanggal Mulai Proyek <span class="text-danger">*</span></label>
-                                                <input type="date" name="tanggal_mulai" class="form-control @error('tanggal_mulai') is-invalid @enderror" 
+                                                <input type="date" name="tanggal_mulai" id="tanggal_mulai_gab" class="form-control @error('tanggal_mulai') is-invalid @enderror" 
                                                        value="{{ old('tanggal_mulai', $proyek->tanggal_mulai) }}" required>
                                                 @error('tanggal_mulai')
                                                     <div class="invalid-feedback">{{ $message }}</div>
@@ -667,12 +667,23 @@
                                             </div>
 
                                             <div class="col-md-6 mb-3">
-                                                <label class="form-label">Tanggal Selesai Proyek <span class="text-danger">*</span></label>
-                                                <input type="date" name="tanggal_selesai" class="form-control @error('tanggal_selesai') is-invalid @enderror"
-                                                       value="{{ old('tanggal_selesai', $proyek->tanggal_selesai) }}" required>
-                                                @error('tanggal_selesai')
+                                                <label class="form-label">Durasi Proyek (Minggu) <span class="text-danger">*</span></label>
+                                                <input type="number" name="durasi_minggu" id="durasi_minggu_gab" class="form-control @error('durasi_minggu') is-invalid @enderror"
+                                                       value="{{ old('durasi_minggu') }}" min="1" step="1" placeholder="Contoh: 8" required>
+                                                @error('durasi_minggu')
                                                     <div class="invalid-feedback">{{ $message }}</div>
                                                 @enderror
+                                                <div class="form-text">Masukkan estimasi durasi pengerjaan dalam minggu</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-12 mb-3">
+                                                <div class="alert alert-info mb-0" id="estimasi-selesai-gab" style="display: none;">
+                                                    <i class="fas fa-calendar-check me-1"></i>
+                                                    <strong>Estimasi Selesai:</strong> <span id="tanggal-selesai-display-gab">—</span>
+                                                </div>
+                                                <input type="hidden" name="tanggal_selesai" id="tanggal_selesai_gab" value="">
                                             </div>
                                         </div>
 
@@ -899,6 +910,55 @@
         retensiCheckbox.addEventListener('change', toggleRetensiFields);
         toggleRetensiFields(); // Initial state
     }
+})();
+
+// Calculate end date from start date + duration weeks
+(function(){
+    const tanggalMulai = document.getElementById('tanggal_mulai_gab');
+    const durasiMinggu = document.getElementById('durasi_minggu_gab');
+    const tanggalSelesai = document.getElementById('tanggal_selesai_gab');
+    const tanggalSelesaiDisplay = document.getElementById('tanggal-selesai-display-gab');
+    const estimasiSelesai = document.getElementById('estimasi-selesai-gab');
+
+    function calculateEndDate() {
+        if (!tanggalMulai || !durasiMinggu || !tanggalSelesai || !tanggalSelesaiDisplay) return;
+
+        const startDate = tanggalMulai.value;
+        const weeks = parseInt(durasiMinggu.value);
+
+        if (!startDate || !weeks || weeks < 1) {
+            tanggalSelesai.value = '';
+            tanggalSelesaiDisplay.textContent = '—';
+            if (estimasiSelesai) estimasiSelesai.style.display = 'none';
+            return;
+        }
+
+        // Calculate end date: start date + (weeks * 7 days) - 1 day
+        const start = new Date(startDate);
+        const end = new Date(start);
+        end.setDate(end.getDate() + (weeks * 7) - 1);
+
+        // Format for hidden input (YYYY-MM-DD)
+        const yyyy = end.getFullYear();
+        const mm = String(end.getMonth() + 1).padStart(2, '0');
+        const dd = String(end.getDate()).padStart(2, '0');
+        tanggalSelesai.value = `${yyyy}-${mm}-${dd}`;
+
+        // Format for display (DD-MM-YYYY)
+        tanggalSelesaiDisplay.textContent = `${dd}-${mm}-${yyyy}`;
+        if (estimasiSelesai) estimasiSelesai.style.display = 'block';
+    }
+
+    if (tanggalMulai) {
+        tanggalMulai.addEventListener('change', calculateEndDate);
+    }
+
+    if (durasiMinggu) {
+        durasiMinggu.addEventListener('input', calculateEndDate);
+    }
+
+    // Calculate on page load if values exist
+    calculateEndDate();
 })();
 </script>
 

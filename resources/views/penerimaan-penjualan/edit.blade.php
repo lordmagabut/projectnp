@@ -32,25 +32,101 @@
                     <form action="{{ route('penerimaan-penjualan.update', $penerimaanPenjualan->id) }}" method="POST">
                         @csrf
                         @method('PUT')
+                        @php
+                            $initialRows = old('items');
+                            if (!$initialRows) {
+                                $initialRows = $penerimaanPenjualan->details->map(function ($d) {
+                                    return [
+                                        'faktur_penjualan_id' => $d->faktur_penjualan_id,
+                                        'nominal' => $d->nominal,
+                                        'pph_dipotong' => $d->pph_dipotong,
+                                        'keterangan_pph' => $d->keterangan_pph,
+                                    ];
+                                })->toArray();
+                                if (empty($initialRows)) {
+                                    $initialRows = [[
+                                        'faktur_penjualan_id' => $penerimaanPenjualan->faktur_penjualan_id,
+                                        'nominal' => $penerimaanPenjualan->nominal,
+                                        'pph_dipotong' => $penerimaanPenjualan->pph_dipotong,
+                                        'keterangan_pph' => $penerimaanPenjualan->keterangan_pph,
+                                    ]];
+                                }
+                            }
+                        @endphp
 
                         <div class="mb-3">
-                            <label for="faktur_penjualan_id" class="form-label">
-                                Faktur Penjualan <span class="text-danger">*</span>
-                            </label>
-                            <select name="faktur_penjualan_id" id="faktur_penjualan_id" 
-                                    class="form-control @error('faktur_penjualan_id') is-invalid @enderror"
-                                    required>
-                                <option value="">-- Pilih Faktur --</option>
-                                @foreach ($fakturPenjualan as $faktur)
-                                    <option value="{{ $faktur->id }}"
-                                            @selected(old('faktur_penjualan_id', $penerimaanPenjualan->faktur_penjualan_id) == $faktur->id)>
-                                        {{ $faktur->no_faktur }} - Rp {{ number_format($faktur->total, 2, ',', '.') }}
-                                        (Sisa: Rp {{ number_format($faktur->total - ($faktur->penerimaanPenjualan->where('status', '!=', null)->sum('nominal') ?? 0), 2, ',', '.') }})
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('faktur_penjualan_id')
-                                <span class="invalid-feedback">{{ $message }}</span>
+                            <label class="form-label">Pembayaran untuk Faktur (1 pemberi kerja)</label>
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle" id="items-table">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 38%">Faktur Penjualan</th>
+                                            <th style="width: 20%">Nominal</th>
+                                            <th style="width: 18%">PPh Dipotong</th>
+                                            <th style="width: 18%">Ket. PPh</th>
+                                            <th style="width: 6%" class="text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($initialRows as $idx => $row)
+                                        <tr class="item-row">
+                                            <td>
+                                                <select name="items[{{ $idx }}][faktur_penjualan_id]" class="form-control" required>
+                                                    <option value="">-- Pilih Faktur --</option>
+                                                    @foreach ($fakturPenjualan as $faktur)
+                                                        @php
+                                                            $sumDetail = \App\Models\PenerimaanPenjualanDetail::where('faktur_penjualan_id', $faktur->id)
+                                                                ->whereHas('penerimaan', function ($q) { $q->whereIn('status', ['draft', 'approved']); })
+                                                                ->sum('nominal');
+                                                            $legacySum = \App\Models\PenerimaanPenjualan::where('faktur_penjualan_id', $faktur->id)
+                                                                ->whereDoesntHave('details')
+                                                                ->whereIn('status', ['draft', 'approved'])
+                                                                ->sum('nominal');
+                                                            $sisa = $faktur->total - ($sumDetail + $legacySum);
+                                                        @endphp
+                                                        <option value="{{ $faktur->id }}" @selected($row['faktur_penjualan_id'] == $faktur->id)>
+                                                            {{ $faktur->no_faktur }} ({{ $faktur->perusahaan->nama_perusahaan ?? 'N/A' }}) - Sisa: Rp {{ number_format($sisa, 2, ',', '.') }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">Rp</span>
+                                                    <input type="number" name="items[{{ $idx }}][nominal]" class="form-control text-right" step="0.01" value="{{ $row['nominal'] }}" required>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">Rp</span>
+                                                    <input type="number" name="items[{{ $idx }}][pph_dipotong]" class="form-control text-right" step="0.01" value="{{ $row['pph_dipotong'] ?? 0 }}">
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <input type="text" name="items[{{ $idx }}][keterangan_pph]" class="form-control" maxlength="100" value="{{ $row['keterangan_pph'] ?? '' }}">
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        @endforeach
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <td colspan="5">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addRow()">
+                                                    <i class="fas fa-plus"></i> Tambah Faktur
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <small class="text-muted">Semua faktur harus milik pemberi kerja/perusahaan yang sama.</small>
+                            @error('items')
+                                <div class="text-danger small mt-1">{{ $message }}</div>
                             @enderror
                         </div>
 
@@ -65,63 +141,6 @@
                             @error('tanggal')
                                 <span class="invalid-feedback">{{ $message }}</span>
                             @enderror
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="nominal" class="form-label">
-                                Nominal <span class="text-danger">*</span>
-                            </label>
-                            <div class="input-group">
-                                <span class="input-group-text">Rp</span>
-                                <input type="number" name="nominal" id="nominal" 
-                                       class="form-control text-right @error('nominal') is-invalid @enderror"
-                                       step="0.01"
-                                       value="{{ old('nominal', $penerimaanPenjualan->nominal) }}"
-                                       required>
-                            </div>
-                            @error('nominal')
-                                <span class="invalid-feedback d-block">{{ $message }}</span>
-                            @enderror
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="pph_dipotong" class="form-label">PPh Dipotong</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">Rp</span>
-                                        <input type="number" name="pph_dipotong" id="pph_dipotong" 
-                                               class="form-control text-right @error('pph_dipotong') is-invalid @enderror"
-                                               step="0.01"
-                                               value="{{ old('pph_dipotong', $penerimaanPenjualan->pph_dipotong ?? 0) }}">
-                                    </div>
-                                    <small class="text-muted d-block mt-1">
-                                        Dari Sertifikat Pembayaran: 
-                                        @if($penerimaanPenjualan->fakturPenjualan->sertifikatPembayaran)
-                                            Rp {{ number_format($penerimaanPenjualan->fakturPenjualan->sertifikatPembayaran->ppn_nilai ?? 0, 2, ',', '.') }}
-                                        @else
-                                            -
-                                        @endif
-                                    </small>
-                                    @error('pph_dipotong')
-                                        <span class="invalid-feedback d-block">{{ $message }}</span>
-                                    @enderror
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="keterangan_pph" class="form-label">Keterangan PPh</label>
-                                    <input type="text" name="keterangan_pph" id="keterangan_pph" 
-                                           class="form-control @error('keterangan_pph') is-invalid @enderror"
-                                           placeholder="Misal: PPh 21, PPh 23, dll"
-                                           value="{{ old('keterangan_pph', $penerimaanPenjualan->keterangan_pph) }}"
-                                           maxlength="100">
-                                    @error('keterangan_pph')
-                                        <span class="invalid-feedback">{{ $message }}</span>
-                                    @enderror
-                                </div>
-                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -190,3 +209,64 @@
     </div>
 </div>
 @endsection
+
+                <script>
+                    let rowIndex = {{ count($initialRows) }};
+
+                    function addRow() {
+                        const tbody = document.querySelector('#items-table tbody');
+                        const template = `
+                            <tr class="item-row">
+                                <td>
+                                    <select name="items[__INDEX__][faktur_penjualan_id]" class="form-control" required>
+                                        <option value="">-- Pilih Faktur --</option>
+                                        @foreach ($fakturPenjualan as $faktur)
+                                            @php
+                                                $sumDetail = \App\Models\PenerimaanPenjualanDetail::where('faktur_penjualan_id', $faktur->id)
+                                                    ->whereHas('penerimaan', function ($q) { $q->whereIn('status', ['draft', 'approved']); })
+                                                    ->sum('nominal');
+                                                $legacySum = \App\Models\PenerimaanPenjualan::where('faktur_penjualan_id', $faktur->id)
+                                                    ->whereDoesntHave('details')
+                                                    ->whereIn('status', ['draft', 'approved'])
+                                                    ->sum('nominal');
+                                                $sisa = $faktur->total - ($sumDetail + $legacySum);
+                                            @endphp
+                                            <option value="{{ $faktur->id }}">{{ $faktur->no_faktur }} ({{ $faktur->perusahaan->nama_perusahaan ?? 'N/A' }}) - Sisa: Rp {{ number_format($sisa, 2, ',', '.') }}</option>
+                                        @endforeach
+                                    </select>
+                                </td>
+                                <td>
+                                    <div class="input-group">
+                                        <span class="input-group-text">Rp</span>
+                                        <input type="number" name="items[__INDEX__][nominal]" class="form-control text-right" step="0.01" required>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group">
+                                        <span class="input-group-text">Rp</span>
+                                        <input type="number" name="items[__INDEX__][pph_dipotong]" class="form-control text-right" step="0.01" value="0">
+                                    </div>
+                                </td>
+                                <td>
+                                    <input type="text" name="items[__INDEX__][keterangan_pph]" class="form-control" maxlength="100">
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `.replace(/__INDEX__/g, rowIndex);
+                        rowIndex++;
+                        tbody.insertAdjacentHTML('beforeend', template);
+                    }
+
+                    function removeRow(btn) {
+                        const row = btn.closest('tr');
+                        const tbody = document.querySelector('#items-table tbody');
+                        if (tbody.querySelectorAll('tr').length <= 1) {
+                            return;
+                        }
+                        row.remove();
+                    }
+                </script>

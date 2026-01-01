@@ -35,6 +35,11 @@ class PenerimaanPenjualan extends Model
         return $this->belongsTo(FakturPenjualan::class, 'faktur_penjualan_id');
     }
 
+    public function details()
+    {
+        return $this->hasMany(PenerimaanPenjualanDetail::class, 'penerimaan_penjualan_id');
+    }
+
     public function pembuatnya()
     {
         return $this->belongsTo(User::class, 'dibuat_oleh_id');

@@ -19,4 +19,5 @@ class Bapp extends Model {
   public function proyek(){ return $this->belongsTo(Proyek::class); }
   public function penawaran(){ return $this->belongsTo(RabPenawaranHeader::class,'penawaran_id'); }
   public function progress(){ return $this->belongsTo(RabProgress::class,'progress_id'); }
+  public function sertifikatPembayaran(){ return $this->hasMany(SertifikatPembayaran::class, 'bapp_id'); }
 }
