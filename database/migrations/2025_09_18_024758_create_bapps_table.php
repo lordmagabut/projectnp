@@ -22,9 +22,9 @@ return new class extends Migration {
       $t->string('nomor_bapp', 100)->unique();
       $t->enum('status', ['draft','submitted','approved','rejected'])->default('draft');
 
-      $t->decimal('total_prev_pct', 10, 4)->default(0);
-      $t->decimal('total_delta_pct',10, 4)->default(0);
-      $t->decimal('total_now_pct', 10, 4)->default(0);
+      $t->decimal('total_prev_pct', 6, 2)->default(0);
+      $t->decimal('total_delta_pct', 6, 2)->default(0);
+      $t->decimal('total_now_pct', 6, 2)->default(0);
 
       $t->string('file_pdf_path')->nullable();
 

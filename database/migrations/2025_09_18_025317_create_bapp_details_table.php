@@ -19,16 +19,16 @@ return new class extends Migration {
       $t->string('kode')->nullable();
       $t->text('uraian')->nullable();
 
-      // snapshot bobot/progress (% proyek)
-      $t->decimal('bobot_item',   10, 4)->default(0);
-      $t->decimal('prev_pct',     10, 4)->default(0);
-      $t->decimal('delta_pct',    10, 4)->default(0);
-      $t->decimal('now_pct',      10, 4)->default(0);
+      // snapshot bobot/progress (% proyek) - 2 desimal untuk konsistensi dengan sertifikat
+      $t->decimal('bobot_item',   6, 2)->default(0);
+      $t->decimal('prev_pct',     6, 2)->default(0);
+      $t->decimal('delta_pct',    6, 2)->default(0);
+      $t->decimal('now_pct',      6, 2)->default(0);
 
       // opsional: % terhadap item
-      $t->decimal('prev_item_pct', 10, 4)->default(0);
-      $t->decimal('delta_item_pct',10, 4)->default(0);
-      $t->decimal('now_item_pct',  10, 4)->default(0);
+      $t->decimal('prev_item_pct', 6, 2)->default(0);
+      $t->decimal('delta_item_pct', 6, 2)->default(0);
+      $t->decimal('now_item_pct',  6, 2)->default(0);
 
       $t->timestamps();
 

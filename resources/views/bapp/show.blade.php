@@ -4,10 +4,18 @@
 @php
   $fmt = fn($n)=>number_format((float)$n, 2, ',', '.');
   $bapp->loadMissing('details','penawaran');
-  $totWi = $bapp->details->sum('bobot_item');
-  $totPrev = $bapp->details->sum('prev_pct');
-  $totDelta = $bapp->details->sum('delta_pct');
-  $totNow = $bapp->details->sum('now_pct');
+  // hindari drift: akumulasi integer (x100)
+  $totWiInt = $totPrevInt = $totDeltaInt = $totNowInt = 0;
+  foreach ($bapp->details as $d) {
+    $totWiInt    += (int) round(((float)$d->bobot_item) * 100);
+    $totPrevInt  += (int) round(((float)$d->prev_pct) * 100);
+    $totDeltaInt += (int) round(((float)$d->delta_pct) * 100);
+    $totNowInt   += (int) round(((float)$d->now_pct) * 100);
+  }
+  $totWi    = round($totWiInt / 100, 2);
+  $totPrev  = round($totPrevInt / 100, 2);
+  $totDelta = round($totDeltaInt / 100, 2);
+  $totNow   = round($totNowInt / 100, 2);
 @endphp
 
 <div class="card shadow-sm animate__animated animate__fadeIn">
@@ -45,10 +53,23 @@
           </button>
         </form>
       @elseif($bapp->status === 'submitted')
-        <form method="POST" action="{{ route('bapp.approve', [$proyek->id, $bapp->id]) }}">
+        <form method="POST" action="{{ route('bapp.approve', [$proyek->id, $bapp->id]) }}" class="d-inline">
           @csrf
           <button class="btn btn-success">
             <i data-feather="check-circle" class="me-1"></i>Setujui
+          </button>
+        </form>
+        <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $bapp->id]) }}" class="d-inline">
+          @csrf
+          <button class="btn btn-warning">
+            <i data-feather="edit" class="me-1"></i>Revisi
+          </button>
+        </form>
+      @elseif($bapp->status === 'approved')
+        <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $bapp->id]) }}" class="d-inline">
+          @csrf
+          <button class="btn btn-warning">
+            <i data-feather="edit" class="me-1"></i>Revisi
           </button>
         </form>
       @endif

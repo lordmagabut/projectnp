@@ -10,5 +10,16 @@ class BappDetail extends Model {
     'bobot_item','prev_pct','delta_pct','now_pct',
     'prev_item_pct','delta_item_pct','now_item_pct'
   ];
+
+  protected $casts = [
+    'bobot_item' => 'decimal:2',
+    'prev_pct' => 'decimal:2',
+    'delta_pct' => 'decimal:2',
+    'now_pct' => 'decimal:2',
+    'prev_item_pct' => 'decimal:2',
+    'delta_item_pct' => 'decimal:2',
+    'now_item_pct' => 'decimal:2',
+  ];
+
   public function bapp(){ return $this->belongsTo(Bapp::class); }
 }

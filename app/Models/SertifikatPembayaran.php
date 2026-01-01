@@ -14,7 +14,7 @@ class SertifikatPembayaran extends Model
 
         'nilai_wo_material','nilai_wo_jasa','nilai_wo_total',
 
-        'uang_muka_persen','uang_muka_nilai',
+        'uang_muka_persen','uang_muka_mode','uang_muka_nilai',
         'pemotongan_um_persen','pemotongan_um_nilai','sisa_uang_muka',
 
         'retensi_persen','retensi_nilai',
@@ -30,6 +30,7 @@ class SertifikatPembayaran extends Model
 
         // identitas dokumen
         'nomor','terbilang','dibuat_oleh_id',
+        'status','disetujui_oleh_id',
 
         // opsional: dipakai di view PDF (aman sekalipun kolomnya belum ada)
         'po_wo_spk_no','po_wo_spk_tanggal',
@@ -67,6 +68,8 @@ class SertifikatPembayaran extends Model
 
         'dpp_material'       => 'decimal:2',
         'dpp_jasa'           => 'decimal:2',
+
+        'status'             => 'string',
     ];
 
     protected $attributes = [

@@ -393,6 +393,12 @@
       ?? optional($finalPenawarans->last())->id;
 
   $currentPenawaran = $finalPenawarans->firstWhere('id', $currentPenawaranId);
+
+  // peta BAPP per minggu untuk penawaran aktif
+  $bappMap = \App\Models\Bapp::where('proyek_id', $proyek->id)
+      ->when($currentPenawaranId, fn($q)=>$q->where('penawaran_id', $currentPenawaranId))
+      ->get()
+      ->keyBy('minggu_ke');
 @endphp
 
 <div class="tab-pane fade" id="progressContent" role="tabpanel">
@@ -516,6 +522,24 @@
                 class="btn btn-sm btn-info me-1">
                 <i data-feather="eye" class="me-1"></i> Detail
               </a>
+
+              @php
+                $bapp = $bappMap[$item['minggu_ke']] ?? null;
+              @endphp
+
+              @if($item['status'] === 'final' && !$bapp)
+                <a
+                  href="{{ route('bapp.create', ['proyek' => $proyek->id, 'penawaran_id' => $currentPenawaranId, 'minggu_ke' => $item['minggu_ke']]) }}"
+                  class="btn btn-sm btn-outline-primary me-1">
+                  <i data-feather="file-text" class="me-1"></i> Terbitkan BAPP
+                </a>
+              @elseif($bapp)
+                <a
+                  href="{{ route('bapp.show', [$proyek->id, $bapp->id]) }}"
+                  class="btn btn-sm btn-primary me-1">
+                  <i data-feather="file-text" class="me-1"></i> Lihat BAPP
+                </a>
+              @endif
 
               @if($item['status'] == 'draft')
                 <form
@@ -654,6 +678,19 @@
                   @csrf
                   <button class="btn btn-sm btn-success">
                     <i data-feather="check-circle" class="me-1"></i> Approve
+                  </button>
+                </form>
+                <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $b->id]) }}" class="d-inline">
+                  @csrf
+                  <button class="btn btn-sm btn-warning">
+                    <i data-feather="edit" class="me-1"></i> Revisi
+                  </button>
+                </form>
+              @elseif($b->status === 'approved')
+                <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $b->id]) }}" class="d-inline">
+                  @csrf
+                  <button class="btn btn-sm btn-warning">
+                    <i data-feather="edit" class="me-1"></i> Revisi
                   </button>
                 </form>
               @endif
@@ -801,9 +838,19 @@
               <a href="{{ route('sertifikat.create', ['bapp_id' => $s->bapp_id]) }}" class="btn btn-sm btn-outline-warning me-1">
                 <i data-feather="refresh-ccw" class="me-1"></i> Revisi
               </a>
-              <a href="{{ route('sertifikat.cetak', $s->id) }}" class="btn btn-sm btn-outline-primary">
-                <i data-feather="download" class="me-1"></i> PDF
-              </a>
+              @if(($s->status ?? 'draft') === 'approved')
+                <a href="{{ route('sertifikat.cetak', $s->id) }}" class="btn btn-sm btn-outline-primary">
+                  <i data-feather="download" class="me-1"></i> PDF
+                </a>
+              @else
+                <form action="{{ route('sertifikat.approve', $s->id) }}" method="POST" class="d-inline">
+                  @csrf
+                  @method('PUT')
+                  <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Setujui sertifikat pembayaran ini?');">
+                    <i data-feather="check-circle" class="me-1"></i> Setujui
+                  </button>
+                </form>
+              @endif
               <form action="{{ route('sertifikat.destroy', $s->id) }}" method="POST" class="d-inline ms-1" onsubmit="return confirm('Hapus sertifikat ini?');">
                 @csrf
                 @method('DELETE')

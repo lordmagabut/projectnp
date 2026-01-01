@@ -256,16 +256,26 @@ public function update(Request $request, $id)
         * 1) Hitung total final per minggu (hanya status final/approved)
         *    -> ini yang dijadikan “dasar akumulasi sebelumnya”.
         */
-        $finalWeekly = $valCol
-        ? \DB::table($pdTable.' as d')
-            ->join('rab_progress as p', 'p.id', '=', 'd.rab_progress_id')
-            ->where('p.proyek_id', $id)
-            ->when($selectedId, fn ($q) => $q->where('p.penawaran_id', $selectedId))
-            ->whereIn('p.status', ['final','approved'])
-            ->groupBy('p.minggu_ke')
-            ->pluck(\DB::raw("SUM(d.$valCol) as s"), 'p.minggu_ke')
-            ->toArray()
-        : [];
+        // Hindari SUM langsung untuk mengurangi error float: akumulasi manual
+        $finalWeekly = [];
+        if ($valCol) {
+            $finalDetails = \DB::table($pdTable.' as d')
+                ->join('rab_progress as p', 'p.id', '=', 'd.rab_progress_id')
+                ->where('p.proyek_id', $id)
+                ->when($selectedId, fn ($q) => $q->where('p.penawaran_id', $selectedId))
+                ->whereIn('p.status', ['final','approved'])
+                ->select('p.minggu_ke', "d.$valCol")
+                ->get();
+
+            $finalWeeklyInt = [];
+            foreach ($finalDetails as $fd) {
+                $wk = (int)$fd->minggu_ke;
+                $finalWeeklyInt[$wk] = ($finalWeeklyInt[$wk] ?? 0) + (int)round((float)$fd->{$valCol} * 100);
+            }
+            foreach ($finalWeeklyInt as $wk => $val) {
+                $finalWeekly[$wk] = round($val / 100, 2);
+            }
+        }
 
         /**
         * 2) Siapkan akumulasi “sebelum minggu X”
@@ -305,16 +315,29 @@ public function update(Request $request, $id)
 
         $prev = $cumBefore[$mingguN] ?? 0.0;
 
-        $deltaThis = $valCol
-            ? (float) \DB::table($pdTable)->where('rab_progress_id', $row->id)->sum($valCol)
-            : 0.0;
+        // KOREKSI: Hitung dengan integer arithmetic untuk presisi
+        // Ambil semua items, hitung raw total, baru bulatkan
+        $deltaThis = 0.0;
+        if ($valCol) {
+                // JANGAN gunakan SUM dari database, ambil individual values
+                $itemDetails = \DB::table($pdTable)->where('rab_progress_id', $row->id)->select($valCol)->get();
+                $itemValues = $itemDetails->pluck($valCol)->toArray();
+            if (!empty($itemValues)) {
+                // Akumulasi dengan integer arithmetic (x100)
+                $totInt = 0;
+                foreach ($itemValues as $val) {
+                    $totInt += (int)round((float)$val * 100);
+                }
+                $deltaThis = round($totInt / 100, 2);
+            }
+        }
 
         $progressSummary[] = [
             'id'                  => $row->id,
             'minggu_ke'           => $mingguN,
             'tanggal'             => $row->tanggal,
             'progress_sebelumnya' => round($prev, 2),
-            'pertumbuhan'         => round($deltaThis, 2),
+            'pertumbuhan'         => $deltaThis,
             'progress_saat_ini'   => round($prev + $deltaThis, 2),
             'status'              => $row->status,
         ];
@@ -326,14 +349,21 @@ public function update(Request $request, $id)
         $realisasi = [];
         if (!empty($minggu) && $valCol) {
         // kelompokkan per minggu untuk progress berstatus final
-        $finalWeekly = \DB::table($pdTable . ' as d')
+            // JANGAN gunakan SUM, ambil individual values dan hitung dengan integer arithmetic
+            $finalDetails = \DB::table($pdTable . ' as d')
             ->join('rab_progress as p', 'p.id', '=', 'd.rab_progress_id')
             ->where('p.proyek_id', $id)
             ->when($selectedId, fn ($q) => $q->where('p.penawaran_id', $selectedId))
             ->where('p.status', 'final')
-            ->groupBy('p.minggu_ke')
-            ->pluck(\DB::raw("SUM(d.$valCol) as s"), 'p.minggu_ke')
-            ->toArray();
+                ->select('p.minggu_ke', "d.$valCol")
+                ->get();
+        
+            $finalWeekly = [];
+            foreach ($finalDetails as $row) {
+                $w = (int)$row->minggu_ke;
+                if (!isset($finalWeekly[$w])) $finalWeekly[$w] = 0;
+                $finalWeekly[$w] += (float)$row->{$valCol};
+            }
 
         $cum = 0.0;
         foreach ($minggu as $w) {

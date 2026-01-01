@@ -15,6 +15,7 @@ use App\Http\Controllers\PoController;
 use App\Http\Controllers\JurnalController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\FakturController;
+use App\Http\Controllers\FakturPenjualanController;
 use App\Http\Controllers\RabController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\RabScheduleController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SertifikatPembayaranController;
 use App\Http\Controllers\PembayaranPembelianController;
 use App\Http\Controllers\PenerimaanPembelianController;
+use App\Http\Controllers\PenerimaanPenjualanController;
 use App\Http\Controllers\ReturPembelianController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\DashboardController;
@@ -166,6 +168,24 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/faktur/{id}/revisi',        [FakturController::class, 'revisi'])->name('faktur.revisi');
     Route::post('/faktur/{id}/approve',       [FakturController::class, 'approve'])->name('faktur.approve');
 
+    // ========== Faktur Penjualan (auto dari Sertifikat) ==========
+    Route::get('/faktur-penjualan',     [FakturPenjualanController::class, 'index'])->name('faktur-penjualan.index');
+    Route::get('/faktur-penjualan/{id}',[FakturPenjualanController::class, 'show'])->name('faktur-penjualan.show');
+    Route::get('/faktur-penjualan/{id}/edit', [FakturPenjualanController::class, 'edit'])->name('faktur-penjualan.edit');
+    Route::put('/faktur-penjualan/{id}', [FakturPenjualanController::class, 'update'])->name('faktur-penjualan.update');
+    Route::post('/faktur-penjualan/{id}/revisi', [FakturPenjualanController::class, 'revisi'])->name('faktur-penjualan.revisi');
+    Route::delete('/faktur-penjualan/{id}', [FakturPenjualanController::class, 'destroy'])->name('faktur-penjualan.destroy');
+
+    // ========== Penerimaan Penjualan (Pembayaran) ==========
+    Route::get('/penerimaan-penjualan', [PenerimaanPenjualanController::class, 'index'])->name('penerimaan-penjualan.index');
+    Route::get('/penerimaan-penjualan/create', [PenerimaanPenjualanController::class, 'create'])->name('penerimaan-penjualan.create');
+    Route::post('/penerimaan-penjualan/store', [PenerimaanPenjualanController::class, 'store'])->name('penerimaan-penjualan.store');
+    Route::get('/penerimaan-penjualan/{penerimaanPenjualan}', [PenerimaanPenjualanController::class, 'show'])->name('penerimaan-penjualan.show');
+    Route::get('/penerimaan-penjualan/{penerimaanPenjualan}/edit', [PenerimaanPenjualanController::class, 'edit'])->name('penerimaan-penjualan.edit');
+    Route::put('/penerimaan-penjualan/{penerimaanPenjualan}', [PenerimaanPenjualanController::class, 'update'])->name('penerimaan-penjualan.update');
+    Route::post('/penerimaan-penjualan/{penerimaanPenjualan}/approve', [PenerimaanPenjualanController::class, 'approve'])->name('penerimaan-penjualan.approve');
+    Route::post('/penerimaan-penjualan/{penerimaanPenjualan}/revisi', [PenerimaanPenjualanController::class, 'revisi'])->name('penerimaan-penjualan.revisi');
+    Route::delete('/penerimaan-penjualan/{penerimaanPenjualan}', [PenerimaanPenjualanController::class, 'destroy'])->name('penerimaan-penjualan.destroy');
 
     Route::get('/pembayaran', [PembayaranPembelianController::class, 'index'])->name('pembayaran.index');
     Route::get('/pembayaran/{id}', [PembayaranPembelianController::class, 'show'])->name('pembayaran.show');
@@ -250,6 +270,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/create',      [SertifikatPembayaranController::class,'create'])->name('create');
         Route::post('/',           [SertifikatPembayaranController::class,'store'])->name('store');
         Route::get('/{id}/edit',   [SertifikatPembayaranController::class,'edit'])->name('edit');
+        Route::post('/{id}/approve', [SertifikatPembayaranController::class, 'approve'])->name('approve');
         Route::get('/{id}',        [SertifikatPembayaranController::class,'show'])->name('show');
         Route::get('/{id}/cetak',  [SertifikatPembayaranController::class,'cetak'])->name('cetak'); // PDF portrait
         Route::put('/{id}',        [SertifikatPembayaranController::class,'update'])->name('update');
@@ -322,6 +343,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('bapp/{bapp}/pdf',     [BappController::class,'pdf'])->name('bapp.pdf'); // view/download PDF
         Route::post('bapp/{bapp}/submit', [BappController::class,'submit'])->name('bapp.submit');
         Route::post('bapp/{bapp}/approve',[BappController::class,'approve'])->name('bapp.approve');
+        Route::post('bapp/{bapp}/revise', [BappController::class,'revise'])->name('bapp.revise');
         Route::delete('bapp/{bapp}',      [BappController::class, 'destroy'])->name('bapp.destroy');
         });
 

@@ -22,8 +22,8 @@ class RabProgressDetail extends Model
     ];
 
     protected $casts = [
-        'bobot_minggu_ini'     => 'decimal:4',
-        'bobot_item_snapshot'  => 'decimal:4',
+        'bobot_minggu_ini'     => 'decimal:2',
+        'bobot_item_snapshot'  => 'decimal:2',
         'pct_item_minggu_ini'  => 'decimal:2',
     ];
 

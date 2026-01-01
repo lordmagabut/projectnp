@@ -24,6 +24,8 @@
 
   // data & total
   $items = $bapp->details->sortBy('kode', SORT_NATURAL)->values();
+  // pakai integer scaling untuk hindari drift (nilai x100)
+  $totWiInt = $totPrevInt = $totDeltaInt = $totNowInt = 0;
   $totWi = $totPrev = $totDelta = $totNow = 0.0;
 
   $pemberiKerja = optional($proyek->pemberiKerja)->nama_pemberi_kerja ?? 'Pemberi Kerja';
@@ -101,10 +103,11 @@
       @php $currArea=null; $currHeader=null; @endphp
       @foreach($items as $it)
         @php
-          $totWi    += (float)$it->bobot_item;
-          $totPrev  += (float)$it->prev_pct;
-          $totDelta += (float)$it->delta_pct;
-          $totNow   += (float)$it->now_pct;
+          // akumulasi integer
+          $totWiInt    += (int) round(((float)$it->bobot_item) * 100);
+          $totPrevInt  += (int) round(((float)$it->prev_pct) * 100);
+          $totDeltaInt += (int) round(((float)$it->delta_pct) * 100);
+          $totNowInt   += (int) round(((float)$it->now_pct) * 100);
 
           $kode  = trim((string)$it->kode);
           $parts = $kode !== '' ? preg_split('/\s*\.\s*/', $kode) : [];
@@ -155,6 +158,13 @@
       @endforeach
 
       {{-- TOTAL (jumlah hanya kolom bobot) --}}
+      @php
+        // konversi kembali ke desimal 2 digit
+        $totWi    = round($totWiInt / 100, 2);
+        $totPrev  = round($totPrevInt / 100, 2);
+        $totDelta = round($totDeltaInt / 100, 2);
+        $totNow   = round($totNowInt / 100, 2);
+      @endphp
       <tr class="row-total">
         <td colspan="2" class="right">TOTAL</td>
         <td class="right">{{ $fmt($totWi) }}</td>

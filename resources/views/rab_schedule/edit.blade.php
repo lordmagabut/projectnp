@@ -76,19 +76,19 @@
         </div>
         <div class="card-body row g-3 align-items-end">
           <div class="col-sm-4">
-            <label class="form-label">Tanggal Mulai Schedule</label>
-            <input type="date" name="start_date" class="form-control form-control-sm"
-                   value="{{ old('start_date', optional($meta)->start_date) }}">
+            <label class="form-label">Tanggal Mulai</label>
+            <input type="text" class="form-control form-control-sm" value="{{ $proyek->tanggal_mulai ? \Carbon\Carbon::parse($proyek->tanggal_mulai)->format('d-m-Y') : '—' }}" disabled>
+            <div class="small-muted mt-1">Dari data Proyek</div>
           </div>
           <div class="col-sm-4">
-            <label class="form-label">Tanggal Selesai Schedule</label>
-            <input type="date" name="end_date" class="form-control form-control-sm"
-                   value="{{ old('end_date', optional($meta)->end_date) }}">
+            <label class="form-label">Tanggal Selesai</label>
+            <input type="text" class="form-control form-control-sm" value="{{ $proyek->tanggal_selesai ? \Carbon\Carbon::parse($proyek->tanggal_selesai)->format('d-m-Y') : '—' }}" disabled>
+            <div class="small-muted mt-1">Dari data Proyek</div>
           </div>
           <div class="col-sm-4">
             <label class="form-label">Total Minggu (otomatis)</label>
-            <input type="text" class="form-control form-control-sm" value="{{ optional($meta)->total_weeks }}" disabled>
-            <div class="small-muted mt-1">Nilai dihitung dari tanggal mulai & selesai saat disimpan.</div>
+            <input type="text" class="form-control form-control-sm" value="{{ optional($meta)->total_weeks ?? '0' }}" disabled>
+            <div class="small-muted mt-1">Dihitung dari tanggal Proyek</div>
           </div>
         </div>
       </div>

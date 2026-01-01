@@ -109,6 +109,7 @@
   $bapp    = $sp->bapp;
   $proyek  = optional($bapp)->proyek;
   $penawar = optional($bapp)->penawaran;
+  $umPenj  = $sp->uangMukaPenjualan;
 
   $nomorSP    = $sp->nomor;
   $namaProyek = $penawar->nama_penawaran ?? '—';
@@ -120,6 +121,8 @@
 
   $terminKe   = (int)$sp->termin_ke;
   $pctCum     = (float)$sp->persen_progress;   // kumulatif saat ini
+
+  $umMode     = strtolower(optional($proyek)->uang_muka_mode ?? 'proporsional');
 
   // ====== CARI KUMULATIF SEBELUMNYA (fallback di VIEW kalau controller belum supply) ======
   $pctPrev = 0.0;
@@ -151,8 +154,14 @@
                 : ($pctCum - $pctPrev);
   $pctNow = max(0, round($pctNowRaw, 4)); // jaga-jaga tidak negatif
 
-  // Parameter pajak/retensi/UM
-  $umPct  = (float)$sp->uang_muka_persen;
+  // Parameter pajak/retensi/UM (UM dari Penjualan, turunkan % dari nominal jika perlu)
+  $umTotal = isset($sp->uang_muka_nilai) ? (float)$sp->uang_muka_nilai : 0.0;
+  if ($umTotal <= 0 && $umPenj) {
+    $umTotal = (float)$umPenj->nominal;
+  }
+  $woTotSafe = (float)$sp->nilai_wo_total ?: 0.0001;
+  $umPct  = $woTotSafe > 0 ? round($umTotal / $woTotSafe * 100, 4) : 0;
+
   $retPct = (float)$sp->retensi_persen;
   $ppnPct = (float)$sp->ppn_persen;
 
@@ -161,23 +170,31 @@
   $woJas = (float)$sp->nilai_wo_jasa;
   $woTot = (float)$sp->nilai_wo_total;
 
-  // UM total kontrak/kolom
+  // UM total per komponen & rasio
   $umMatTotal = round($woMat * $umPct/100, 2);
   $umJasTotal = round($woJas * $umPct/100, 2);
+  $ratioM = $umTotal > 0 ? round($umMatTotal / $umTotal, 6) : 0.0;
+  $ratioJ = $umTotal > 0 ? round($umJasTotal / $umTotal, 6) : 0.0;
 
-  // Potongan UM PERIODE INI (proporsional delta progress)
-  $umCutMat = round($umMatTotal * $pctNow/100, 2);
-  $umCutJas = round($umJasTotal * $pctNow/100, 2);
+  // Check toggle uang muka & retensi dari proyek
+  $proyekPdf = optional($sp->bapp)->proyek;
+  $gunakanUM_pdf = (bool)($proyekPdf->gunakan_uang_muka ?? false);
+  $gunakanRetensi_pdf = (bool)($proyekPdf->gunakan_retensi ?? false);
+
+  // Pemotongan UM PERIODE INI ambil dari DB, bagi sesuai rasio
+  $umCutTotal = ($gunakanUM_pdf && isset($sp->pemotongan_um_nilai)) ? (float)$sp->pemotongan_um_nilai : 0.0;
+  $umCutMat = round($umCutTotal * $ratioM, 2);
+  $umCutJas = round($umCutTotal * $ratioJ, 2);
 
   // DPP (basis PPh) PERIODE INI dari DB bila ada (supaya PDF = acuan pajak)
   $dppM_db = isset($sp->dpp_material) ? (float)$sp->dpp_material : null;
   $dppJ_db = isset($sp->dpp_jasa)     ? (float)$sp->dpp_jasa     : null;
 
-  // Jika DPP DB tidak ada, hitung dari WO×delta% lalu kurangi UM & retensi
-  $fallbackPrgMat = round($woMat * $pctNow/100, 2);
-  $fallbackPrgJas = round($woJas * $pctNow/100, 2);
-  $fallbackRetMat = round($fallbackPrgMat * $retPct/100, 2);
-  $fallbackRetJas = round($fallbackPrgJas * $retPct/100, 2);
+  // Jika DPP DB tidak ada, fallback gunakan nilai_progress_rp (delta rupiah) dibagi proporsi WO
+  $fallbackPrgMat = isset($sp->nilai_progress_rp) ? round((float)$sp->nilai_progress_rp * ($woTotSafe > 0 ? $woMat/$woTotSafe : 0), 2) : round($woMat * $pctNow/100, 2);
+  $fallbackPrgJas = isset($sp->nilai_progress_rp) ? round((float)$sp->nilai_progress_rp * ($woTotSafe > 0 ? $woJas/$woTotSafe : 0), 2) : round($woJas * $pctNow/100, 2);
+  $fallbackRetMat = $gunakanRetensi_pdf ? round($fallbackPrgMat * $retPct/100, 2) : 0;
+  $fallbackRetJas = $gunakanRetensi_pdf ? round($fallbackPrgJas * $retPct/100, 2) : 0;
   $dppMat_fallback = $fallbackPrgMat - $umCutMat - $fallbackRetMat;
   $dppJas_fallback = $fallbackPrgJas - $umCutJas - $fallbackRetJas;
 
@@ -186,13 +203,13 @@
   $subJas = ($dppJ_db !== null) ? $dppJ_db : $dppJas_fallback;
 
   // Dari DPP + potongan UM turunkan Progress PERIODE INI → progress = (DPP + UM) / (1 - retensi%)
-  $den = max(0.0001, (1 - $retPct/100)); // hindari div/0
+  $den = $gunakanRetensi_pdf ? max(0.0001, (1 - $retPct/100)) : 1; // hindari div/0
   $prgMat = round(($subMat + $umCutMat) / $den, 2);
   $prgJas = round(($subJas + $umCutJas) / $den, 2);
 
   // Retensi PERIODE INI hasil turunan (agar identitas 2−3=4 pas)
-  $retMat = round($prgMat * $retPct/100, 2);
-  $retJas = round($prgJas * $retPct/100, 2);
+  $retMat = $gunakanRetensi_pdf ? round($prgMat * $retPct/100, 2) : 0;
+  $retJas = $gunakanRetensi_pdf ? round($prgJas * $retPct/100, 2) : 0;
 
   // PPN dari DPP; rekonsiliasi ke ppn_nilai DB bila perlu
   $ppnMat = round($subMat * $ppnPct/100, 2);
@@ -223,9 +240,10 @@
     $pphBaseKind = (string)($tax->pph_base ?? 'dpp'); // 'dpp' | 'subtotal'
     $extraOpts   = is_array($tax->extra_options ?? null) ? $tax->extra_options : [];
     $pphSource   = (string)($extraOpts['pph_dpp_source'] ?? 'jasa'); // 'jasa' | 'material_jasa'
+    $pphDipungut = ($proyekPdf->pph_dipungut ?? 'ya') === 'ya';
 
     $pphMat = 0.0; $pphJas = 0.0;
-    if ($applyPph && $pphRate > 0) {
+    if ($applyPph && $pphRate > 0 && $pphDipungut) {
       if ($pphSource === 'material_jasa') {
         $baseM = ($pphBaseKind === 'dpp') ? $subMat : $prgMat;
         $baseJ = ($pphBaseKind === 'dpp') ? $subJas : $prgJas;
@@ -245,6 +263,13 @@
   // Formatter
   $fmt = fn($n)=> number_format((float)$n, 0, ',', '.');
   $pct = fn($n,$d=2)=> rtrim(rtrim(number_format((float)$n,$d,',','.'),'0'),',');
+
+  // UM Penjualan audit info
+  $umAfter  = isset($sp->sisa_uang_muka) ? (float)$sp->sisa_uang_muka : ($umPenj ? $umPenj->getSisaUangMuka() : 0);
+  $umCutNow = $umCutTotal;
+  $umBefore = max(0, round($umAfter + $umCutNow, 2));
+  $umModeLabel = strtoupper($umMode);
+  $umCutPct = ($umMode === 'utuh') ? 100 : (isset($sp->pemotongan_um_persen) ? (float)$sp->pemotongan_um_persen : $pctCum);
 @endphp
 
 <!-- ================= HALAMAN 1 (narasi kumulatif, tampilkan delta) ================= -->
@@ -357,7 +382,14 @@
       <td colspan="3" style="text-align:left; background:#f6f6f6; font-style: italic;">(Rincian Potongan Periode Ini)</td>
     </tr>
     <tr class="subrow">
-      <td></td><td style="padding-left:22px">Pemotongan Uang Muka (proporsional {{ $pct($pctNow,2) }}% dari UM kontrak)</td>
+      <td></td>
+      <td style="padding-left:22px">
+        Pemotongan Uang Muka (Mode {{ $umModeLabel }}, {{ $pct($umCutPct,2) }}%)<br>
+        @if($umPenj)
+          UM Penjualan: {{ $umPenj->nomor_bukti ?? '-' }}<br>
+          Sisa sebelum: Rp.&nbsp;{{ $fmt($umBefore) }} | Sisa sesudah: Rp.&nbsp;{{ $fmt($umAfter) }}
+        @endif
+      </td>
       <td class="right money">Rp.&nbsp;{{ $fmt($umCutMat) }}</td>
       <td class="right money">Rp.&nbsp;{{ $fmt($umCutJas) }}</td>
       <td class="right money">Rp.&nbsp;{{ $fmt($umCutMat + $umCutJas) }}</td>

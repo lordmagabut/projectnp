@@ -82,15 +82,28 @@ class BappController extends Controller
     $totDelta = round($rows->sum('bDelta'), 4);
     $totNow   = round($rows->sum('bNow'),   4);
 
+    // Hitung total minggu dan tanggal progress untuk validasi
+    $totalWeeks = 1;
+    if ($proyek->tanggal_mulai && $proyek->tanggal_selesai) {
+        $start = \Carbon\Carbon::parse($proyek->tanggal_mulai);
+        $end = \Carbon\Carbon::parse($proyek->tanggal_selesai);
+        $days = $start->diffInDays($end) + 1;
+        $totalWeeks = (int) ceil($days / 7);
+    }
+
+    $tanggalProgress = $progress ? \Carbon\Carbon::parse($progress->tanggal)->toDateString() : now()->toDateString();
+
     return view('bapp.create', [
-        'proyek'     => $proyek,
-        'penawaran'  => $penawaranId ? RabPenawaranHeader::find($penawaranId) : null,
-        'progress'   => $progress,
-        'mingguKe'   => $mingguKe,
-        'rows'       => $rows,
-        'totPrev'    => $totPrev,
-        'totDelta'   => $totDelta,
-        'totNow'     => $totNow,
+        'proyek'          => $proyek,
+        'penawaran'       => $penawaranId ? RabPenawaranHeader::find($penawaranId) : null,
+        'progress'        => $progress,
+        'mingguKe'        => $mingguKe,
+        'rows'            => $rows,
+        'totPrev'         => $totPrev,
+        'totDelta'        => $totDelta,
+        'totNow'          => $totNow,
+        'totalWeeks'      => $totalWeeks,
+        'tanggalProgress' => $tanggalProgress,
     ]);
 }
 
@@ -134,16 +147,22 @@ class BappController extends Controller
             ]);
 
             $details = [];
-            $totPrev = $totDelta = $totNow = 0.0;
+            // Gunakan integer arithmetic untuk menghindari floating point error
+            $totPrevAccum = $totDeltaAccum = $totNowAccum = 0;  // integer (dalam perseratusan)
 
             foreach ($items as $it) {
                 $id   = $it->id;
                 $Wi_i = (float)($Wi[$id] ?? 0);
                 $prev = (float)($prevProj[$id] ?? 0);   // % proyek kumulatif < N
                 $dlt  = (float)($deltaProj[$id] ?? 0);  // % proyek minggu N
-                $now  = round($prev + $dlt, 4);
+                $now  = $prev + $dlt;  // Jangan bulatkan dulu
 
                 if ($Wi_i == 0 && $prev == 0 && $dlt == 0) continue; // skip baris kosong
+
+                // Simpan dengan 2 desimal
+                $prev_rounded = round($prev, 2);
+                $dlt_rounded = round($dlt, 2);
+                $now_rounded = round($now, 2);
 
                 $details[] = [
                     'bapp_id'         => $bapp->id,
@@ -151,19 +170,21 @@ class BappController extends Controller
                     'kode'            => $it->kode,
                     'uraian'          => $it->uraian,
                     'bobot_item'      => $Wi_i,
-                    'prev_pct'        => $prev,
-                    'delta_pct'       => $dlt,
-                    'now_pct'         => $now,
-                    'prev_item_pct'   => (float)($prevItem[$id]  ?? 0),
-                    'delta_item_pct'  => (float)($deltaItem[$id] ?? 0),
-                    'now_item_pct'    => round(($prevItem[$id] ?? 0) + ($deltaItem[$id] ?? 0), 4),
+                    'prev_pct'        => $prev_rounded,
+                    'delta_pct'       => $dlt_rounded,
+                    'now_pct'         => $now_rounded,
+                    'prev_item_pct'   => round((float)($prevItem[$id]  ?? 0), 2),
+                    'delta_item_pct'  => round((float)($deltaItem[$id] ?? 0), 2),
+                    'now_item_pct'    => round(((float)($prevItem[$id] ?? 0) + (float)($deltaItem[$id] ?? 0)), 2),
                     'created_at'      => now(),
                     'updated_at'      => now(),
                 ];
 
-                $totPrev  += $prev;
-                $totDelta += $dlt;
-                $totNow   += $now;
+                // Akumulasi menggunakan integer arithmetic (nilai * 100)
+                // untuk menghindari floating point precision error
+                $totPrevAccum  += (int)round($prev_rounded * 100);
+                $totDeltaAccum += (int)round($dlt_rounded * 100);
+                $totNowAccum   += (int)round($now_rounded * 100);
             }
 
             if (!empty($details)) {
@@ -171,9 +192,9 @@ class BappController extends Controller
             }
 
             $bapp->update([
-                'total_prev_pct'   => round($totPrev,  4),
-                'total_delta_pct'  => round($totDelta, 4),
-                'total_now_pct'    => round($totNow,   4),
+                'total_prev_pct'   => round($totPrevAccum / 100, 2),
+                'total_delta_pct'  => round($totDeltaAccum / 100, 2),
+                'total_now_pct'    => round($totNowAccum / 100, 2),
             ]);
 
             // generate PDF
@@ -222,6 +243,24 @@ class BappController extends Controller
             'approved_at' => now(),
         ]);
         return back()->with('success','BAPP disetujui.');
+    }
+
+    public function revise(Proyek $proyek, Bapp $bapp)
+    {
+        abort_if($bapp->proyek_id !== $proyek->id, 404);
+        
+        // Hanya bisa revisi jika status submitted atau approved
+        if (!in_array($bapp->status, ['submitted', 'approved'])) {
+            return back()->with('error', 'BAPP hanya bisa direvisi jika statusnya Submitted atau Approved.');
+        }
+        
+        $bapp->update([
+            'status' => 'draft',
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
+        
+        return back()->with('success', 'BAPP dikembalikan ke status Draft untuk revisi.');
     }
 
     /**
@@ -310,6 +349,21 @@ private function dataset(int $proyekId, ?int $penawaranId, int $mingguKe, ?RabPr
             ->selectRaw('pi.rab_detail_id as id, SUM(sd.'.$sdVal.') as s')
             ->groupBy('pi.rab_detail_id')
             ->pluck('s','id')->toArray();
+    }
+
+    // NORMALISASI: total bobot harus tepat 100 (koreksi drift dari schedule)
+    $totalWi = array_sum($Wi);
+    if ($totalWi > 0 && abs($totalWi - 100) > 0.0001) {
+        $factor = 100 / $totalWi;
+        foreach ($Wi as $id => $val) {
+            $Wi[$id] = round($val * $factor, 2); // round ke 2 desimal (sesuai DB decimal(6,2))
+        }
+        // koreksi item pertama jika masih ada sisa
+        $newTotal = array_sum($Wi);
+        if ($newTotal != 100 && count($Wi) > 0) {
+            $firstId = array_key_first($Wi);
+            $Wi[$firstId] = round($Wi[$firstId] + (100 - $newTotal), 2);
+        }
     }
 
     /* --- cari BAPP TERAKHIR sebelum minggu N (prev kumulatif) --- */

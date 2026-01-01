@@ -167,6 +167,55 @@
     </div>
 
     {{-- ================================
+         Informasi Proyek (Jika Final)
+       ================================= --}}
+    @if($penawaran->status === 'final')
+      <h5 class="mb-3 text-primary"><i class="fas fa-file-contract me-2"></i> Informasi Proyek</h5>
+      <div class="table-responsive mb-4">
+        <table class="table table-borderless table-sm">
+          <tr>
+            <th style="width: 200px">Nomor SPK</th>
+            <td>: <strong>{{ $proyek->no_spk ?? '-' }}</strong></td>
+          </tr>
+          <tr>
+            <th>Periode Proyek</th>
+            <td>: <strong>{{ $proyek->tanggal_mulai ? \Carbon\Carbon::parse($proyek->tanggal_mulai)->format('d-m-Y') : '-' }}</strong> s/d <strong>{{ $proyek->tanggal_selesai ? \Carbon\Carbon::parse($proyek->tanggal_selesai)->format('d-m-Y') : '-' }}</strong></td>
+          </tr>
+          <tr>
+            <th>Uang Muka (DP)</th>
+            <td>:
+              @if($proyek->gunakan_uang_muka)
+                <span class="badge bg-info">Digunakan</span> &nbsp; <strong>{{ $proyek->persen_dp ?? 0 }}%</strong>
+              @else
+                <span class="badge bg-light text-dark">Tidak Digunakan</span>
+              @endif
+            </td>
+          </tr>
+          <tr>
+            <th>Retensi</th>
+            <td>:
+              @if($proyek->gunakan_retensi)
+                <span class="badge bg-info">Digunakan</span> &nbsp; <strong>{{ $proyek->persen_retensi ?? 0 }}%</strong> — Durasi <strong>{{ $proyek->durasi_retensi ?? 0 }} hari</strong>
+              @else
+                <span class="badge bg-light text-dark">Tidak Digunakan</span>
+              @endif
+            </td>
+          </tr>
+          <tr>
+            <th>PPh Pemotongan</th>
+            <td>:
+              @if(($proyek->pph_dipungut ?? 'ya') === 'ya')
+                <span class="badge bg-warning text-dark">Dipungut</span> &nbsp; <small class="text-muted">Dipotong dari tagihan</small>
+              @else
+                <span class="badge bg-success">Bayar Sendiri</span> &nbsp; <small class="text-muted">Tidak dipotong dari tagihan</small>
+              @endif
+            </td>
+          </tr>
+        </table>
+      </div>
+    @endif
+
+    {{-- ================================
          Ringkasan Pajak & Total
        ================================= --}}
     <h5 class="mb-3 text-primary"><i class="fas fa-calculator me-2"></i> Ringkasan Pajak</h5>
@@ -516,30 +565,6 @@
         </button>
       @endif
 
-      {{-- Bobot (hanya aktif jika FINAL) --}}
-      @if($isFinal)
-        <form method="POST" action="{{ route('proyek.penawaran.snapshot', [$proyek->id, $penawaran->id]) }}" class="m-0">
-          @csrf
-          <button class="btn btn-dark btn-sm" type="submit" title="Buat Bobot">
-            <i class="fas fa-balance-scale me-1"></i> Bobot
-          </button>
-        </form>
-      @else
-        <button class="btn btn-dark btn-sm disabled-btn" type="button" data-bs-toggle="tooltip" title="Finalkan penawaran (upload PO/WO/SPK) untuk mengakses Bobot">
-          <i class="fas fa-balance-scale me-1"></i> Bobot
-        </button>
-      @endif
-
-      {{-- RAB Schedule (hanya aktif jika FINAL) --}}
-      @if($isFinal)
-        <a class="btn btn-outline-primary btn-sm" href="{{ route('rabSchedule.index', $proyek->id) }}">
-          <i class="fas fa-calendar-alt me-1"></i> RAB Schedule
-        </a>
-      @else
-        <a class="btn btn-outline-primary btn-sm disabled-btn" href="javascript:void(0)" data-bs-toggle="tooltip" title="Finalkan penawaran (upload PO/WO/SPK) untuk mengakses Schedule">
-          <i class="fas fa-calendar-alt me-1"></i> RAB Schedule
-        </a>
-      @endif
     </div>
 
     @php
@@ -719,31 +744,77 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
           </div>
 
           <div class="row">
+            <div class="col-md-12 mb-3">
+              <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="gunakan_uang_muka" name="gunakan_uang_muka" value="1"
+                       {{ old('gunakan_uang_muka', $proyek->gunakan_uang_muka ?? false) ? 'checked' : '' }}>
+                <label class="form-check-label" for="gunakan_uang_muka">
+                  <strong>Gunakan Uang Muka (DP)</strong>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="row" id="dp-fields">
             <div class="col-md-4 mb-3">
-              <label class="form-label">Persentase DP (%) <span class="text-danger">*</span></label>
+              <label class="form-label">Persentase DP (%)</label>
               <input type="number" step="0.01" name="persen_dp" class="form-control @error('persen_dp') is-invalid @enderror"
-                     value="{{ old('persen_dp', $proyek->persen_dp ?? 0) }}" min="0" max="100" required>
+                     value="{{ old('persen_dp', $proyek->persen_dp ?? 0) }}" min="0" max="100">
               @error('persen_dp')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
             </div>
+          </div>
 
+          <div class="row">
+            <div class="col-md-12 mb-3">
+              <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="gunakan_retensi" name="gunakan_retensi" value="1"
+                       {{ old('gunakan_retensi', $proyek->gunakan_retensi ?? false) ? 'checked' : '' }}>
+                <label class="form-check-label" for="gunakan_retensi">
+                  <strong>Gunakan Retensi</strong>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="row" id="retensi-fields">
             <div class="col-md-4 mb-3">
-              <label class="form-label">Persentase Retensi (%) <span class="text-danger">*</span></label>
+              <label class="form-label">Persentase Retensi (%)</label>
               <input type="number" step="0.01" name="persen_retensi" class="form-control @error('persen_retensi') is-invalid @enderror"
-                     value="{{ old('persen_retensi', $proyek->persen_retensi ?? 0) }}" min="0" max="100" required>
+                     value="{{ old('persen_retensi', $proyek->persen_retensi ?? 0) }}" min="0" max="100">
               @error('persen_retensi')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
             </div>
 
             <div class="col-md-4 mb-3">
-              <label class="form-label">Durasi Retensi (Hari) <span class="text-danger">*</span></label>
+              <label class="form-label">Durasi Retensi (Hari)</label>
               <input type="number" name="durasi_retensi" class="form-control @error('durasi_retensi') is-invalid @enderror"
-                     value="{{ old('durasi_retensi', $proyek->durasi_retensi ?? 0) }}" min="0" required>
+                     value="{{ old('durasi_retensi', $proyek->durasi_retensi ?? 0) }}" min="0">
               @error('durasi_retensi')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-12 mb-3">
+              <label class="form-label">PPh Pemotongan</label>
+              <div class="form-check">
+                <input type="radio" class="form-check-input" id="pph_dipungut_ya" name="pph_dipungut" value="ya"
+                       {{ old('pph_dipungut', $proyek->pph_dipungut ?? 'ya') === 'ya' ? 'checked' : '' }}>
+                <label class="form-check-label" for="pph_dipungut_ya">
+                  <strong>Dipungut</strong> - PPh dipotong dari tagihan
+                </label>
+              </div>
+              <div class="form-check">
+                <input type="radio" class="form-check-input" id="pph_dipungut_tidak" name="pph_dipungut" value="tidak"
+                       {{ old('pph_dipungut', $proyek->pph_dipungut ?? 'ya') === 'tidak' ? 'checked' : '' }}>
+                <label class="form-check-label" for="pph_dipungut_tidak">
+                  <strong>Bayar Sendiri</strong> - PPh tidak dipotong dari tagihan
+                </label>
+              </div>
             </div>
           </div>
 
@@ -873,6 +944,38 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
   modeEl?.addEventListener('change', filterAndRender);
   discEl?.addEventListener('change', filterAndRender);
 })();
+</script>
+
+<script>
+  // Toggle show/hide fields for DP and Retensi
+  (function(){
+    const dpCheckbox = document.getElementById('gunakan_uang_muka');
+    const dpFields = document.getElementById('dp-fields');
+    const retensiCheckbox = document.getElementById('gunakan_retensi');
+    const retensiFields = document.getElementById('retensi-fields');
+
+    function toggleDpFields() {
+      if (dpCheckbox && dpFields) {
+        dpFields.style.display = dpCheckbox.checked ? 'flex' : 'none';
+      }
+    }
+
+    function toggleRetensiFields() {
+      if (retensiCheckbox && retensiFields) {
+        retensiFields.style.display = retensiCheckbox.checked ? 'flex' : 'none';
+      }
+    }
+
+    if (dpCheckbox) {
+      dpCheckbox.addEventListener('change', toggleDpFields);
+      toggleDpFields(); // Initial state
+    }
+
+    if (retensiCheckbox) {
+      retensiCheckbox.addEventListener('change', toggleRetensiFields);
+      toggleRetensiFields(); // Initial state
+    }
+  })();
 </script>
 
 <script>

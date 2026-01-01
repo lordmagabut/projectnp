@@ -104,13 +104,19 @@ $items = DB::table('rab_penawaran_weight as w')
         ->get()
         ->keyBy('rab_penawaran_item_id');
 
-    // Meta tanggal (1 baris per proyek+penawaran)
+    // Ambil tanggal dari proyek
+    $start = $proyek->tanggal_mulai ? Carbon::parse($proyek->tanggal_mulai)->startOfDay() : now()->startOfDay();
+    $end = $proyek->tanggal_selesai ? Carbon::parse($proyek->tanggal_selesai)->endOfDay() : now()->addWeeks(4)->endOfDay();
+    $days = $start->diffInDays($end) + 1;
+    $weeks = (int) ceil($days / 7);
+
+    // Meta tanggal (disimpan untuk konsistensi, tapi source: proyek)
     $meta = \App\Models\RabScheduleMeta::firstOrCreate(
         ['proyek_id' => $proyek->id, 'penawaran_id' => $penawaran->id],
         [
-            'start_date'  => now()->toDateString(),
-            'end_date'    => now()->addWeeks(4)->toDateString(),
-            'total_weeks' => 5,
+            'start_date'  => $start->toDateString(),
+            'end_date'    => $end->toDateString(),
+            'total_weeks' => max(1, $weeks),
         ]
     );
 
@@ -134,8 +140,6 @@ $items = DB::table('rab_penawaran_weight as w')
     public function saveSetup(Request $request, Proyek $proyek, RabPenawaranHeader $penawaran)
     {
         $data = $request->validate([
-            'start_date' => ['required','date'],
-            'end_date'   => ['required','date','after_or_equal:start_date'],
             'rows'       => ['required','array','min:1'],
     
             'rows.*.rab_penawaran_item_id' => ['required','exists:rab_penawaran_items,id'],
@@ -145,9 +149,11 @@ $items = DB::table('rab_penawaran_weight as w')
     
         DB::transaction(function () use ($data, $proyek, $penawaran) {
     
-            // 1) Simpan meta tanggal penawaran
-            $start = Carbon::parse($data['start_date'])->startOfDay();
-            $end   = Carbon::parse($data['end_date'])->endOfDay();
+            // 1) Ambil tanggal dari proyek
+            abort_if(!$proyek->tanggal_mulai || !$proyek->tanggal_selesai, 400, 'Tanggal mulai & selesai proyek harus diisi terlebih dahulu');
+            
+            $start = Carbon::parse($proyek->tanggal_mulai)->startOfDay();
+            $end   = Carbon::parse($proyek->tanggal_selesai)->endOfDay();
             $days  = $start->diffInDays($end) + 1; // inklusif
             $weeks = (int) ceil($days / 7);
     

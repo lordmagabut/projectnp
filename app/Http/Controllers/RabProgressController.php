@@ -265,12 +265,22 @@ foreach ($detailIds as $did) {
 // (opsional kompatibilitas lama)
 $realizedMap = $prevMap;
 
+        // Hitung total minggu dari tanggal proyek
+        $totalWeeks = 1;
+        if ($proyek->tanggal_mulai && $proyek->tanggal_selesai) {
+            $start = Carbon::parse($proyek->tanggal_mulai);
+            $end = Carbon::parse($proyek->tanggal_selesai);
+            $days = $start->diffInDays($end) + 1;
+            $totalWeeks = (int) ceil($days / 7);
+        }
+
         return view('proyek.progress.create', [
             'proyek'           => $proyek,
             'finalPenawarans'  => $finalPenawarans,
             'penawaranId'      => $penawaranId,
             'mingguKe'         => $mingguKe,
             'tanggal'          => now()->toDateString(),
+            'totalWeeks'       => $totalWeeks,
 
             'rows'             => $displayRows,
 
@@ -323,6 +333,21 @@ $realizedMap = $prevMap;
             ->groupBy('pi.rab_detail_id')
             ->pluck('s', 'did')->toArray();
 
+        // NORMALISASI: total bobot harus tepat 100 (koreksi drift dari schedule)
+        $totalBobot = array_sum($bobotSnap);
+        if ($totalBobot > 0 && abs($totalBobot - 100) > 0.0001) {
+            $factor = 100 / $totalBobot;
+            foreach ($bobotSnap as $id => $val) {
+                $bobotSnap[$id] = round($val * $factor, 2); // round ke 2 desimal
+            }
+            // koreksi item pertama jika masih ada sisa
+            $newTotal = array_sum($bobotSnap);
+            if ($newTotal != 100 && count($bobotSnap) > 0) {
+                $firstId = array_key_first($bobotSnap);
+                $bobotSnap[$firstId] = round($bobotSnap[$firstId] + (100 - $newTotal), 2);
+            }
+        }
+
         // --- Prev % item s/d (N-1) dari kolom BARU (FINAL) — ini kunci sederhananya ---
         $prevPctItem = DB::table('rab_progress_detail as rpd')
             ->join('rab_progress as rp', 'rp.id', '=', 'rpd.rab_progress_id')
@@ -346,24 +371,48 @@ $realizedMap = $prevMap;
                 'status'       => 'draft',   // atau 'final' sesuai tombol
             ]);
 
+            // Gunakan akumulasi raw lalu koreksi selisih setelah dibulatkan per-item
             $rows = [];
+            $totDeltaProj_raw = 0.0;  // akumulasi delta proyek (raw)
+            
             foreach ($detailIds as $did) {
                 $bobotItem = (float)($bobotSnap[$did] ?? 0.0);
                 $prevPct   = (float)($prevPctItem[$did] ?? 0.0);
                 $nowPct    = (float)$nowPctById[$did];
 
-                $deltaPct  = max(0.0, $nowPct - $prevPct);               // % item minggu ini
-                $deltaProj = $bobotItem * ($deltaPct / 100.0);           // % proyek minggu ini
+                // Hitung delta SEBELUM pembulatan untuk menghindari floating point error
+                $deltaPctRaw   = max(0.0, $nowPct - $prevPct);
+                $deltaProj_Raw = $bobotItem * ($deltaPctRaw / 100.0);
+
+                // Akumulasi raw (tanpa dibulatkan per-item)
+                $totDeltaProj_raw += $deltaProj_Raw;
+
+                // Bulatkan untuk penyimpanan
+                $deltaPct  = round($deltaPctRaw, 2);       // % item minggu ini
+                $deltaProj = round($deltaProj_Raw, 2);     // % proyek minggu ini (DISPLAY saja)
 
                 $rows[] = [
                     'rab_progress_id'      => $rp->id,
                     'rab_detail_id'        => $did,
-                    'bobot_minggu_ini'     => $deltaProj,                 // % proyek (delta)
+                    'bobot_minggu_ini'     => $deltaProj,                 // % proyek (delta) - untuk display
                     'pct_item_minggu_ini'  => $deltaPct,                  // % item (delta)
-                    'bobot_item_snapshot'  => $bobotItem,                 // snapshot
+                    'bobot_item_snapshot'  => round($bobotItem, 2),       // snapshot (2 desimal)
                     'created_at'           => now(),
                     'updated_at'           => now(),
                 ];
+            }
+
+            // Hitung total delta yang benar dari akumulasi raw
+            $totalDeltaProjCorrect = round($totDeltaProj_raw, 2);
+            
+            // Jika ada perbedaan rounding, koreksi item pertama
+            if (count($rows) > 0 && $totalDeltaProjCorrect != round(array_sum(array_column($rows, 'bobot_minggu_ini')), 2)) {
+                $currentSum = round(array_sum(array_column($rows, 'bobot_minggu_ini')), 2);
+                $diff = $totalDeltaProjCorrect - $currentSum;
+                if (abs($diff) > 0.001) {
+                    // Koreksi item pertama untuk memastikan total tepat
+                    $rows[0]['bobot_minggu_ini'] = round((float)$rows[0]['bobot_minggu_ini'] + $diff, 2);
+                }
             }
 
             DB::table('rab_progress_detail')->insert($rows);
@@ -729,44 +778,73 @@ private function realizedToDateMap(int $proyekId, ?int $penawaranId, int $uptoWe
         * 4) REALISASI
         * ------------------------------*/
         // Δ minggu ini (% PROYEK) pada progress yang sedang dilihat
-        $deltaMap = RabProgressDetail::where('rab_progress_id', $progress->id)
-            ->select('rab_detail_id', DB::raw('SUM(bobot_minggu_ini) as s'))
-            ->groupBy('rab_detail_id')
-            ->pluck('s','rab_detail_id')
-            ->toArray();
+            // JANGAN gunakan SUM() dari database, ambil individual values dan hitung dengan integer arithmetic
+            $deltaDetails = RabProgressDetail::where('rab_progress_id', $progress->id)
+                ->select('rab_detail_id', 'bobot_minggu_ini')
+                ->get();
+        
+            $deltaMap = [];
+            $deltaInt = [];
+            foreach ($deltaDetails as $d) {
+                $deltaInt[$d->rab_detail_id] = ($deltaInt[$d->rab_detail_id] ?? 0) + (int)round((float)$d->bobot_minggu_ini * 100);
+            }
+            foreach ($deltaInt as $did => $v) {
+                $deltaMap[$did] = round($v / 100, 2);
+            }
 
         // Δ minggu ini (% ITEM) pada progress yang sedang dilihat
-        $deltaPctMap = RabProgressDetail::where('rab_progress_id', $progress->id)
-            ->select('rab_detail_id', DB::raw('SUM(pct_item_minggu_ini) as s'))
-            ->groupBy('rab_detail_id')
-            ->pluck('s','rab_detail_id')
-            ->toArray();
+            $deltaPctDetails = RabProgressDetail::where('rab_progress_id', $progress->id)
+                ->select('rab_detail_id', 'pct_item_minggu_ini')
+                ->get();
+        
+            $deltaPctMap = [];
+            $deltaPctInt = [];
+            foreach ($deltaPctDetails as $d) {
+                $deltaPctInt[$d->rab_detail_id] = ($deltaPctInt[$d->rab_detail_id] ?? 0) + (int)round((float)$d->pct_item_minggu_ini * 100);
+            }
+            foreach ($deltaPctInt as $did => $v) {
+                $deltaPctMap[$did] = round($v / 100, 2);
+            }
 
         // % ITEM kumulatif s/d (N-1) FINAL saja
-        $prevPctItemMap = DB::table('rab_progress_detail as rpd')
+        $prevPctItemRows = DB::table('rab_progress_detail as rpd')
             ->join('rab_progress as rp', 'rp.id', '=', 'rpd.rab_progress_id')
             ->where('rp.proyek_id', $proyek->id)
             ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
             ->where('rp.status', 'final')              // hanya FINAL, revisi/draft diabaikan
             ->where('rp.minggu_ke', '<', $mingguKe)
             ->whereIn('rpd.rab_detail_id', $detailIds)
-            ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.pct_item_minggu_ini) as s'))
-            ->groupBy('rpd.rab_detail_id')
-            ->pluck('s','rpd.rab_detail_id')
-            ->toArray();
+            ->select('rpd.rab_detail_id', 'rpd.pct_item_minggu_ini')
+            ->get();
+
+        $prevPctItemMap = [];
+        $prevPctInt = [];
+        foreach ($prevPctItemRows as $row) {
+            $prevPctInt[$row->rab_detail_id] = ($prevPctInt[$row->rab_detail_id] ?? 0) + (int)round((float)$row->pct_item_minggu_ini * 100);
+        }
+        foreach ($prevPctInt as $did => $v) {
+            $prevPctItemMap[$did] = round($v / 100, 2);
+        }
 
         // % PROYEK kumulatif s/d (N-1) FINAL saja → dipakai kolom "Bobot s/d Minggu Lalu"
-        $prevMap = DB::table('rab_progress_detail as rpd')
+        $prevProjRows = DB::table('rab_progress_detail as rpd')
             ->join('rab_progress as rp', 'rp.id', '=', 'rpd.rab_progress_id')
             ->where('rp.proyek_id', $proyek->id)
             ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
             ->where('rp.status', 'final')              // hanya FINAL
             ->where('rp.minggu_ke', '<', $mingguKe)
             ->whereIn('rpd.rab_detail_id', $detailIds)
-            ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.bobot_minggu_ini) as s'))
-            ->groupBy('rpd.rab_detail_id')
-            ->pluck('s','rpd.rab_detail_id')
-            ->toArray();
+            ->select('rpd.rab_detail_id', 'rpd.bobot_minggu_ini')
+            ->get();
+
+        $prevMap = [];
+        $prevProjInt = [];
+        foreach ($prevProjRows as $row) {
+            $prevProjInt[$row->rab_detail_id] = ($prevProjInt[$row->rab_detail_id] ?? 0) + (int)round((float)$row->bobot_minggu_ini * 100);
+        }
+        foreach ($prevProjInt as $did => $v) {
+            $prevMap[$did] = round($v / 100, 2);
+        }
 
         /* ------------------------------
         * 5) Master item & urutan natural
@@ -791,7 +869,10 @@ private function realizedToDateMap(int $proyekId, ?int $penawaranId, int $uptoWe
             $tgt    = (float)($targetToMap[$it->id] ?? 0);
             $bPrev  = (float)($prevMap[$it->id]     ?? 0);
             $bDelta = (float)($deltaMap[$it->id]    ?? 0);
-            $bNow   = $bPrev + $bDelta;
+            
+            // KOREKSI: Hitung bNow dengan akumulasi integer untuk presisi
+            // Gunakan 2-decimal untuk perhitungan
+            $bNow   = round($bPrev + $bDelta, 2);
 
             // % terhadap item (dibatasi 0..100 agar tidak over)
             $pPrevItem  = (float)($prevPctItemMap[$it->id] ?? 0);
@@ -812,11 +893,12 @@ private function realizedToDateMap(int $proyekId, ?int $penawaranId, int $uptoWe
             return $it;
         });
 
-        $totWi    = $rows->sum('Wi');
-        $totTarget= $rows->sum('tgt');
-        $totPrev  = $rows->sum('bPrev');
-        $totDelta = $rows->sum('bDelta');
-        $totNow   = $rows->sum('bNow');
+        // HITUNG TOTAL dengan integer arithmetic untuk presisi
+        $totWi    = round($rows->sum('Wi'), 2);
+        $totTarget= round($rows->sum('tgt'), 2);
+        $totPrev  = round($rows->sum('bPrev'), 2);
+        $totDelta = round($rows->sum('bDelta'), 2);
+        $totNow   = round($totPrev + $totDelta, 2);  // Hitung dari previous + delta, bukan sum langsung
 
         return view('proyek.progress.detail', [
             'proyek'    => $proyek,
@@ -1222,9 +1304,18 @@ public function destroy(Proyek $proyek, RabProgress $progress)
         }
     }
 
+    // Hitung total minggu dari tanggal proyek
+    $totalWeeks = 1;
+    if ($proyek->tanggal_mulai && $proyek->tanggal_selesai) {
+        $start = Carbon::parse($proyek->tanggal_mulai);
+        $end = Carbon::parse($proyek->tanggal_selesai);
+        $days = $start->diffInDays($end) + 1;
+        $totalWeeks = (int) ceil($days / 7);
+    }
+
     return view('proyek.progress.edit', compact(
         'proyek','progress','finalPenawarans','penawaranId','mingguKe','tanggal',
-        'rows','plannedToMap','prevMap','bobotMap'
+        'rows','plannedToMap','prevMap','bobotMap','totalWeeks'
     ));
 }
 
@@ -1289,6 +1380,21 @@ if (\Schema::hasColumn($sdTbl, 'rab_detail_id')) {
         ->pluck('s', 'did')->toArray();
 }
 
+    // NORMALISASI: total bobot harus tepat 100 (koreksi drift dari schedule)
+    $totalBobot = array_sum($bobotSnap);
+    if ($totalBobot > 0 && abs($totalBobot - 100) > 0.0001) {
+        $factor = 100 / $totalBobot;
+        foreach ($bobotSnap as $id => $val) {
+            $bobotSnap[$id] = round($val * $factor, 2); // round ke 2 desimal
+        }
+        // koreksi item pertama jika masih ada sisa
+        $newTotal = array_sum($bobotSnap);
+        if ($newTotal != 100 && count($bobotSnap) > 0) {
+            $firstId = array_key_first($bobotSnap);
+            $bobotSnap[$firstId] = round($bobotSnap[$firstId] + (100 - $newTotal), 2);
+        }
+    }
+
 
     // Prev % item s/d (N-1) FINAL
     $prevPctItem = DB::table('rab_progress_detail as rpd')
@@ -1305,24 +1411,48 @@ if (\Schema::hasColumn($sdTbl, 'rab_detail_id')) {
         // replace semua detail progress ini
         RabProgressDetail::where('rab_progress_id',$progress->id)->delete();
 
+        // Gunakan akumulasi raw lalu koreksi selisih setelah dibulatkan per-item
         $rows = [];
+        $totDeltaProj_raw = 0.0;  // akumulasi delta proyek (raw)
+        
         foreach ($detailIds as $did) {
             $bobotItem = (float)($bobotSnap[$did] ?? 0.0);
             $prevPct   = (float)($prevPctItem[$did] ?? 0.0);
             $nowPct    = (float)$nowPctById[$did];
 
-            $deltaPct  = max(0.0, $nowPct - $prevPct);
-            $deltaProj = $bobotItem * ($deltaPct / 100.0);
+            // Hitung delta SEBELUM pembulatan untuk menghindari floating point error
+            $deltaPctRaw   = max(0.0, $nowPct - $prevPct);
+            $deltaProj_Raw = $bobotItem * ($deltaPctRaw / 100.0);
+
+            // Akumulasi raw (tanpa dibulatkan per-item)
+            $totDeltaProj_raw += $deltaProj_Raw;
+
+            // Bulatkan untuk penyimpanan
+            $deltaPct  = round($deltaPctRaw, 2);
+            $deltaProj = round($deltaProj_Raw, 2);
 
             $rows[] = [
                 'rab_progress_id'     => $progress->id,
                 'rab_detail_id'       => $did,
                 'bobot_minggu_ini'    => $deltaProj,
                 'pct_item_minggu_ini' => $deltaPct,
-                'bobot_item_snapshot' => $bobotItem,
+                'bobot_item_snapshot' => round($bobotItem, 2),
                 'created_at'          => now(),
                 'updated_at'          => now(),
             ];
+        }
+
+        // Hitung total delta yang benar dari akumulasi raw
+        $totalDeltaProjCorrect = round($totDeltaProj_raw, 2);
+        
+        // Jika ada perbedaan rounding, koreksi item pertama
+        if (count($rows) > 0 && $totalDeltaProjCorrect != round(array_sum(array_column($rows, 'bobot_minggu_ini')), 2)) {
+            $currentSum = round(array_sum(array_column($rows, 'bobot_minggu_ini')), 2);
+            $diff = $totalDeltaProjCorrect - $currentSum;
+            if (abs($diff) > 0.001) {
+                // Koreksi item pertama untuk memastikan total tepat
+                $rows[0]['bobot_minggu_ini'] = round((float)$rows[0]['bobot_minggu_ini'] + $diff, 2);
+            }
         }
 
         if (!empty($rows)) DB::table('rab_progress_detail')->insert($rows);

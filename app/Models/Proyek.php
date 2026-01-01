@@ -22,15 +22,18 @@ class Proyek extends Model
         'tanggal_mulai',
         'tanggal_selesai',
         'persen_dp',
+        'gunakan_uang_muka',
         'persen_retensi',
         'durasi_retensi',
+        'gunakan_retensi',
         'status',
         'lokasi',
         'file_spk',
         'file_gambar_kerja',
         'jenis_proyek',
         'penawaran_price_mode',
-        'uang_muka_mode'
+        'uang_muka_mode',
+        'pph_dipungut'
     ];
 
     public function pemberiKerja()

@@ -1059,9 +1059,12 @@ class RabPenawaranController extends Controller
             'no_spk'           => 'required|string|max:100',
             'tanggal_mulai'    => 'required|date',
             'tanggal_selesai'  => 'required|date|after_or_equal:tanggal_mulai',
-            'persen_dp'        => 'required|numeric|min:0|max:100',
-            'persen_retensi'   => 'required|numeric|min:0|max:100',
-            'durasi_retensi'   => 'required|integer|min:0',
+            'persen_dp'        => 'nullable|numeric|min:0|max:100',
+            'persen_retensi'   => 'nullable|numeric|min:0|max:100',
+            'durasi_retensi'   => 'nullable|integer|min:0',
+            'gunakan_uang_muka' => 'nullable|boolean',
+            'gunakan_retensi'   => 'nullable|boolean',
+            'pph_dipungut'      => 'required|in:ya,tidak',
         ], [
             'approval_files.required'   => 'Unggah minimal 1 file PDF.',
             'approval_files.*.mimes'    => 'Semua file harus berformat PDF.',
@@ -1070,9 +1073,7 @@ class RabPenawaranController extends Controller
             'tanggal_mulai.required'    => 'Tanggal mulai proyek harus diisi.',
             'tanggal_selesai.required'  => 'Tanggal selesai proyek harus diisi.',
             'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus setelah atau sama dengan tanggal mulai.',
-            'persen_dp.required'        => 'Persentase DP harus diisi.',
-            'persen_retensi.required'   => 'Persentase Retensi harus diisi.',
-            'durasi_retensi.required'   => 'Durasi Retensi harus diisi.',
+            'pph_dipungut.required'     => 'PPh pemotongan harus dipilih.',
         ]);
 
         $files = $request->file('approval_files', []);
@@ -1099,12 +1100,15 @@ class RabPenawaranController extends Controller
         // Update proyek dengan data tanggal, DP, dan retensi
         $proyek = $penawaran->proyek;
         $proyek->update([
-            'no_spk'           => $request->no_spk,
-            'tanggal_mulai'    => $request->tanggal_mulai,
-            'tanggal_selesai'  => $request->tanggal_selesai,
-            'persen_dp'        => $request->persen_dp,
-            'persen_retensi'   => $request->persen_retensi,
-            'durasi_retensi'   => $request->durasi_retensi,
+            'no_spk'            => $request->no_spk,
+            'tanggal_mulai'     => $request->tanggal_mulai,
+            'tanggal_selesai'   => $request->tanggal_selesai,
+            'gunakan_uang_muka' => $request->has('gunakan_uang_muka') ? true : false,
+            'persen_dp'         => $request->persen_dp ?? 0,
+            'gunakan_retensi'   => $request->has('gunakan_retensi') ? true : false,
+            'persen_retensi'    => $request->persen_retensi ?? 0,
+            'durasi_retensi'    => $request->durasi_retensi ?? 0,
+            'pph_dipungut'      => $request->pph_dipungut ?? 'ya',
         ]);
 
         // Buat Sales Order ringkasan otomatis ketika penawaran disetujui.
@@ -1158,6 +1162,13 @@ class RabPenawaranController extends Controller
         } catch (\Exception $e) {
             // Log error tapi jangan ganggu flow approval
             \Log::error('Error creating SalesOrder for penawaran '.$penawaran->id.': '.$e->getMessage());
+        }
+
+        // Buat snapshot bobot otomatis ketika penawaran disetujui
+        try {
+            $this->snapshotWeightsFromOffer($penawaran);
+        } catch (\Exception $e) {
+            \Log::warning('Error creating snapshot bobot saat approval penawaran '.$penawaran->id.': '.$e->getMessage());
         }
 
         return redirect()

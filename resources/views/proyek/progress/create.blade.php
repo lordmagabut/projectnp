@@ -41,11 +41,16 @@
       </div>
       <div class="col-md-3">
         <label class="form-label">Minggu ke</label>
-        <input type="number" class="form-control" name="minggu_ke" value="{{ $mingguKe }}" min="1">
+        <select class="form-select" name="minggu_ke" id="mingguKeSelect">
+          @for($w = 1; $w <= $totalWeeks; $w++)
+            <option value="{{ $w }}" {{ $w === $mingguKe ? 'selected' : '' }}>Minggu {{ $w }}</option>
+          @endfor
+        </select>
       </div>
       <div class="col-md-3">
         <label class="form-label">Tanggal</label>
-        <input type="date" class="form-control" name="tanggal" value="{{ $tanggal }}">
+        <input type="date" class="form-control" name="tanggal" id="tanggalInput" value="{{ $tanggal }}">
+        <div class="small text-muted mt-1" id="tanggalHint"></div>
       </div>
     </div>
 
@@ -203,6 +208,56 @@
   const fmt  = n => (Number(n||0)).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});
   const deID = s => { if (s==null) return 0; const t=String(s).replace(/\./g,'').replace(',', '.'); const v=parseFloat(t); return isNaN(v)?0:v; };
 
+  // ==== DATE RANGE VALIDATION ====
+  @if($proyek->tanggal_mulai && $proyek->tanggal_selesai)
+  const proyekStart = new Date('{{ $proyek->tanggal_mulai }}');
+  const proyekEnd = new Date('{{ $proyek->tanggal_selesai }}');
+  const mingguKeSelect = document.getElementById('mingguKeSelect');
+  const tanggalInput = document.getElementById('tanggalInput');
+  const tanggalHint = document.getElementById('tanggalHint');
+
+  function updateDateRange() {
+    const mingguKe = parseInt(mingguKeSelect.value);
+    
+    // Hitung start date minggu ke-N (dimulai dari minggu 1)
+    const weekStart = new Date(proyekStart);
+    weekStart.setDate(weekStart.getDate() + (mingguKe - 1) * 7);
+    
+    // Hitung end date minggu ke-N
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    
+    // Clamp dengan tanggal akhir proyek
+    const maxDate = weekEnd > proyekEnd ? proyekEnd : weekEnd;
+    
+    // Format untuk input date (YYYY-MM-DD)
+    const minStr = weekStart.toISOString().split('T')[0];
+    const maxStr = maxDate.toISOString().split('T')[0];
+    
+    // Set min & max
+    tanggalInput.min = minStr;
+    tanggalInput.max = maxStr;
+    
+    // Set default value jika kosong atau di luar range
+    const currentVal = tanggalInput.value;
+    if (!currentVal || currentVal < minStr || currentVal > maxStr) {
+      tanggalInput.value = minStr;
+    }
+    
+    // Update hint
+    const formatDate = (d) => d.toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'});
+    tanggalHint.textContent = `Rentang: ${formatDate(weekStart)} - ${formatDate(maxDate)}`;
+  }
+
+  // Event listener
+  mingguKeSelect.addEventListener('change', updateDateRange);
+  
+  // Initial update
+  updateDateRange();
+  @endif
+  // ==== END DATE RANGE VALIDATION ====
+
+
   function recalcRow(tr){
     const bobot    = parseFloat(tr.dataset.bobot    || 0); // % proyek (item)
     const prevPct  = parseFloat(tr.dataset.prevpct  || 0); // % item s/d minggu lalu
@@ -214,9 +269,15 @@
     if (isNaN(pct)) pct = 0;
     pct = Math.max(0, Math.min(100, pct)); // clamp 0..100
 
-    const nowBobot   = bobot * pct / 100;                 // % proyek (kumulatif saat ini)
-    const deltaPct   = pct - prevPct;                     // % item minggu ini
-    const deltaBobot = Math.max(0, nowBobot - prevProj);  // jangan kurangi progres
+    // FORMULA BENAR: bobot adalah % proyek untuk item ini
+    // nowBobot = bobot * (pct / 100) = bobot * pct / 100
+    // Gunakan integer arithmetic: * 100, round, / 100, / 100
+    const nowBobot_raw = bobot * pct / 100;
+    const nowBobot = Math.round(nowBobot_raw * 100) / 100;
+    
+    const deltaPct = pct - prevPct;                        // % item minggu ini
+    const deltaBobot_raw = nowBobot - prevProj;            // bisa negatif
+    const deltaBobot = Math.max(0, Math.round(deltaBobot_raw * 100) / 100); // jangan kurangi progres
 
     tr.querySelector('.now-bobot').textContent   = fmt(nowBobot);
     tr.querySelector('.delta-pct').textContent   = fmt(deltaPct);
@@ -226,24 +287,48 @@
     // 1) Saat load, jika target > prev_bobot → kuning (kita tertinggal).
     // 2) Saat user ubah nilai, kuning tetap sampai now_bobot >= target.
     const cellNow = tr.querySelector('.now-bobot'); // ini adalah <td>
-    const needWarn = target > nowBobot;             // warna berdasarkan posisi terbaru
+    const needWarn = target > nowBobot;         // warna berdasarkan posisi terbaru
     cellNow.classList.toggle('cf-warn', needWarn);
   }
 
   function recalcTotal(){
-    let tTarget = 0, tPrevBob = 0, tNow = 0, tDB = 0, tDP = 0;
+    // HITUNG RAW VALUES dari data attribute, bukan dari TD yang sudah diformat!
+    let tTarget = 0, tPrevBob = 0, tNowRaw = 0, tDBRaw = 0, tDP = 0;
+    
     document.querySelectorAll('#tbl-progress tbody tr[data-row="item"]').forEach(tr=>{
-      tTarget += deID(tr.querySelector('.target-2week')?.textContent);
-      tPrevBob+= deID(tr.querySelector('.prev-bobot')?.textContent);
-      tNow    += deID(tr.querySelector('.now-bobot')?.textContent);
-      tDB     += deID(tr.querySelector('.delta-bobot')?.textContent);
-      tDP     += deID(tr.querySelector('.delta-pct')?.textContent);
+      const bobot    = parseFloat(tr.dataset.bobot    || 0);
+      const prevPct  = parseFloat(tr.dataset.prevpct  || 0);
+      const prevProj = parseFloat(tr.dataset.realprev || 0);
+      const target   = parseFloat(tr.dataset.target   || 0);
+
+      // Baca input
+      const inp = tr.querySelector('.input-pct');
+      let pct = parseFloat(inp?.value || 0);
+      if (isNaN(pct)) pct = 0;
+      pct = Math.max(0, Math.min(100, pct));
+
+      // Hitung raw (belum bulatkan!)
+      const nowBobot_raw = bobot * pct / 100;
+      const deltaPct = pct - prevPct;
+      const deltaBobot_raw = Math.max(0, nowBobot_raw - prevProj);
+
+      // Accumulate raw values
+      tTarget += target;
+      tPrevBob += prevProj;
+      tNowRaw += nowBobot_raw;
+      tDBRaw += deltaBobot_raw;
+      tDP += deltaPct;
     });
-    document.getElementById('tot-target').textContent      = fmt(tTarget);
-    document.getElementById('tot-prev-bobot').textContent  = fmt(tPrevBob);
+
+    // BARU bulatkan setelah sum!
+    const tNow = Math.round(tNowRaw * 100) / 100;
+    const tDB = Math.round(tDBRaw * 100) / 100;
+    
+    document.getElementById('tot-target').textContent      = fmt(Math.round(tTarget * 100) / 100);
+    document.getElementById('tot-prev-bobot').textContent  = fmt(Math.round(tPrevBob * 100) / 100);
     document.getElementById('tot-now').textContent         = fmt(tNow);
     document.getElementById('tot-delta-bobot').textContent = fmt(tDB);
-    const elDP = document.getElementById('tot-delta-pct'); if (elDP) elDP.textContent = fmt(tDP);
+    const elDP = document.getElementById('tot-delta-pct'); if (elDP) elDP.textContent = fmt(Math.round(tDP * 100) / 100);
   }
 
   // Inisialisasi (akan otomatis warnai sesuai kondisi awal)

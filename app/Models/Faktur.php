@@ -28,6 +28,7 @@ class Faktur extends Model
         'jurnal_id',
         'uang_muka_dipakai',  // NEW
         'uang_muka_id',       // NEW
+        'sertifikat_pembayaran_id',
     ];
 
     // Relasi ke detail
@@ -62,6 +63,10 @@ class Faktur extends Model
     public function jurnal()
     {
         return $this->belongsTo(Jurnal::class, 'jurnal_id');
+    }
+    public function sertifikatPembayaran()
+    {
+        return $this->belongsTo(\App\Models\SertifikatPembayaran::class, 'sertifikat_pembayaran_id');
     }
     public function fakturDetails()
         {

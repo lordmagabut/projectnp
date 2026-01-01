@@ -48,10 +48,12 @@
           <input
             name="tanggal_bapp"
             type="date"
+            id="tanggalBappInput"
             class="form-control @error('tanggal_bapp') is-invalid @enderror"
             required
             value="{{ old('tanggal_bapp', now()->toDateString()) }}"
           >
+          <div class="small text-muted mt-1" id="tanggalBappHint"></div>
           @error('tanggal_bapp') <div class="invalid-feedback">{{ $message }}</div> @enderror
         </div>
 
@@ -168,3 +170,58 @@
   </div>
 </form>
 @endsection
+
+@push('custom-scripts')
+<script>
+(function(){
+  // ==== BAPP DATE VALIDATION ====
+  @if($proyek->tanggal_mulai && $proyek->tanggal_selesai && isset($tanggalProgress))
+  const proyekStart = new Date('{{ $proyek->tanggal_mulai }}');
+  const proyekEnd = new Date('{{ $proyek->tanggal_selesai }}');
+  const tanggalProgress = new Date('{{ $tanggalProgress }}');
+  const mingguKe = {{ $mingguKe }};
+  const tanggalBappInput = document.getElementById('tanggalBappInput');
+  const tanggalBappHint = document.getElementById('tanggalBappHint');
+
+  function updateBappDateRange() {
+    // Hitung start date minggu ke-N (dimulai dari minggu 1)
+    const weekStart = new Date(proyekStart);
+    weekStart.setDate(weekStart.getDate() + (mingguKe - 1) * 7);
+    
+    // Hitung end date minggu ke-N
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    
+    // Clamp dengan tanggal akhir proyek
+    const weekEndClamped = weekEnd > proyekEnd ? proyekEnd : weekEnd;
+    
+    // Min = tanggal progress, Max = end of week (atau end proyek)
+    const minDate = tanggalProgress;
+    const maxDate = weekEndClamped;
+    
+    // Format untuk input date (YYYY-MM-DD)
+    const minStr = minDate.toISOString().split('T')[0];
+    const maxStr = maxDate.toISOString().split('T')[0];
+    
+    // Set min & max
+    tanggalBappInput.min = minStr;
+    tanggalBappInput.max = maxStr;
+    
+    // Set default value jika kosong atau di luar range
+    const currentVal = tanggalBappInput.value;
+    if (!currentVal || currentVal < minStr || currentVal > maxStr) {
+      tanggalBappInput.value = minStr; // default = tanggal progress
+    }
+    
+    // Update hint
+    const formatDate = (d) => d.toLocaleDateString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'});
+    tanggalBappHint.textContent = `Rentang: ${formatDate(minDate)} - ${formatDate(maxDate)}`;
+  }
+
+  // Initial update
+  updateBappDateRange();
+  @endif
+  // ==== END BAPP DATE VALIDATION ====
+})();
+</script>
+@endpush

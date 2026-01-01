@@ -41,20 +41,20 @@
         <div class="col-md-3">
           <label class="form-label">WO Material (Rp)</label>
           <input type="number" step="0.01" class="form-control" name="nilai_wo_material" id="nilai_wo_material" required>
+          <small class="text-muted">Format: <span id="fmt_nilai_wo_material">Rp 0,00</span></small>
         </div>
         <div class="col-md-3">
           <label class="form-label">WO Upah (Rp)</label>
           <input type="number" step="0.01" class="form-control" name="nilai_wo_jasa" id="nilai_wo_jasa" required>
+          <small class="text-muted">Format: <span id="fmt_nilai_wo_jasa">Rp 0,00</span></small>
         </div>
         <div class="col-md-3">
           <label class="form-label">Total Penawaran (Rp)</label>
           <input type="number" step="0.01" class="form-control" id="final_total" readonly>
+          <small class="text-muted">Format: <span id="fmt_final_total">Rp 0,00</span></small>
         </div>
 
-        <div class="col-md-3">
-          <label class="form-label">Uang Muka %</label>
-          <input type="number" step="0.01" class="form-control" name="uang_muka_persen" id="uang_muka_persen" required>
-        </div>
+        <input type="hidden" name="uang_muka_persen" id="uang_muka_persen">
 
         <!-- Hidden field for uang_muka_penjualan_id -->
         <input type="hidden" name="uang_muka_penjualan_id" id="uang_muka_penjualan_id">
@@ -68,9 +68,12 @@
             Sisa: <span id="um_sisa">-</span>
           </div>
         </div>
-        <div class="col-md-3">
-          <label class="form-label">Pemotongan UM % (= % progress)</label>
-          <input type="number" step="0.01" class="form-control" name="pemotongan_um_persen" id="pemotongan_um_persen" required>
+
+        <div class="col-md-12" id="um_rule_container" style="display: none;">
+          <div class="alert alert-warning mb-0">
+            <strong>Rule Pemotongan Uang Muka:</strong>
+            <div id="um_rule_text" class="mt-1">-</div>
+          </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Retensi %</label>
@@ -122,6 +125,19 @@
   const el  = id => document.getElementById(id);
   const set = (id, v) => { const e = el(id); if (e) e.value = (v ?? ''); };
 
+  const fmtRp = (num) => new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Number(num) || 0);
+
+  const updateFmt = (inputId, spanId) => {
+    const val = Number(el(inputId)?.value || 0);
+    const span = el(spanId);
+    if (span) span.textContent = fmtRp(val);
+  };
+
   function fillFromBappId(id) {
     const d = BAPPS[String(id)];
     if (!d) return;
@@ -129,6 +145,10 @@
     set('nilai_wo_material', d.nilai_wo_material);
     set('nilai_wo_jasa',     d.nilai_wo_jasa);
     set('final_total',       d.final_total);
+
+    updateFmt('nilai_wo_material', 'fmt_nilai_wo_material');
+    updateFmt('nilai_wo_jasa', 'fmt_nilai_wo_jasa');
+    updateFmt('final_total', 'fmt_final_total');
 
     set('uang_muka_persen',  d.uang_muka_persen);
     set('retensi_persen',    d.retensi_persen);
@@ -138,8 +158,21 @@
     set('persen_progress',   d.persen_progress);
     // set('persen_progress',   d.persen_progress_delta); // <- kalau mau periode ini saja
 
-    set('pemotongan_um_persen', d.persen_progress); // = % progress
+    const mode = (d.uang_muka_mode || 'proporsional').toLowerCase();
+
     set('termin_ke',         d.termin_ke);
+
+    // Rule pemotongan UM
+    const ruleCtr = el('um_rule_container');
+    const ruleTxt = el('um_rule_text');
+    if (ruleCtr && ruleTxt) {
+      ruleCtr.style.display = 'block';
+      if (mode === 'utuh') {
+        ruleTxt.textContent = 'Mode UTUH: pemotongan Uang Muka dilakukan penuh pada sertifikat ini (sisa UM akan menjadi 0).';
+      } else {
+        ruleTxt.textContent = 'Mode PROPORSIONAL: pemotongan Uang Muka mengikuti persentase progres (proporsional kumulatif).';
+      }
+    }
 
     // Uang Muka Penjualan
     if (d.uang_muka_penjualan_id) {
@@ -171,6 +204,14 @@
     if (this.value) fillFromBappId(this.value);
   });
 
+  ['nilai_wo_material','nilai_wo_jasa','final_total'].forEach(id => {
+    const input = el(id);
+    if (input) input.addEventListener('input', () => {
+      if (id !== 'final_total') updateFmt(id, `fmt_${id}`);
+      else updateFmt(id, 'fmt_final_total');
+    });
+  });
+
   document.addEventListener('DOMContentLoaded', () => {
     const pre = @json($prefillBappId);
     if (pre) {
@@ -178,6 +219,10 @@
       const opt = [...sel.options].find(o => o.value == String(pre));
       if (opt) { sel.value = String(pre); fillFromBappId(pre); }
     }
+
+    updateFmt('nilai_wo_material', 'fmt_nilai_wo_material');
+    updateFmt('nilai_wo_jasa', 'fmt_nilai_wo_jasa');
+    updateFmt('final_total', 'fmt_final_total');
   });
 </script>
 @endpush
