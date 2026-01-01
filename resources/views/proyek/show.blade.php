@@ -166,6 +166,14 @@
                   <td>{{ \Carbon\Carbon::parse($proyek->tanggal_selesai)->format('d-m-Y') }}</td>
                 </tr>
                 <tr>
+                  <th><i data-feather="user-check" class="me-2 text-muted"></i> Site Manager</th>
+                  <td>{{ $proyek->site_manager_name ?? '—' }}</td>
+                </tr>
+                <tr>
+                  <th><i data-feather="users" class="me-2 text-muted"></i> Project Manager</th>
+                  <td>{{ $proyek->project_manager_name ?? '—' }}</td>
+                </tr>
+                <tr>
                   <th><i data-feather="map-pin" class="me-2 text-muted"></i> Lokasi</th>
                   <td>{{ $proyek->lokasi }}</td>
                 </tr>
@@ -488,7 +496,7 @@
 
   {{-- Desktop table --}}
   <div class="table-responsive d-none d-md-block">
-    <table class="table table-hover table-bordered table-sm">
+    <table class="table table-hover align-middle display nowrap w-100 dataTable">
       <thead class="table-light">
         <tr>
           <th>Minggu Ke</th>
@@ -497,7 +505,7 @@
           <th class="text-end">Pertumbuhan (%)</th>
           <th class="text-end">Progress Saat Ini (%)</th>
           <th class="text-center">Status</th>
-          <th class="text-center">Aksi</th>
+          <th class="text-center" style="width: 90px">Aksi</th>
         </tr>
       </thead>
       <tbody>
@@ -517,43 +525,61 @@
               @endswitch
             </td>
             <td class="text-center">
-              <a
-                href="{{ route('proyek.progress.detail', ['proyek'=>$proyek->id, 'progress'=>$item['id']]) }}?penawaran_id={{ $currentPenawaranId }}"
-                class="btn btn-sm btn-info me-1">
-                <i data-feather="eye" class="me-1"></i> Detail
-              </a>
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                  Menu Aksi
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <a
+                      class="dropdown-item"
+                      href="{{ route('proyek.progress.detail', ['proyek'=>$proyek->id, 'progress'=>$item['id']]) }}?penawaran_id={{ $currentPenawaranId }}"
+                    >
+                      <i data-feather="eye" class="me-2"></i>Detail
+                    </a>
+                  </li>
 
-              @php
-                $bapp = $bappMap[$item['minggu_ke']] ?? null;
-              @endphp
+                  @php
+                    $bapp = $bappMap[$item['minggu_ke']] ?? null;
+                  @endphp
 
-              @if($item['status'] === 'final' && !$bapp)
-                <a
-                  href="{{ route('bapp.create', ['proyek' => $proyek->id, 'penawaran_id' => $currentPenawaranId, 'minggu_ke' => $item['minggu_ke']]) }}"
-                  class="btn btn-sm btn-outline-primary me-1">
-                  <i data-feather="file-text" class="me-1"></i> Terbitkan BAPP
-                </a>
-              @elseif($bapp)
-                <a
-                  href="{{ route('bapp.show', [$proyek->id, $bapp->id]) }}"
-                  class="btn btn-sm btn-primary me-1">
-                  <i data-feather="file-text" class="me-1"></i> Lihat BAPP
-                </a>
-              @endif
+                  @if($item['status'] === 'final' && !$bapp)
+                    <li>
+                      <a
+                        class="dropdown-item"
+                        href="{{ route('bapp.create', ['proyek' => $proyek->id, 'penawaran_id' => $currentPenawaranId, 'minggu_ke' => $item['minggu_ke']]) }}"
+                      >
+                        <i data-feather="file-text" class="me-2"></i>Terbitkan BAPP
+                      </a>
+                    </li>
+                  @elseif($bapp)
+                    <li>
+                      <a
+                        class="dropdown-item"
+                        href="{{ route('bapp.show', [$proyek->id, $bapp->id]) }}"
+                      >
+                        <i data-feather="file-text" class="me-2"></i>Lihat BAPP
+                      </a>
+                    </li>
+                  @endif
 
-              @if($item['status'] == 'draft')
-                <form
-                  action="{{ route('proyek.progress.destroy', ['proyek'=>$proyek->id, 'progress'=>$item['id']]) }}?penawaran_id={{ $currentPenawaranId }}"
-                  method="POST"
-                  class="d-inline"
-                  onsubmit="return confirm('Yakin ingin menghapus progress minggu ke-{{ $item['minggu_ke'] }}? Tindakan ini tidak dapat dibatalkan.')">
-                  @csrf
-                  @method('DELETE')
-                  <button type="submit" class="btn btn-sm btn-danger">
-                    <i data-feather="trash-2" class="me-1"></i> Hapus
-                  </button>
-                </form>
-              @endif
+                  @if($item['status'] == 'draft')
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <form
+                        action="{{ route('proyek.progress.destroy', ['proyek'=>$proyek->id, 'progress'=>$item['id']]) }}?penawaran_id={{ $currentPenawaranId }}"
+                        method="POST"
+                        onsubmit="return confirm('Yakin ingin menghapus progress minggu ke-{{ $item['minggu_ke'] }}? Tindakan ini tidak dapat dibatalkan.')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="dropdown-item text-danger">
+                          <i data-feather="trash-2" class="me-2"></i>Hapus
+                        </button>
+                      </form>
+                    </li>
+                  @endif
+                </ul>
+              </div>
             </td>
           </tr>
         @empty
@@ -619,7 +645,7 @@
   </div>
 
   <div class="table-responsive">
-    <table class="table table-hover table-bordered table-sm align-middle" id="tbl-bapp">
+    <table class="table table-hover align-middle display nowrap w-100 dataTable" id="tbl-bapp">
       <thead class="table-light">
         <tr>
           <th style="width:4%">#</th>
@@ -631,7 +657,7 @@
           <th class="text-end" style="width:12%">Prog. Minggu Ini (%)</th>
           <th class="text-end" style="width:12%">Prog. Saat Ini (%)</th>
           <th class="text-center" style="width:10%">Status</th>
-          <th class="text-center" style="width:16%">Aksi</th>
+          <th class="text-center" style="width:90px">Aksi</th>
         </tr>
       </thead>
       <tbody>
@@ -654,69 +680,88 @@
               @endswitch
             </td>
             <td class="text-center">
-              <a href="{{ route('bapp.show', [$proyek->id, $b->id]) }}"
-                 class="btn btn-sm btn-outline-teal me-1">
-                <i data-feather="eye" class="me-1"></i> Detail
-              </a>
-              @if($b->file_pdf_path)
-                <a target="_blank" href="{{ route('bapp.pdf', [$proyek->id, $b->id]) }}"
-                   class="btn btn-sm btn-outline-primary me-1">
-                  <i data-feather="download" class="me-1"></i> PDF
-                </a>
-              @endif
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                  Menu Aksi
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <a href="{{ route('bapp.show', [$proyek->id, $b->id]) }}" class="dropdown-item">
+                      <i data-feather="eye" class="me-2"></i>Detail
+                    </a>
+                  </li>
 
-              @if($b->status === 'draft')
-                <form method="POST" action="{{ route('bapp.submit', [$proyek->id, $b->id]) }}" class="d-inline">
-                  @csrf
-                  <button class="btn btn-sm btn-primary">
-                    <i data-feather="send" class="me-1"></i> Submit
-                  </button>
-                </form>
-              @elseif($b->status === 'submitted')
-                <form method="POST" action="{{ route('bapp.approve', [$proyek->id, $b->id]) }}" class="d-inline"
-                      onsubmit="return confirm('Setujui BAPP {{ $b->nomor_bapp }}?');">
-                  @csrf
-                  <button class="btn btn-sm btn-success">
-                    <i data-feather="check-circle" class="me-1"></i> Approve
-                  </button>
-                </form>
-                <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $b->id]) }}" class="d-inline">
-                  @csrf
-                  <button class="btn btn-sm btn-warning">
-                    <i data-feather="edit" class="me-1"></i> Revisi
-                  </button>
-                </form>
-              @elseif($b->status === 'approved')
-                <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $b->id]) }}" class="d-inline">
-                  @csrf
-                  <button class="btn btn-sm btn-warning">
-                    <i data-feather="edit" class="me-1"></i> Revisi
-                  </button>
-                </form>
-              @endif
+                  <li>
+                    <a target="_blank" href="{{ route('bapp.pdf', [$proyek->id, $b->id]) }}" class="dropdown-item">
+                      <i data-feather="download" class="me-2"></i>PDF
+                    </a>
+                  </li>
 
-              {{-- tombol HAPUS: hanya jika belum approved --}}
-              @if($b->status !== 'approved')
-                <form method="POST"
-                      action="{{ route('bapp.destroy', [$proyek->id, $b->id]) }}"
-                      class="d-inline"
-                      onsubmit="return confirm('Hapus BAPP {{ $b->nomor_bapp }}? Tindakan ini tidak dapat dibatalkan.');">
-                  @csrf
-                  @method('DELETE')
-                  {{-- supaya kembali ke halaman & tab yang sama --}}
-                  <input type="hidden" name="redirect_to" value="{{ request()->fullUrl() }}">
-                  <button class="btn btn-sm btn-danger">
-                    <i data-feather="trash-2" class="me-1"></i> Hapus
-                  </button>
-                </form>
-              @endif
+                  @if($b->status === 'draft')
+                    <li>
+                      <form method="POST" action="{{ route('bapp.submit', [$proyek->id, $b->id]) }}">
+                        @csrf
+                        <button class="dropdown-item">
+                          <i data-feather="send" class="me-2"></i>Submit
+                        </button>
+                      </form>
+                    </li>
+                  @elseif($b->status === 'submitted')
+                    <li>
+                      <form method="POST" action="{{ route('bapp.approve', [$proyek->id, $b->id]) }}"
+                            onsubmit="return confirm('Setujui BAPP {{ $b->nomor_bapp }}?');">
+                        @csrf
+                        <button class="dropdown-item">
+                          <i data-feather="check-circle" class="me-2"></i>Approve
+                        </button>
+                      </form>
+                    </li>
+                    <li>
+                      <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $b->id]) }}">
+                        @csrf
+                        <button class="dropdown-item">
+                          <i data-feather="edit" class="me-2"></i>Revisi
+                        </button>
+                      </form>
+                    </li>
+                  @elseif($b->status === 'approved')
+                    <li>
+                      <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $b->id]) }}">
+                        @csrf
+                        <button class="dropdown-item">
+                          <i data-feather="edit" class="me-2"></i>Revisi
+                        </button>
+                      </form>
+                    </li>
+                  @endif
 
-              @if($b->status === 'approved' && $b->sertifikatPembayaran->isEmpty())
-                <a class="btn btn-sm btn-success" href="{{ route('sertifikat.create') }}?bapp_id={{ $b->id }}">
-                  Buat Sertifikat Pembayaran
-                </a>
-              @endif
+                  @if($b->status === 'approved' && $b->sertifikatPembayaran->isEmpty())
+                    <li>
+                      <a class="dropdown-item" href="{{ route('sertifikat.create') }}?bapp_id={{ $b->id }}">
+                        <i data-feather="credit-card" class="me-2"></i>Buat Sertifikat Pembayaran
+                      </a>
+                    </li>
+                  @endif
 
+                  {{-- tombol HAPUS: hanya jika belum approved --}}
+                  @if($b->status !== 'approved')
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <form method="POST"
+                            action="{{ route('bapp.destroy', [$proyek->id, $b->id]) }}"
+                            onsubmit="return confirm('Hapus BAPP {{ $b->nomor_bapp }}? Tindakan ini tidak dapat dibatalkan.');">
+                        @csrf
+                        @method('DELETE')
+                        {{-- supaya kembali ke halaman & tab yang sama --}}
+                        <input type="hidden" name="redirect_to" value="{{ request()->fullUrl() }}">
+                        <button class="dropdown-item text-danger">
+                          <i data-feather="trash-2" class="me-2"></i>Hapus
+                        </button>
+                      </form>
+                    </li>
+                  @endif
+                </ul>
+              </div>
             </td>
           </tr>
         @empty
@@ -797,8 +842,10 @@
     </span>
   </div>
 
+  @php $priceMode = $proyek->penawaran_price_mode ?? 'pisah'; @endphp
+
   <div class="table-responsive">
-    <table class="table table-hover table-bordered table-sm align-middle" id="tbl-sertifikat">
+    <table class="table table-hover align-middle display nowrap w-100 dataTable" id="tbl-sertifikat">
     <thead class="table-light">
       <tr>
         <th style="width:4%">#</th>
@@ -806,12 +853,17 @@
         <th style="width:11%">Tanggal</th>
         <th style="width:10%">Termin</th>
         <th>No. BAPP</th>
-        <th class="text-end" style="width:12%">WO Material</th>
-        <th class="text-end" style="width:12%">WO Upah</th>
-        <th class="text-end" style="width:12%">DPP Material</th>  {{-- baru --}}
-        <th class="text-end" style="width:12%">DPP Jasa</th>      {{-- baru --}}
+        @if($priceMode === 'pisah')
+          <th class="text-end" style="width:12%">WO Material</th>
+          <th class="text-end" style="width:12%">WO Upah</th>
+          <th class="text-end" style="width:12%">DPP Material</th>
+          <th class="text-end" style="width:12%">DPP Jasa</th>
+        @else
+          <th class="text-end" style="width:14%">WO (Gabungan)</th>
+          <th class="text-end" style="width:14%">DPP (Gabungan)</th>
+        @endif
         <th class="text-end" style="width:14%">Tagihan (Bruto+PPN)</th>
-        <th class="text-center" style="width:16%">Aksi</th>
+        <th class="text-center" style="width:90px">Aksi</th>
       </tr>
     </thead>
 
@@ -823,44 +875,57 @@
             <td>{{ \Carbon\Carbon::parse($s->tanggal)->format('d-m-Y') }}</td>
             <td class="text-nowrap">Ke-{{ $s->termin_ke }}</td>
             <td class="text-nowrap">{{ $s->bapp?->nomor_bapp ?? '-' }}</td>
-            <td class="text-end">{{ $rp($s->nilai_wo_material) }}</td>
-            <td class="text-end">{{ $rp($s->nilai_wo_jasa) }}</td>
-            <td class="text-end">{{ $rp($s->dpp_material) }}</td>
-            <td class="text-end">{{ $rp($s->dpp_jasa) }}</td>
+            @if($priceMode === 'pisah')
+              <td class="text-end">{{ $rp($s->nilai_wo_material) }}</td>
+              <td class="text-end">{{ $rp($s->nilai_wo_jasa) }}</td>
+              <td class="text-end">{{ $rp($s->dpp_material) }}</td>
+              <td class="text-end">{{ $rp($s->dpp_jasa) }}</td>
+            @else
+              @php
+                $woTotal = $s->nilai_wo_total ?? ($s->nilai_wo_material + $s->nilai_wo_jasa);
+                $dppTotal = ($s->dpp_material ?? 0) + ($s->dpp_jasa ?? 0);
+              @endphp
+              <td class="text-end">{{ $rp($woTotal) }}</td>
+              <td class="text-end">{{ $rp($dppTotal) }}</td>
+            @endif
             <td class="text-end fw-semibold text-primary">{{ $rp($s->total_tagihan) }}</td>
             <td class="text-center">
-              <a href="{{ route('sertifikat.show', $s->id) }}" class="btn btn-sm btn-outline-teal me-1">
-                <i data-feather="eye" class="me-1"></i> Detail
-              </a>
-              <a href="{{ route('sertifikat.edit', $s->id) }}" class="btn btn-sm btn-outline-primary me-1">
-                <i data-feather="edit" class="me-1"></i> Edit
-              </a>
-              <a href="{{ route('sertifikat.create', ['bapp_id' => $s->bapp_id]) }}" class="btn btn-sm btn-outline-warning me-1">
-                <i data-feather="refresh-ccw" class="me-1"></i> Revisi
-              </a>
-              @if(($s->status ?? 'draft') === 'approved')
-                <a href="{{ route('sertifikat.cetak', $s->id) }}" class="btn btn-sm btn-outline-primary">
-                  <i data-feather="download" class="me-1"></i> PDF
-                </a>
-              @else
-                <form action="{{ route('sertifikat.approve', $s->id) }}" method="POST" class="d-inline">
-                  @csrf
-                  <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Setujui sertifikat pembayaran ini?');">
-                    <i data-feather="check-circle" class="me-1"></i> Setujui
-                  </button>
-                </form>
-              @endif
-              <form action="{{ route('sertifikat.destroy', $s->id) }}" method="POST" class="d-inline ms-1" onsubmit="return confirm('Hapus sertifikat ini?');">
-                @csrf
-                @method('DELETE')
-                <button type="submit" class="btn btn-sm btn-outline-danger">
-                  <i data-feather="trash-2" class="me-1"></i> Hapus
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                  Menu Aksi
                 </button>
-              </form>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <a href="{{ route('sertifikat.show', $s->id) }}" class="dropdown-item">
+                      <i data-feather="eye" class="me-2"></i>Detail
+                    </a>
+                  </li>
+                  @if(($s->status ?? 'draft') !== 'approved')
+                    <li>
+                      <form action="{{ route('sertifikat.approve', $s->id) }}" method="POST">
+                        @csrf
+                        <button type="submit" class="dropdown-item" onclick="return confirm('Setujui sertifikat pembayaran ini?');">
+                          <i data-feather="check-circle" class="me-2"></i>Setujui
+                        </button>
+                      </form>
+                    </li>
+                  @endif
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <form action="{{ route('sertifikat.destroy', $s->id) }}" method="POST" onsubmit="return confirm('Hapus sertifikat ini?');">
+                      @csrf
+                      @method('DELETE')
+                      <button type="submit" class="dropdown-item text-danger">
+                        <i data-feather="trash-2" class="me-2"></i>Hapus
+                      </button>
+                    </form>
+                  </li>
+                </ul>
+              </div>
             </td>
           </tr>
         @empty
-          <tr><td colspan="9" class="text-center text-muted py-3">Belum ada sertifikat untuk penawaran ini.</td></tr>
+          <tr><td colspan="{{ $priceMode === 'pisah' ? 11 : 9 }}" class="text-center text-muted py-3">Belum ada sertifikat untuk penawaran ini.</td></tr>
         @endforelse
       </tbody>
     </table>

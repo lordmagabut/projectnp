@@ -39,7 +39,7 @@ class SertifikatPembayaranController extends Controller
         $sp->fill($data);
         $sp->save();
 
-        return redirect()->route('sertifikat.index')->with('success', 'Sertifikat diperbarui.');
+        return redirect()->to($this->redirectToProyekTab($sp, $request))->with('success', 'Sertifikat diperbarui.');
     }
 
     public function destroy($id)
@@ -57,7 +57,7 @@ class SertifikatPembayaranController extends Controller
         
         $sp->delete();
 
-        return redirect()->route('sertifikat.index')->with('success', 'Sertifikat dihapus dan Uang Muka telah dikembalikan.');
+        return redirect()->to($this->redirectToProyekTab($sp, request()))->with('success', 'Sertifikat dihapus dan Uang Muka telah dikembalikan.');
     }
 
     public function create(Request $r)
@@ -516,7 +516,7 @@ class SertifikatPembayaranController extends Controller
     {
         $sp = SertifikatPembayaran::with('bapp.proyek')->findOrFail($id);
         if ($sp->status === 'approved') {
-            return redirect()->route('sertifikat.show', $sp->id)->with('info', 'Sertifikat sudah disetujui.');
+            return redirect()->to($this->redirectToProyekTab($sp, request()))->with('info', 'Sertifikat sudah disetujui.');
         }
 
         $sp->status = 'approved';
@@ -579,7 +579,7 @@ class SertifikatPembayaranController extends Controller
             ]);
         }
 
-        return redirect()->route('sertifikat.show', $sp->id)->with('success', 'Sertifikat disetujui dan faktur dibuat.');
+        return redirect()->to($this->redirectToProyekTab($sp, request()))->with('success', 'Sertifikat disetujui dan faktur dibuat.');
     }
 
     public function cetak($id)
@@ -607,6 +607,26 @@ class SertifikatPembayaranController extends Controller
         return $pdf->download('Sertifikat-Pembayaran-'.$sp->nomor.'.pdf');
     }
     
+    protected function redirectToProyekTab(SertifikatPembayaran $sp, ?Request $request = null): string
+    {
+        if ($request && $request->filled('redirect_to')) {
+            return $request->input('redirect_to');
+        }
+
+        $proyekId = optional($sp->bapp)->proyek_id;
+        $penawaranId = optional($sp->bapp)->penawaran_id;
+
+        if ($proyekId) {
+            $query = ['tab' => 'sertifikat'];
+            if ($penawaranId) {
+                $query['penawaran_id'] = $penawaranId;
+            }
+            return route('proyek.show', $proyekId) . '?' . http_build_query($query);
+        }
+
+        return route('sertifikat.index');
+    }
+
     
 
     // -------- util terbilang sederhana (ID) ----------

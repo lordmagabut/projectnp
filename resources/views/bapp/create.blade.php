@@ -74,6 +74,16 @@
           <label class="form-label">Catatan</label>
           <textarea name="notes" class="form-control" rows="2">{{ old('notes') }}</textarea>
         </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Penandatangan BAPP</label>
+          @php $signBy = old('sign_by', 'sm'); @endphp
+          <select name="sign_by" class="form-select">
+            <option value="sm" {{ $signBy === 'sm' ? 'selected' : '' }}>Site Manager</option>
+            <option value="pm" {{ $signBy === 'pm' ? 'selected' : '' }}>Project Manager</option>
+          </select>
+          <small class="text-muted">Nama diambil dari detail proyek.</small>
+        </div>
       </div>
 
       @php

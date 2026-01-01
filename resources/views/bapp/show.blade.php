@@ -2,6 +2,8 @@
 
 @section('content')
 @php
+  use Illuminate\Support\Facades\Storage;
+
   $fmt = fn($n)=>number_format((float)$n, 2, ',', '.');
   $bapp->loadMissing('details','penawaran');
   // hindari drift: akumulasi integer (x100)
@@ -38,21 +40,12 @@
         <i data-feather="arrow-left" class="me-1"></i>Kembali
       </a>
 
-      @if($bapp->file_pdf_path)
-        <a class="btn btn-outline-primary" target="_blank"
-           href="{{ route('bapp.pdf', [$proyek->id, $bapp->id]) }}">
-          <i data-feather="download" class="me-1"></i>Unduh PDF
-        </a>
-      @endif
+      <a class="btn btn-outline-primary" target="_blank"
+         href="{{ route('bapp.pdf', [$proyek->id, $bapp->id]) }}">
+        <i data-feather="download" class="me-1"></i>Unduh PDF
+      </a>
 
-      @if($bapp->status === 'draft')
-        <form method="POST" action="{{ route('bapp.submit', [$proyek->id, $bapp->id]) }}">
-          @csrf
-          <button class="btn btn-primary">
-            <i data-feather="send" class="me-1"></i>Kirim untuk Persetujuan
-          </button>
-        </form>
-      @elseif($bapp->status === 'submitted')
+      @if($bapp->status === 'submitted')
         <form method="POST" action="{{ route('bapp.approve', [$proyek->id, $bapp->id]) }}" class="d-inline">
           @csrf
           <button class="btn btn-success">
@@ -77,13 +70,51 @@
   </div>
 
   <div class="card-body">
+    @if($errors->any())
+      <div class="alert alert-danger">
+        <div class="fw-semibold mb-1">Gagal mengirim:</div>
+        <ul class="mb-0">
+          @foreach($errors->all() as $e)
+            <li>{{ $e }}</li>
+          @endforeach
+        </ul>
+      </div>
+    @endif
+
+    @if($bapp->status === 'draft')
+      <form method="POST" action="{{ route('bapp.submit', [$proyek->id, $bapp->id]) }}" enctype="multipart/form-data" class="row g-2 align-items-end mb-3">
+        @csrf
+        <div class="col-md-6 col-lg-5">
+          <label class="form-label">Upload Tanda Terima (PDF)</label>
+          <input type="file" name="tanda_terima_pdf" accept="application/pdf" required
+                 class="form-control form-control-sm @error('tanda_terima_pdf') is-invalid @enderror">
+          <div class="form-text">Wajib PDF, maks 10MB.</div>
+          @error('tanda_terima_pdf') <div class="invalid-feedback">{{ $message }}</div> @enderror
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-primary mt-2 mt-md-0">
+            <i data-feather="send" class="me-1"></i>Kirim untuk Persetujuan
+          </button>
+        </div>
+      </form>
+    @endif
+
     {{-- Ringkasan --}}
     <div class="row g-2 small text-muted mb-3">
       <div class="col-12"><strong>Proyek:</strong> {{ $proyek->nama_proyek }}</div>
       <div class="col-12"><strong>Penawaran:</strong> {{ $bapp->penawaran?->nama_penawaran ?? '-' }}</div>
       <div class="col-12"><strong>Minggu ke:</strong> {{ $bapp->minggu_ke }}</div>
       <div class="col-12"><strong>Tanggal BAPP:</strong> {{ \Carbon\Carbon::parse($bapp->tanggal_bapp)->format('d-m-Y') }}</div>
+      <div class="col-12"><strong>Penandatangan:</strong> {{ ($bapp->sign_by === 'pm') ? ($proyek->project_manager_name ?? 'Project Manager') : ($proyek->site_manager_name ?? 'Site Manager') }}</div>
       <div class="col-12"><strong>Catatan:</strong> {{ $bapp->notes ?: '-' }}</div>
+      <div class="col-12">
+        <strong>Tanda Terima:</strong>
+        @if($bapp->file_pdf_path)
+          <a href="{{ Storage::url($bapp->file_pdf_path) }}" target="_blank" rel="noopener">Lihat PDF</a>
+        @else
+          -
+        @endif
+      </div>
     </div>
 
     {{-- Tabel detail (sinkron dengan Create) --}}
@@ -140,12 +171,6 @@
       </table>
     </div>
 
-    @if($bapp->file_pdf_path)
-      <div class="alert alert-info mt-3 mb-0">
-        File PDF tersimpan di: <code>storage/{{ $bapp->file_pdf_path }}</code>.
-        Jika tidak bisa dibuka, pastikan sudah menjalankan <code>php artisan storage:link</code>.
-      </div>
-    @endif
   </div>
 </div>
 @endsection

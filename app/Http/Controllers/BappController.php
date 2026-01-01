@@ -117,7 +117,8 @@ class BappController extends Controller
             'minggu_ke'    => ['required','integer','min:1'],
             'tanggal_bapp' => ['required','date'],
             'nomor_bapp'   => ['required','string','max:100','unique:bapps,nomor_bapp'],
-            'notes'        => ['nullable','string','max:1000'],
+              'notes'        => ['nullable','string','max:1000'],
+              'sign_by'      => ['required','in:sm,pm'],
         ]);
 
         $penawaranId = (int)($data['penawaran_id'] ?? 0);
@@ -144,6 +145,7 @@ class BappController extends Controller
                 'total_now_pct'    => 0,
                 'created_by'       => auth()->id(),
                 'notes'            => $data['notes'] ?? null,
+                'sign_by'         => $data['sign_by'],
             ]);
 
             $details = [];
@@ -197,17 +199,6 @@ class BappController extends Controller
                 'total_now_pct'    => round($totNowAccum / 100, 2),
             ]);
 
-            // generate PDF
-            $safeNo = Str::slug($bapp->nomor_bapp);
-            $path   = "bapp/{$proyek->id}/{$safeNo}.pdf";
-
-            $pdf = PDF::loadView('bapp.pdf', [
-                'bapp'     => $bapp->fresh('details','proyek','penawaran'),
-                'proyek'   => $proyek,
-            ])->setPaper('a4','landscape');
-
-            Storage::disk('public')->put($path, $pdf->output());
-            $bapp->update(['file_pdf_path' => $path]);
         });
 
         return redirect()
@@ -224,13 +215,41 @@ class BappController extends Controller
     public function pdf(Proyek $proyek, Bapp $bapp)
     {
         abort_if($bapp->proyek_id !== $proyek->id, 404);
-        return response()->file(storage_path('app/public/'.$bapp->file_pdf_path));
+        $bapp->loadMissing('details','penawaran','proyek.pemberiKerja');
+        $pdf = PDF::loadView('bapp.pdf', [
+            'bapp'   => $bapp,
+            'proyek' => $proyek,
+        ])->setPaper('a4','landscape');
+
+        $nomorSafe = preg_replace('/[\\\\\/]+/', '-', $bapp->nomor_bapp ?? '');
+        $filename = 'BAPP-'.$nomorSafe.'.pdf';
+        return $pdf->stream($filename);
     }
 
-    public function submit(Proyek $proyek, Bapp $bapp)
+    public function submit(Proyek $proyek, Bapp $bapp, Request $r)
     {
         abort_if($bapp->proyek_id !== $proyek->id, 404);
-        $bapp->update(['status' => 'submitted']);
+
+        $data = $r->validate([
+            'tanda_terima_pdf' => ['required','file','mimes:pdf','max:10240'], // max ~10MB
+        ]);
+
+        $file = $data['tanda_terima_pdf'];
+        $slugNomor = Str::slug($bapp->nomor_bapp ?? 'bapp', '-');
+        $filename = 'tanda-terima-'.$slugNomor.'-'.$bapp->id.'-'.now()->format('YmdHis').'.'.$file->getClientOriginalExtension();
+
+        // hapus file lama hanya jika berasal dari folder tanda terima
+        if ($bapp->file_pdf_path && Str::startsWith($bapp->file_pdf_path, 'bapp/tanda-terima/')) {
+            Storage::disk('public')->delete($bapp->file_pdf_path);
+        }
+
+        $path = $file->storeAs('bapp/tanda-terima', $filename, 'public');
+
+        $bapp->update([
+            'status'         => 'submitted',
+            'file_pdf_path'  => $path,
+        ]);
+
         return back()->with('success','BAPP dikirim untuk persetujuan.');
     }
 
@@ -466,11 +485,6 @@ public function destroy(Proyek $proyek, Bapp $bapp, Request $request)
     }
 
     DB::transaction(function () use ($bapp) {
-        // hapus PDF jika ada
-        if (!empty($bapp->file_pdf_path)) {
-            Storage::disk('public')->delete($bapp->file_pdf_path);
-        }
-
         // hapus detail (jaga-jaga jika FK tidak ON DELETE CASCADE)
         try { $bapp->details()->delete(); } catch (\Throwable $e) {}
 

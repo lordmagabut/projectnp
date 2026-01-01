@@ -28,8 +28,13 @@
   $totWiInt = $totPrevInt = $totDeltaInt = $totNowInt = 0;
   $totWi = $totPrev = $totDelta = $totNow = 0.0;
 
-  $pemberiKerja = optional($proyek->pemberiKerja)->nama_pemberi_kerja ?? 'Pemberi Kerja';
-  $dibuatOleh   = auth()->user()->name ?? '________________';
+    $pemberiKerja = optional($proyek->pemberiKerja)->nama_pemberi_kerja ?? 'Pemberi Kerja';
+    $pemberiKerjaPic = optional($proyek->pemberiKerja)->pic ?? '________________';
+    $signBy = $bapp->sign_by ?? 'sm';
+    $dibuatOleh = $signBy === 'pm'
+    ? ($proyek->project_manager_name ?: (auth()->user()->name ?? '________________'))
+    : ($proyek->site_manager_name ?: (auth()->user()->name ?? '________________'));
+  $dibuatJabatan = $signBy === 'pm' ? 'Project Manager' : 'Site Manager';
 @endphp
 <!DOCTYPE html>
 <html>
@@ -182,14 +187,14 @@
       <td>
         <div>Dibuat oleh</div>
         <div class="box"></div>
-        <div><strong>{{ $dibuatOleh }}</strong></div>
-        <div style="color:#666">{{ config('app.name') }}</div>
+          <div><strong>______________________________________</strong></div>
+          <div style="color:#666">{{ $dibuatOleh }} - {{ $dibuatJabatan }}</div>
       </td>
       <td>
         <div>Disetujui oleh</div>
         <div class="box"></div>
-        <div><strong>____________________________</strong></div>
-        <div style="color:#666">{{ $pemberiKerja }}</div>
+          <div><strong>______________________________________</strong></div>
+          <div style="color:#666">{{ $pemberiKerjaPic }} - {{ $pemberiKerja }}</div>
       </td>
     </tr>
   </table>

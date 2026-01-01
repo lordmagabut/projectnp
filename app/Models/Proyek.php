@@ -33,7 +33,9 @@ class Proyek extends Model
         'jenis_proyek',
         'penawaran_price_mode',
         'uang_muka_mode',
-        'pph_dipungut'
+        'pph_dipungut',
+        'site_manager_name',
+        'project_manager_name'
     ];
 
     public function pemberiKerja()

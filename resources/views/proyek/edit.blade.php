@@ -166,6 +166,17 @@
             </div>
           </div>
 
+          <div class="row g-3 mt-1">
+            <div class="col-md-6">
+              <label class="form-label">Site Manager</label>
+              <input type="text" name="site_manager_name" class="form-control" value="{{ old('site_manager_name', $proyek->site_manager_name) }}" placeholder="Nama Site Manager">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Project Manager</label>
+              <input type="text" name="project_manager_name" class="form-control" value="{{ old('project_manager_name', $proyek->project_manager_name) }}" placeholder="Nama Project Manager">
+            </div>
+          </div>
+
           {{-- Profil Pajak Proyek (Tetap sama) --}}
           <hr class="my-4">
           <h5 class="mb-3">Profil Pajak Proyek</h5>

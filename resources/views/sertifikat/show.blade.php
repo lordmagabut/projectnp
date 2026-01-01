@@ -5,9 +5,15 @@
   <div class="card-header d-flex justify-content-between align-items-center">
     <h5 class="mb-0">Detail Sertifikat Pembayaran</h5>
     <div class="d-flex gap-2">
+      @php
+        $redir = route('proyek.show', optional(optional($sp->bapp)->proyek)->id ?? 0) . '?tab=sertifikat' . (optional($sp->bapp)->penawaran_id ? ('&penawaran_id=' . optional($sp->bapp)->penawaran_id) : '');
+      @endphp
+      <a href="{{ route('sertifikat.edit', $sp->id) }}?redirect_to={{ urlencode($redir) }}" class="btn btn-outline-primary">Edit</a>
+      <a href="{{ route('sertifikat.create', ['bapp_id' => $sp->bapp_id]) }}?redirect_to={{ urlencode($redir) }}" class="btn btn-outline-warning">Revisi</a>
       @if(($sp->status ?? 'draft') !== 'approved')
         <form method="POST" action="{{ route('sertifikat.approve', $sp->id) }}" onsubmit="return confirm('Setujui sertifikat ini dan buat faktur penjualan?');">
           @csrf
+          <input type="hidden" name="redirect_to" value="{{ $redir }}">
           <button class="btn btn-success" type="submit">Setujui</button>
         </form>
       @endif
@@ -366,7 +372,7 @@
     </table>
 
     <div class="mt-3">
-      <a href="{{ route('proyek.show', optional(optional($sp->bapp)->proyek)->id ?? 0) }}#sertifikat" class="btn btn-secondary">Kembali</a>
+      <a href="{{ $redir }}" class="btn btn-secondary">Kembali</a>
       @if(($sp->status ?? 'draft') === 'approved')
         <a href="{{ route('sertifikat.cetak', $sp->id) }}" class="btn btn-outline-primary">Cetak PDF</a>
       @endif
