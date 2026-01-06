@@ -72,7 +72,11 @@ class UangMukaPenjualanController extends Controller
 
     public function show($id)
     {
-        $um = UangMukaPenjualan::with(['salesOrder.penawaran.proyek', 'proyek', 'creator'])->findOrFail($id);
+        $um = UangMukaPenjualan::with([
+            'salesOrder.penawaran', 
+            'proyek.pemberiKerja', 
+            'creator'
+        ])->findOrFail($id);
         return view('uang-muka-penjualan.show', compact('um'));
     }
 

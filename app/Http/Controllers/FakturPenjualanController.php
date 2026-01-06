@@ -19,7 +19,7 @@ class FakturPenjualanController extends Controller
 
     public function show($id)
     {
-        $faktur = FakturPenjualan::with('proyek', 'sertifikatPembayaran')->findOrFail($id);
+        $faktur = FakturPenjualan::with(['proyek.pemberiKerja', 'sertifikatPembayaran', 'perusahaan'])->findOrFail($id);
         return view('faktur-penjualan.show', compact('faktur'));
     }
 

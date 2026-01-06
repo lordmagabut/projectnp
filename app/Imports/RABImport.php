@@ -14,19 +14,20 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 class RABImport implements WithMultipleSheets
 {
     protected $proyek_id;
+    public $ctx;
 
     public function __construct($proyek_id)
     {
         $this->proyek_id = $proyek_id;
+        $this->ctx = new RABImportContext($proyek_id);
     }
 
     public function sheets(): array
     {
-        $ctx = new RABImportContext($this->proyek_id);
         return [
-            'RAB_Header' => new RABHeaderSheetImport($ctx),
-            'RAB_Detail' => new RABDetailSheetImport($ctx),
-            0            => new LegacySingleSheetImport($ctx), // fallback template lama
+            'RAB_Header' => new RABHeaderSheetImport($this->ctx),
+            'RAB_Detail' => new RABDetailSheetImport($this->ctx),
+            0            => new LegacySingleSheetImport($this->ctx), // fallback template lama
         ];
     }
 }
@@ -38,6 +39,7 @@ class RABImportContext
     public array $headerMap = [];        // map[kode] = id
     public array $pendingParents = [];   // [[childId, parent_kode], ...]
     public array $headerTotals = [];     // map[header_id] = total
+    public array $invalidAhsp = [];      // array untuk mencatat AHSP yang tidak ditemukan
 
     public function __construct(int $proyek_id)
     {
@@ -145,21 +147,47 @@ class RABDetailSheetImport implements ToCollection, WithHeadingRow
                 $harga_upah     = RABImportContext::dec($row['harga_upah'] ?? 0);
                 $harga_satuan   = RABImportContext::dec($row['harga_satuan'] ?? 0);
 
-                $ahsp_id   = isset($row['ahsp_id']) && $row['ahsp_id'] !== '' ? (int)$row['ahsp_id'] : null;
+                $ahsp_id_input   = isset($row['ahsp_id']) && $row['ahsp_id'] !== '' ? (int)$row['ahsp_id'] : null;
                 $ahsp_kode = trim((string)($row['ahsp_kode'] ?? ''));
+                
+                // Variable untuk menyimpan ahsp_id yang valid (setelah diverifikasi)
+                $ahsp_id_valid = null;
 
                 // fallback ke AHSP bila semua harga kosong (atau bila AHSP tersedia dan ingin mengisi harga)
-                if (($harga_material + $harga_upah + $harga_satuan) == 0 && ($ahsp_id || $ahsp_kode)) {
+                if (($harga_material + $harga_upah + $harga_satuan) == 0 && ($ahsp_id_input || $ahsp_kode)) {
                     $q = AhspHeader::query();
-                    if ($ahsp_id)   $q->where('id', $ahsp_id);
+                    if ($ahsp_id_input)   $q->where('id', $ahsp_id_input);
                     if ($ahsp_kode) $q->orWhere('kode_pekerjaan', $ahsp_kode);
                     if ($ahsp = $q->first()) {
+                        $ahsp_id_valid = $ahsp->id; // Set ID yang valid
                         $satuan = $satuan ?: $ahsp->satuan;
                         // Isi harga material & upah dari AHSP jika tersedia
                         $harga_material = (float)($ahsp->total_material ?? 0);
                         $harga_upah     = (float)($ahsp->total_upah ?? 0);
                         // Harga satuan berasal dari total AHSP jika ada, fallback ke penjumlahan material+upah
                         $harga_satuan = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? ($harga_material + $harga_upah));
+                    } else {
+                        // AHSP tidak ditemukan, catat untuk warning
+                        $ahspRef = $ahsp_id_input ? "ID: $ahsp_id_input" : "Kode: $ahsp_kode";
+                        $this->ctx->invalidAhsp[] = [
+                            'item' => $deskripsi ?: $kode,
+                            'ahsp' => $ahspRef
+                        ];
+                    }
+                } elseif ($ahsp_id_input || $ahsp_kode) {
+                    // Jika ada harga tapi ahsp_id/kode tetap diisi, verifikasi dulu apakah AHSP ada
+                    $q = AhspHeader::query();
+                    if ($ahsp_id_input)   $q->where('id', $ahsp_id_input);
+                    if ($ahsp_kode) $q->orWhere('kode_pekerjaan', $ahsp_kode);
+                    if ($ahsp = $q->first()) {
+                        $ahsp_id_valid = $ahsp->id; // Set ID yang valid
+                    } else {
+                        // AHSP tidak ditemukan, catat untuk warning
+                        $ahspRef = $ahsp_id_input ? "ID: $ahsp_id_input" : "Kode: $ahsp_kode";
+                        $this->ctx->invalidAhsp[] = [
+                            'item' => $deskripsi ?: $kode,
+                            'ahsp' => $ahspRef
+                        ];
                     }
                 }
 
@@ -185,7 +213,7 @@ class RABDetailSheetImport implements ToCollection, WithHeadingRow
                 RabDetail::create([
                     'proyek_id'      => $this->ctx->proyek_id,
                     'rab_header_id'  => $header_id,
-                    'ahsp_id'        => $ahsp_id ?: null,
+                    'ahsp_id'        => $ahsp_id_valid, // Gunakan ID yang sudah diverifikasi
                     'kode'           => $kode,
                     'kode_sort'      => RABImportContext::kodeSort($kode),
                     'deskripsi'      => $deskripsi,

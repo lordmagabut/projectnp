@@ -43,6 +43,15 @@ class Proyek extends Model
         return $this->belongsTo(PemberiKerja::class);
     }
 
+    /**
+     * Get perusahaan for this project.
+     * Since this is a single-company system, always return the first perusahaan.
+     */
+    public function getPerusahaanAttribute()
+    {
+        return Perusahaan::first();
+    }
+
     public function rabHeaders()
     {
         return $this->hasMany(RabHeader::class, 'proyek_id');

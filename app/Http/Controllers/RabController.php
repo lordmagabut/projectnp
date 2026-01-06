@@ -45,7 +45,23 @@ class RabController extends Controller
         RabHeader::where('proyek_id', $request->proyek_id)->delete();
         RabDetail::where('proyek_id', $request->proyek_id)->delete();
 
-        Excel::import(new RABImport($request->proyek_id), $request->file('file'));
+        $import = new RABImport($request->proyek_id);
+        Excel::import($import, $request->file('file'));
+        
+        // Cek apakah ada AHSP yang tidak valid
+        $invalidAhsp = $import->ctx->invalidAhsp ?? [];
+
+        // Berikan pesan sesuai kondisi
+        if (!empty($invalidAhsp)) {
+            $warningMsg = 'RAB berhasil diimport, namun ' . count($invalidAhsp) . ' item memiliki referensi AHSP yang tidak ditemukan dan dilewati (tidak di-link ke AHSP): ';
+            $items = array_slice($invalidAhsp, 0, 5); // Tampilkan max 5 item
+            $itemList = collect($items)->map(fn($i) => "{$i['item']} ({$i['ahsp']})")->implode(', ');
+            if (count($invalidAhsp) > 5) {
+                $itemList .= ' dan ' . (count($invalidAhsp) - 5) . ' lainnya';
+            }
+            return redirect()->route('proyek.show', $request->proyek_id)
+                ->with('warning', $warningMsg . $itemList);
+        }
 
         return redirect()->route('proyek.show', $request->proyek_id)->with('success', 'RAB berhasil diimport!');
     }
