@@ -95,7 +95,10 @@
                 @if($row->payment_status === 'belum_dibayar')
                   <a href="{{ route('uang-muka-penjualan.pay', $row->id) }}" class="btn btn-sm btn-outline-success">Bayar</a>
                 @endif
-                  <button type="submit" class="btn btn-sm btn-outline-danger" {{ $row->nominal_digunakan > 0 ? 'disabled' : '' }}>Hapus</button>
+                <form action="{{ route('uang-muka-penjualan.destroy', $row->id) }}" method="POST" style="display:inline;">
+                  @csrf
+                  @method('DELETE')
+                  <button type="submit" class="btn btn-sm btn-outline-danger" {{ $row->nominal_digunakan > 0 ? 'disabled' : '' }} onclick="return confirm('Hapus UM ini?')">Hapus</button>
                 </form>
               </td>
             </tr>
