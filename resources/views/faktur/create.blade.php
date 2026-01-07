@@ -45,6 +45,19 @@
                         </select>
                     </div>
 
+                    <!-- Multiple Penerimaan Selection -->
+                    <div id="penerimaanSection" class="mt-4 p-3 border rounded bg-light" style="display:none;">
+                        <h5 class="mb-3">
+                            <i data-feather="package" style="width: 18px; height: 18px;"></i>
+                            Pilih Penerimaan Barang (Bisa Lebih Dari Satu)
+                        </h5>
+                        <div id="penerimaanList" class="row">
+                            <!-- Penerimaan items akan dimuat melalui JavaScript -->
+                        </div>
+                        <!-- Hidden input untuk penerimaan_ids -->
+                        <input type="hidden" id="penerimaanIdsInput" name="penerimaan_ids" value="">
+                    </div>
+
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Diskon Global (%)</label>
@@ -80,11 +93,12 @@
                     </div>
 
                     <div id="poDetailContainer" class="mt-4" style="display:none;">
-                        <h5>Detail Barang</h5>
+                        <h5>Detail Barang dari Penerimaan Terpilih</h5>
                         <table class="table table-bordered">
                             <thead>
                                 <tr>
                                     <th>Nama Barang</th>
+                                    <th>Penerimaan</th>
                                     <th>Qty Tersedia</th>
                                     <th>Qty Faktur</th>
                                     <th>Harga</th>
@@ -97,7 +111,7 @@
                         </table>
                     </div>
 
-                    <button type="submit" class="btn btn-primary mt-3">Simpan Faktur</button>
+                    <button type="submit" class="btn btn-primary mt-3" onclick="return validateFakturForm();">Simpan Faktur</button>
                 </form>
             </div>
         </div>
@@ -107,8 +121,45 @@
 
 @push('custom-scripts')
 <script>
+    function validateFakturForm() {
+        const supplierId = document.getElementById('supplierSelect').value;
+        const poId = document.getElementById('poSelect').value;
+        
+        // Validasi supplier dan PO dipilih
+        if (!supplierId) {
+            alert('Pilih supplier terlebih dahulu');
+            return false;
+        }
+        if (!poId) {
+            alert('Pilih Pesanan Pembelian (PO) terlebih dahulu');
+            return false;
+        }
+
+        // Validasi ada minimal 1 item dengan qty > 0 - cek input qty yang ada
+        const qtyInputs = document.querySelectorAll('input[name*="items["][name*="][qty]"]');
+        if (qtyInputs.length === 0) {
+            alert('Pilih penerimaan barang dan tambahkan item');
+            return false;
+        }
+
+        let hasValidItem = false;
+        qtyInputs.forEach(input => {
+            if (parseFloat(input.value || 0) > 0) {
+                hasValidItem = true;
+            }
+        });
+
+        if (!hasValidItem) {
+            alert('Minimal harus ada 1 item dengan qty > 0');
+            return false;
+        }
+
+        return true;
+    }
+
     const routePoBySupplier = "{{ url('api/po-by-supplier') }}";
-    const routePoDetail = "{{ url('api/po-detail') }}";
+    const routePenerimaanByPo = "{{ url('api/penerimaan-by-po') }}";
+    const routePenerimaanDetail = "{{ url('api/penerimaan-detail') }}";
     const routeUangMukaBySupplier = "{{ url('api/uang-muka-by-supplier') }}";
 
     document.getElementById('supplierSelect').addEventListener('change', function () {
@@ -194,51 +245,162 @@
             if (ppnInput) ppnInput.value = ppn;
         }
 
+        const penerimaanSection = document.getElementById('penerimaanSection');
+        const penerimaanList = document.getElementById('penerimaanList');
         const container = document.getElementById('poDetailContainer');
-        const tbody = document.getElementById('poItemsTable');
-        tbody.innerHTML = '';
+        
+        penerimaanList.innerHTML = '';
+        
         if (poId) {
-            fetch(`${routePoDetail}/${poId}`)
+            // Load penerimaan untuk PO ini
+            fetch(`${routePenerimaanByPo}/${poId}`)
                 .then(res => res.json())
                 .then(data => {
-                    if (data.details && data.details.length > 0) {
-                        data.details.forEach((item, index) => {
-                            tbody.innerHTML += `
-                                <tr>
-                                    <td>
-                                        ${item.barang_nama}
-                                        <input type="hidden" name="items[${index}][po_detail_id]" value="${item.id}">
-                                        <input type="hidden" name="items[${index}][kode_item]" value="${item.barang_id}">
-                                        <input type="hidden" name="items[${index}][uraian]" value="${item.barang_nama}">
-                                        <input type="hidden" name="items[${index}][uom]" value="${item.satuan}">
-                                    </td>
-                                    <td>${item.qty_available}</td>
-                                    <td>
-                                        <input type="number" name="items[${index}][qty]" value="${item.qty_available}" 
-                                               max="${item.qty_available}" min="0" step="0.01" class="form-control" required>
-                                    </td>
-                                    <td>
-                                        Rp ${parseInt(item.harga).toLocaleString('id-ID')}
-                                        <input type="hidden" name="items[${index}][harga]" value="${item.harga}">
-                                    </td>
-                                    <td>
-                                        <span class="total">Rp ${(item.qty_available * item.harga).toLocaleString('id-ID')}</span>
-                                    </td>
-                                </tr>`;
+                    if (data.length > 0) {
+                        penerimaanList.innerHTML = '';
+                        data.forEach((penerimaan, index) => {
+                            const tanggal = new Date(penerimaan.tanggal).toLocaleDateString('id-ID');
+                            penerimaanList.innerHTML += `
+                                <div class="col-md-6 mb-3">
+                                    <div class="form-check p-3 border rounded cursor-pointer hover-bg" style="cursor: pointer;">
+                                        <input class="form-check-input penerimaan-checkbox" type="checkbox" 
+                                               name="penerimaan_ids[]" value="${penerimaan.id}" id="penerimaan${penerimaan.id}"
+                                               data-po-id="${poId}">
+                                        <label class="form-check-label w-100" for="penerimaan${penerimaan.id}">
+                                            <strong>${penerimaan.no_penerimaan}</strong><br>
+                                            <small class="text-muted">Tanggal: ${tanggal}</small><br>
+                                            <small class="text-muted">Status: <span class="badge bg-success">Approved</span></small>
+                                        </label>
+                                    </div>
+                                </div>`;
                         });
-                        container.style.display = 'block';
+                        penerimaanSection.style.display = 'block';
                     } else {
-                        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Tidak ada item yang tersedia untuk difaktur</td></tr>';
-                        container.style.display = 'block';
+                        penerimaanList.innerHTML = '<div class="col-12"><div class="alert alert-info">Tidak ada penerimaan yang approved untuk PO ini</div></div>';
+                        penerimaanSection.style.display = 'block';
                     }
                 })
                 .catch(err => {
-                    console.error('Error loading PO details:', err);
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error memuat data PO</td></tr>';
+                    console.error('Error loading penerimaan:', err);
+                    penerimaanList.innerHTML = '<div class="col-12"><div class="alert alert-danger">Error memuat penerimaan</div></div>';
                 });
         } else {
+            penerimaanSection.style.display = 'none';
             container.style.display = 'none';
         }
     });
+
+    // Load barang ketika penerimaan dipilih (trigger saat ada perubahan checkbox)
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('penerimaan-checkbox')) {
+            // Update hidden input dengan selected penerimaan IDs
+            const selectedIds = Array.from(document.querySelectorAll('.penerimaan-checkbox:checked'))
+                .map(cb => cb.value);
+            document.getElementById('penerimaanIdsInput').value = selectedIds.join(',');
+            
+            loadPenerimaanDetails();
+        }
+    });
+
+    function loadPenerimaanDetails() {
+        const poId = document.getElementById('poSelect').value;
+        const selectedPenerimaanIds = Array.from(document.querySelectorAll('.penerimaan-checkbox:checked'))
+            .map(cb => cb.value);
+        
+        const container = document.getElementById('poDetailContainer');
+        const tbody = document.getElementById('poItemsTable');
+        
+        if (selectedPenerimaanIds.length === 0) {
+            container.style.display = 'none';
+            tbody.innerHTML = '';
+            return;
+        }
+
+        // Load details dari semua penerimaan yang dipilih
+        const csrfToken = document.querySelector('input[name="_token"]').value;
+        
+        fetch(`${routePenerimaanDetail}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify({
+                penerimaan_ids: selectedPenerimaanIds
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.details && data.details.length > 0) {
+                tbody.innerHTML = '';
+                let rowIndex = 0;
+                
+                // Group by po_detail untuk merge rows dengan item yang sama
+                const groupedByPoDetail = {};
+                data.details.forEach(item => {
+                    if (!groupedByPoDetail[item.po_detail_id]) {
+                        groupedByPoDetail[item.po_detail_id] = [];
+                    }
+                    groupedByPoDetail[item.po_detail_id].push(item);
+                });
+
+                Object.keys(groupedByPoDetail).forEach(poDetailId => {
+                    const items = groupedByPoDetail[poDetailId];
+                    const firstItem = items[0];
+                    const totalQtyAvailable = items.reduce((sum, item) => sum + parseFloat(item.qty_available || 0), 0);
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>
+                                ${firstItem.barang_nama}
+                                <input type="hidden" name="items[${rowIndex}][po_detail_id]" value="${firstItem.po_detail_id}">
+                                <input type="hidden" name="items[${rowIndex}][kode_item]" value="${firstItem.barang_id}">
+                                <input type="hidden" name="items[${rowIndex}][uraian]" value="${firstItem.barang_nama}">
+                                <input type="hidden" name="items[${rowIndex}][uom]" value="${firstItem.satuan}">
+                            </td>
+                            <td>
+                                <small>${items.map(item => item.no_penerimaan).join(', ')}</small>
+                            </td>
+                            <td>${totalQtyAvailable}</td>
+                            <td>
+                                <input type="number" name="items[${rowIndex}][qty]" value="${totalQtyAvailable}" 
+                                       max="${totalQtyAvailable}" min="0" step="0.01" class="form-control item-qty" required>
+                            </td>
+                            <td>
+                                Rp ${parseInt(firstItem.harga).toLocaleString('id-ID')}
+                                <input type="hidden" name="items[${rowIndex}][harga]" value="${firstItem.harga}">
+                            </td>
+                            <td>
+                                <span class="total">Rp ${(totalQtyAvailable * firstItem.harga).toLocaleString('id-ID')}</span>
+                            </td>
+                        </tr>`;
+                    rowIndex++;
+                });
+
+                container.style.display = 'block';
+                updateTotalCalculation();
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Tidak ada item yang belum difaktur dari penerimaan terpilih</td></tr>';
+                container.style.display = 'block';
+            }
+        })
+        .catch(err => {
+            console.error('Error loading details:', err);
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error memuat data</td></tr>';
+        });
+    }
+
+    // Update total calculation
+    function updateTotalCalculation() {
+        document.querySelectorAll('.item-qty').forEach(input => {
+            input.addEventListener('change', function() {
+                const row = this.closest('tr');
+                const harga = parseFloat(row.querySelector('input[name*="[harga]"]').value);
+                const qty = parseFloat(this.value || 0);
+                const total = (qty * harga).toLocaleString('id-ID');
+                row.querySelector('.total').textContent = `Rp ${total}`;
+            });
+        });
+    }
 </script>
 @endpush

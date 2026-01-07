@@ -144,6 +144,7 @@
               // Kelompokkan permissions berdasarkan kata kunci
               $grouped = [
                 'Purchase Order' => [],
+                'Goods Receipt' => [],
                 'User Management' => [],
                 'Role Management' => [],
                 'Other' => []
@@ -152,6 +153,8 @@
               foreach($permissions as $permission) {
                 if (str_contains($permission->name, ' po')) {
                   $grouped['Purchase Order'][] = $permission;
+                } elseif (str_contains($permission->name, ' penerimaan')) {
+                  $grouped['Goods Receipt'][] = $permission;
                 } elseif (str_contains($permission->name, 'user')) {
                   $grouped['User Management'][] = $permission;
                 } elseif (str_contains($permission->name, 'role')) {
@@ -264,6 +267,7 @@
               // Kelompokkan permissions berdasarkan kata kunci
               $groupedEdit = [
                 'Purchase Order' => [],
+                'Goods Receipt' => [],
                 'User Management' => [],
                 'Role Management' => [],
                 'Other' => []
@@ -272,6 +276,8 @@
               foreach($permissions as $permission) {
                 if (str_contains($permission->name, ' po')) {
                   $groupedEdit['Purchase Order'][] = $permission;
+                } elseif (str_contains($permission->name, ' penerimaan')) {
+                  $groupedEdit['Goods Receipt'][] = $permission;
                 } elseif (str_contains($permission->name, 'user')) {
                   $groupedEdit['User Management'][] = $permission;
                 } elseif (str_contains($permission->name, 'role')) {

@@ -26,9 +26,19 @@ class Faktur extends Model
         'status',
         'file_path',
         'jurnal_id',
-        'uang_muka_dipakai',  // NEW
-        'uang_muka_id',       // NEW
+        'uang_muka_dipakai',
+        'uang_muka_id',
         'sertifikat_pembayaran_id',
+        'dibuat_oleh',
+        'dibuat_at',
+        'disetujui_oleh',
+        'disetujui_at',
+    ];
+
+    protected $casts = [
+        'tanggal' => 'date',
+        'dibuat_at' => 'datetime',
+        'disetujui_at' => 'datetime',
     ];
 
     // Relasi ke detail
@@ -82,6 +92,17 @@ class Faktur extends Model
     public function uangMuka()
     {
         return $this->belongsTo(UangMukaPembelian::class, 'uang_muka_id');
+    }
+
+    // Audit trail relations
+    public function dibuatOleh()
+    {
+        return $this->belongsTo(User::class, 'dibuat_oleh');
+    }
+
+    public function disetujuiOleh()
+    {
+        return $this->belongsTo(User::class, 'disetujui_oleh');
     }
 
     /**

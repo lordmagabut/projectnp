@@ -115,14 +115,14 @@ Route::middleware(['auth'])->group(function () {
     // QR validation routes removed for security concerns
 
     // ========== Penerimaan Pembelian ==========
-    Route::get('/penerimaan', [PenerimaanPembelianController::class, 'index'])->name('penerimaan.index');
-    Route::get('/penerimaan/create/{po_id}', [PenerimaanPembelianController::class, 'create'])->name('penerimaan.create');
-    Route::post('/penerimaan/store', [PenerimaanPembelianController::class, 'store'])->name('penerimaan.store');
-    Route::get('/penerimaan/{id}', [PenerimaanPembelianController::class, 'show'])->name('penerimaan.show');
-    Route::post('/penerimaan/{id}/approve', [PenerimaanPembelianController::class, 'approve'])->name('penerimaan.approve');
-    Route::post('/penerimaan/{id}/revisi', [PenerimaanPembelianController::class, 'revisi'])->name('penerimaan.revisi');
-    Route::delete('/penerimaan/{id}', [PenerimaanPembelianController::class, 'destroy'])->name('penerimaan.destroy');
-    Route::get('/penerimaan/{id}/surat-jalan', [PenerimaanPembelianController::class, 'viewSuratJalan'])->name('penerimaan.viewSuratJalan');
+    Route::get('/penerimaan', [PenerimaanPembelianController::class, 'index'])->name('penerimaan.index')->middleware('permission:view penerimaan');
+    Route::get('/penerimaan/create/{po_id}', [PenerimaanPembelianController::class, 'create'])->name('penerimaan.create')->middleware('permission:create penerimaan');
+    Route::post('/penerimaan/store', [PenerimaanPembelianController::class, 'store'])->name('penerimaan.store')->middleware('permission:create penerimaan');
+    Route::get('/penerimaan/{id}', [PenerimaanPembelianController::class, 'show'])->name('penerimaan.show')->middleware('permission:view penerimaan');
+    Route::post('/penerimaan/{id}/approve', [PenerimaanPembelianController::class, 'approve'])->name('penerimaan.approve')->middleware('permission:approve penerimaan');
+    Route::post('/penerimaan/{id}/revisi', [PenerimaanPembelianController::class, 'revisi'])->name('penerimaan.revisi')->middleware('permission:edit penerimaan');
+    Route::delete('/penerimaan/{id}', [PenerimaanPembelianController::class, 'destroy'])->name('penerimaan.destroy')->middleware('permission:delete penerimaan');
+    Route::get('/penerimaan/{id}/surat-jalan', [PenerimaanPembelianController::class, 'viewSuratJalan'])->name('penerimaan.viewSuratJalan')->middleware('permission:view penerimaan');
 
     // ========== Retur Pembelian ==========
     Route::get('/retur', [ReturPembelianController::class, 'index'])->name('retur.index');
@@ -167,6 +167,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/po-by-supplier/{supplier_id}', [FakturController::class, 'getPoBySupplier'])->name('api.po-by-supplier');
     Route::get('/api/po-detail/{po_id}', [FakturController::class, 'getPoDetail'])->name('api.po-detail');
     Route::get('/api/uang-muka-by-supplier/{supplier_id}', [FakturController::class, 'getUangMukaBySupplier'])->name('api.uang-muka-by-supplier');
+    Route::get('/api/penerimaan-by-po/{po_id}', [FakturController::class, 'getPenerimaanByPo'])->name('api.penerimaan-by-po');
+    Route::post('/api/penerimaan-detail', [FakturController::class, 'getPenerimaanDetail'])->name('api.penerimaan-detail');
     
     Route::get('/faktur/create-from-po/{po}', [FakturController::class, 'createFromPo'])->name('faktur.createFromPo');
     Route::get('/faktur/create-from-penerimaan/{penerimaan}', [FakturController::class, 'createFromPenerimaan'])->name('faktur.createFromPenerimaan');

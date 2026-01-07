@@ -131,6 +131,7 @@
                                             </li>
 
                                             @if($item->status == 'draft')
+                                            @can('approve penerimaan')
                                             <li>
                                                 <form action="{{ route('penerimaan.approve', $item->id) }}" method="POST">
                                                     @csrf
@@ -139,7 +140,9 @@
                                                     </button>
                                                 </form>
                                             </li>
+                                            @endcan
                                             @else
+                                            @can('edit penerimaan')
                                             <li>
                                                 <form action="{{ route('penerimaan.revisi', $item->id) }}" method="POST">
                                                     @csrf
@@ -148,6 +151,7 @@
                                                     </button>
                                                 </form>
                                             </li>
+                                            @endcan
                                             @endif
 
                                             <li>
@@ -157,6 +161,7 @@
                                             </li>
                                             
                                             @if($item->status == 'draft')
+                                            @can('delete penerimaan')
                                             <li><hr class="dropdown-divider"></li>
                                             <li>
                                                 <form action="{{ route('penerimaan.destroy', $item->id) }}" method="POST">
@@ -166,6 +171,7 @@
                                                     </button>
                                                 </form>
                                             </li>
+                                            @endcan
                                             @endif
                                         </ul>
                                     </div>

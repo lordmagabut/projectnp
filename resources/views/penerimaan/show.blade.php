@@ -84,6 +84,7 @@
                     @php
                         $totalDiterima = 0;
                         $totalTerfaktur = 0;
+                        $totalRemaining = 0;
                     @endphp
 
                     <div class="table-responsive mb-4">
@@ -107,8 +108,10 @@
                                         ->sum('qty_retur');
                                     $netDiterima = max(0, ($detail->qty_diterima - $qtyReturApproved));
                                     $sisaBelumDifaktur = max(0, ($netDiterima - $qtyTerfaktur));
+                                    $remaining = max(0, ($detail->qty_po - $detail->qty_diterima));
                                     $totalDiterima += $netDiterima;
                                     $totalTerfaktur += $qtyTerfaktur;
+                                    $totalRemaining += $remaining;
                                 @endphp
                                 <tr>
                                     <td class="text-center">{{ $index + 1 }}</td>
@@ -127,8 +130,8 @@
                                             <div><small class="text-muted">Net: {{ number_format($netDiterima, 2, ',', '.') }}</small></div>
                                         @endif
                                     </td>
-                                    <td class="text-center {{ $sisaBelumDifaktur > 0 ? 'text-danger' : 'text-muted' }}">
-                                        {{ number_format($sisaBelumDifaktur, 2, ',', '.') }}
+                                    <td class="text-center {{ $remaining > 0 ? 'text-warning' : 'text-muted' }}">
+                                        {{ number_format($remaining, 2, ',', '.') }}
                                     </td>
                                     <td class="text-center">{{ $detail->uom }}</td>
                                 </tr>
@@ -140,8 +143,8 @@
                                     <td class="text-center fw-bolder text-success bg-soft-primary">
                                         {{ number_format($totalDiterima, 2, ',', '.') }}
                                     </td>
-                                    <td class="text-center fw-bolder text-danger">
-                                        {{ number_format(max(0, $totalDiterima - $totalTerfaktur), 2, ',', '.') }}
+                                    <td class="text-center fw-bolder text-warning">
+                                        {{ number_format($totalRemaining, 2, ',', '.') }}
                                     </td>
                                     <td></td>
                                 </tr>
@@ -236,29 +239,6 @@
                         </div>
                         <div class="dashed-sep mt-3 mb-4"></div>
 
-                        <div class="mt-4 pt-2">
-                            <div class="fw-bold small mb-2">Signature Section,</div>
-                            <div class="d-flex justify-content-between small mb-4">
-                                <div>
-                                    <span class="me-2">Signature :</span>
-                                    <span class="underline-space"></span>
-                                </div>
-                                <div>
-                                    <span class="me-2">Receipt # :</span>
-                                    <span class="fw-bold">{{ $penerimaan->no_penerimaan }}</span>
-                                </div>
-                            </div>
-                            <div class="d-flex justify-content-between small">
-                                <div>
-                                    <span class="me-2">Name :</span>
-                                    <span class="underline-space" style="width:220px;"></span>
-                                </div>
-                                <div>
-                                    <span class="me-2">Date :</span>
-                                    <span class="underline-space" style="width:180px;"></span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div> 
 
@@ -266,19 +246,23 @@
                 <div class="mt-5 d-print-none">
                     <div class="d-flex gap-2 flex-wrap">
                         @if($penerimaan->status == 'draft')
+                        @can('approve penerimaan')
                         <form action="{{ route('penerimaan.approve', $penerimaan->id) }}" method="POST" class="d-inline">
                             @csrf
                             <button type="submit" class="btn btn-success" onclick="return confirm('Approve this goods receipt?')">
                                 <i data-feather="check"></i> Approve Receipt
                             </button>
                         </form>
+                        @endcan
                         @else
+                        @can('edit penerimaan')
                         <form action="{{ route('penerimaan.revisi', $penerimaan->id) }}" method="POST" class="d-inline">
                             @csrf
                             <button type="submit" class="btn btn-warning" onclick="return confirm('Revise this receipt? It will return to draft status.')">
                                 <i data-feather="edit-3"></i> Revise
                             </button>
                         </form>
+                        @endcan
                         @endif
                         
                         @php
