@@ -15,6 +15,11 @@
         </div>
 
         <div class="mb-3">
+            <label for="alias" class="form-label">Alias</label>
+            <input type="text" name="alias" class="form-control" placeholder="Nama singkat/alias (opsional)">
+        </div>
+
+        <div class="mb-3">
             <label for="alamat" class="form-label">Alamat</label>
             <textarea name="alamat" class="form-control" required></textarea>
         </div>

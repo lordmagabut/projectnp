@@ -16,10 +16,20 @@ class PenerimaanPembelian extends Model
         'nama_supplier',
         'id_proyek',
         'id_perusahaan',
+        'dibuat_oleh',
+        'dibuat_at',
+        'disetujui_oleh',
+        'disetujui_at',
         'keterangan',
         'no_surat_jalan',
+        'file_surat_jalan',
         'status',
         'status_penagihan',
+    ];
+
+    protected $casts = [
+        'dibuat_at' => 'datetime',
+        'disetujui_at' => 'datetime',
     ];
 
     public function po()
@@ -40,6 +50,16 @@ class PenerimaanPembelian extends Model
     public function perusahaan()
     {
         return $this->belongsTo(Perusahaan::class, 'id_perusahaan');
+    }
+
+    public function dibuatOleh()
+    {
+        return $this->belongsTo(User::class, 'dibuat_oleh');
+    }
+
+    public function disetujuiOleh()
+    {
+        return $this->belongsTo(User::class, 'disetujui_oleh');
     }
 
     public function details()

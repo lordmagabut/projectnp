@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FakturPenjualan;
+use App\Models\UangMukaPenjualan;
 use Illuminate\Http\Request;
 
 class FakturPenjualanController extends Controller
@@ -101,11 +102,24 @@ class FakturPenjualanController extends Controller
                 ->with('error', 'Tidak dapat menghapus faktur yang sudah menerima pembayaran.');
         }
 
+        // Kembalikan uang muka jika ada yang dipakai
+        if ($faktur->uang_muka_dipakai > 0 && $faktur->sertifikat_pembayaran_id) {
+            $sertifikat = $faktur->sertifikatPembayaran;
+            if ($sertifikat) {
+                // Cari uang muka yang terkait melalui sales order
+                $uangMuka = UangMukaPenjualan::where('sales_order_id', $sertifikat->sales_order_id)->first();
+                if ($uangMuka) {
+                    // Kembalikan nominal yang dipakai
+                    $uangMuka->updateNominalDigunakan(-$faktur->uang_muka_dipakai);
+                }
+            }
+        }
+
         $noFaktur = $faktur->no_faktur;
         $faktur->delete();
 
         return redirect()->route('faktur-penjualan.index')
-            ->with('success', "Faktur {$noFaktur} berhasil dihapus.");
+            ->with('success', "Faktur {$noFaktur} berhasil dihapus dan uang muka dikembalikan.");
     }
 }
 

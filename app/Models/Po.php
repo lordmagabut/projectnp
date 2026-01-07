@@ -13,6 +13,7 @@ class Po extends Model
 
     protected $fillable = [
         'no_po',
+        'validation_key',
         'tanggal',
         'id_supplier',
         'nama_supplier',
@@ -22,12 +23,18 @@ class Po extends Model
         'total',
         'status',         
         'printed_at',
-        'file_path'      
+        'file_path',
+        'dibuat_oleh', 'dibuat_at',
+        'direview_oleh', 'direview_at',
+        'disetujui_oleh', 'disetujui_at',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
         'printed_at' => 'datetime',
+        'dibuat_at' => 'datetime',
+        'direview_at' => 'datetime',
+        'disetujui_at' => 'datetime',
     ];
 
     // Derived attributes
@@ -86,5 +93,19 @@ class Po extends Model
     public function fakturs()
     {
         return $this->hasMany(Faktur::class, 'id_po');
+    }
+
+    // Audit relations
+    public function dibuatOleh()
+    {
+        return $this->belongsTo(User::class, 'dibuat_oleh');
+    }
+    public function direviewOleh()
+    {
+        return $this->belongsTo(User::class, 'direview_oleh');
+    }
+    public function disetujuiOleh()
+    {
+        return $this->belongsTo(User::class, 'disetujui_oleh');
     }
 }

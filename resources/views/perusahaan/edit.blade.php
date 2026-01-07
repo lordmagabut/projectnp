@@ -16,6 +16,11 @@
         </div>
 
         <div class="mb-3">
+            <label for="alias" class="form-label">Alias</label>
+            <input type="text" name="alias" class="form-control" value="{{ $perusahaan->alias }}" placeholder="Nama singkat/alias (opsional)">
+        </div>
+
+        <div class="mb-3">
             <label for="alamat" class="form-label">Alamat</label>
             <textarea name="alamat" class="form-control" required>{{ $perusahaan->alamat }}</textarea>
         </div>

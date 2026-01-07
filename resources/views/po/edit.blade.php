@@ -18,7 +18,8 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">No. PO</label>
-                            <input type="text" name="no_po" class="form-control" value="{{ $po->no_po }}" required>
+                            <input type="text" name="no_po" id="noPoField" class="form-control" value="{{ $po->no_po }}" readonly>
+                            <small class="text-muted">Nomor saat ini: {{ $po->no_po }}. Akan menjadi: <span id="noPoPreview">{{ $previewNoPo ?? '—' }}</span></small>
                         </div>
                     </div>
 
@@ -225,5 +226,21 @@
         document.getElementById('idPerusahaan').value = idPerusahaan || '';
         document.getElementById('namaPerusahaan').value = namaPerusahaan || '';
     });
+
+    // Preview nomor PO dinamis saat tanggal berubah
+    const tanggalInput = document.querySelector('input[name="tanggal"]');
+    const noPoPreview = document.getElementById('noPoPreview');
+    function updateNoPoPreview() {
+        const tgl = tanggalInput.value || new Date().toISOString().slice(0,10);
+        fetch(`{{ route('po.preview_no') }}?tanggal=${encodeURIComponent(tgl)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data?.no_po) {
+                    noPoPreview.textContent = data.no_po;
+                }
+            })
+            .catch(() => {});
+    }
+    tanggalInput?.addEventListener('change', updateNoPoPreview);
 </script>
 @endsection

@@ -40,28 +40,40 @@ class PenerimaanPembelianController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'po_id'         => 'required|exists:po,id',
-            'tanggal'       => 'required|date',
-            'no_penerimaan' => 'required|unique:penerimaan_pembelian,no_penerimaan',
-            'items'         => 'required|array|min:1',
+            'po_id'            => 'required|exists:po,id',
+            'tanggal'          => 'required|date',
+            'no_penerimaan'    => 'required|unique:penerimaan_pembelian,no_penerimaan',
+            'items'            => 'required|array|min:1',
+            'file_surat_jalan' => 'nullable|file|mimes:pdf|max:2048', // 2MB max
         ]);
 
         DB::beginTransaction();
         try {
             $po = Po::with('poDetails')->findOrFail($request->po_id);
 
+            // Handle file upload
+            $filePath = null;
+            if ($request->hasFile('file_surat_jalan')) {
+                $file = $request->file('file_surat_jalan');
+                $fileName = 'surat_jalan_' . time() . '_' . $file->getClientOriginalName();
+                $filePath = $file->storeAs('surat_jalan', $fileName, 'public');
+            }
+
             // Buat Header Penerimaan
             $penerimaan = PenerimaanPembelian::create([
-                'no_penerimaan'  => $request->no_penerimaan,
-                'tanggal'        => $request->tanggal,
-                'po_id'          => $po->id,
-                'id_supplier'    => $po->id_supplier,
-                'nama_supplier'  => $po->nama_supplier,
-                'id_proyek'      => $po->id_proyek,
-                'id_perusahaan'  => $po->id_perusahaan,
-                'keterangan'     => $request->keterangan,
-                'no_surat_jalan' => $request->no_surat_jalan,
-                'status'         => 'draft',
+                'no_penerimaan'    => $request->no_penerimaan,
+                'tanggal'          => $request->tanggal,
+                'po_id'            => $po->id,
+                'id_supplier'      => $po->id_supplier,
+                'nama_supplier'    => $po->nama_supplier,
+                'id_proyek'        => $po->id_proyek,
+                'id_perusahaan'    => $po->id_perusahaan,
+                'dibuat_oleh'      => auth()->id(),
+                'dibuat_at'        => now(),
+                'keterangan'       => $request->keterangan,
+                'no_surat_jalan'   => $request->no_surat_jalan,
+                'file_surat_jalan' => $filePath,
+                'status'           => 'draft',
             ]);
 
             // Simpan Detail Penerimaan
@@ -131,6 +143,11 @@ class PenerimaanPembelianController extends Controller
                 return back()->with('error', 'Tidak bisa menghapus penerimaan yang sudah dialokasikan ke faktur.');
             }
 
+            // Hapus file surat jalan jika ada
+            if ($penerimaan->file_surat_jalan && \Storage::disk('public')->exists($penerimaan->file_surat_jalan)) {
+                \Storage::disk('public')->delete($penerimaan->file_surat_jalan);
+            }
+
             // Kembalikan qty_diterima di po_detail
             foreach ($penerimaan->details as $detail) {
                 $poDetail = PoDetail::find($detail->po_detail_id);
@@ -172,6 +189,8 @@ class PenerimaanPembelianController extends Controller
         }
 
         $penerimaan->status = 'approved';
+        $penerimaan->disetujui_oleh = auth()->id();
+        $penerimaan->disetujui_at = now();
         // Set status penagihan awal berdasarkan qty_terfaktur saat ini
         $sumTerfaktur = $penerimaan->details->sum('qty_terfaktur');
         if ($sumTerfaktur >= $totalDiterima) {
@@ -211,10 +230,24 @@ class PenerimaanPembelianController extends Controller
 
         $penerimaan->status = 'draft';
         $penerimaan->status_penagihan = 'belum';
+        $penerimaan->disetujui_oleh = null;
+        $penerimaan->disetujui_at = null;
         $penerimaan->save();
 
         return redirect()->route('penerimaan.show', $penerimaan->id)
             ->with('success', 'Penerimaan dikembalikan ke status draft untuk direvisi.');
+    }
+
+    public function viewSuratJalan($id)
+    {
+        $penerimaan = PenerimaanPembelian::findOrFail($id);
+        
+        if (!$penerimaan->file_surat_jalan || !\Storage::disk('public')->exists($penerimaan->file_surat_jalan)) {
+            return back()->with('error', 'File surat jalan tidak ditemukan.');
+        }
+
+        $path = storage_path('app/public/' . $penerimaan->file_surat_jalan);
+        return response()->file($path);
     }
 }
 

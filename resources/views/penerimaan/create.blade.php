@@ -11,7 +11,7 @@
                     <div class="alert alert-danger">{{ session('error') }}</div>
                 @endif
 
-                <form action="{{ route('penerimaan.store') }}" method="POST">
+                <form action="{{ route('penerimaan.store') }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <input type="hidden" name="po_id" value="{{ $po->id }}">
 
@@ -34,6 +34,14 @@
                             <input type="text" name="no_surat_jalan" class="form-control">
                         </div>
                         <div class="col-md-6">
+                            <label>Upload PDF Surat Jalan</label>
+                            <input type="file" name="file_surat_jalan" class="form-control" accept=".pdf">
+                            <small class="text-muted">Format: PDF, Maksimal 2MB</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
                             <label>Supplier</label>
                             <input type="text" class="form-control" value="{{ $po->nama_supplier }}" readonly>
                         </div>

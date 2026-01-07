@@ -16,7 +16,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">No. PO</label>
-                            <input type="text" name="no_po" class="form-control" required>
+                            <input type="text" name="no_po" id="noPoField" class="form-control" value="{{ $previewNoPo ?? '' }}" readonly placeholder="Akan dibuat otomatis saat simpan">
                         </div>
                     </div>
 
@@ -130,6 +130,26 @@
 
 <script>
     let index = 1;
+
+    // Update preview nomor PO saat tanggal berubah
+    const tanggalInput = document.querySelector('input[name="tanggal"]');
+    const noPoField = document.getElementById('noPoField');
+    const noPoPreview = document.getElementById('noPoPreview');
+    function updateNoPoPreview() {
+        const tgl = tanggalInput.value || new Date().toISOString().slice(0,10);
+        fetch(`{{ route('po.preview_no') }}?tanggal=${encodeURIComponent(tgl)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data?.no_po) {
+                    noPoField.value = data.no_po;
+                    noPoPreview.textContent = data.no_po;
+                }
+            })
+            .catch(() => {});
+    }
+    tanggalInput?.addEventListener('change', updateNoPoPreview);
+    // Initialize on load if empty
+    if (!noPoField.value) updateNoPoPreview();
 
     function hitungTotal() {
         let diskon = parseFloat(document.getElementById('diskon-global').value) || 0;

@@ -26,6 +26,7 @@ class PerusahaanController extends Controller
     {
         $request->validate([
             'nama_perusahaan' => 'required',
+            'alias' => 'nullable|string|max:100',
             'alamat' => 'required',
             'email' => 'nullable|email',
             'no_telp' => 'nullable',
@@ -35,6 +36,7 @@ class PerusahaanController extends Controller
 
         $data = $request->only([
             'nama_perusahaan',
+            'alias',
             'alamat',
             'email',
             'no_telp',
@@ -62,6 +64,7 @@ class PerusahaanController extends Controller
 
         $request->validate([
             'nama_perusahaan' => 'required',
+            'alias' => 'nullable|string|max:100',
             'alamat' => 'required',
             'email' => 'nullable|email',
             'no_telp' => 'nullable',
@@ -73,6 +76,7 @@ class PerusahaanController extends Controller
 
         $data = $request->only([
             'nama_perusahaan',
+            'alias',
             'alamat',
             'email',
             'no_telp',

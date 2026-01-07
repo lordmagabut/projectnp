@@ -101,9 +101,18 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/proyek/{id}/rab-reset', [ProyekController::class, 'resetRab'])->name('proyek.resetRab');
 
     // ========== PO ==========
-    Route::get('/po/{id}/print',  [PoController::class, 'print'])->name('po.print');
-    Route::put('/po/revisi/{id}', [PoController::class, 'revisi'])->name('po.revisi');
-    Route::resource('po', PoController::class)->middleware('cek_akses_po');
+    Route::get('/po/preview-no', [PoController::class, 'previewNoPo'])->name('po.preview_no');
+    Route::get('/po', [PoController::class, 'index'])->name('po.index')->middleware('permission:view po');
+    Route::get('/po/create', [PoController::class, 'create'])->name('po.create')->middleware('permission:create po');
+    Route::post('/po', [PoController::class, 'store'])->name('po.store')->middleware('permission:create po');
+    Route::get('/po/{po}', [PoController::class, 'show'])->name('po.show')->middleware('permission:view po');
+    Route::get('/po/{po}/edit', [PoController::class, 'edit'])->name('po.edit')->middleware('permission:edit po');
+    Route::put('/po/{po}', [PoController::class, 'update'])->name('po.update')->middleware('permission:edit po');
+    Route::delete('/po/{po}', [PoController::class, 'destroy'])->name('po.destroy')->middleware('permission:delete po');
+    Route::post('/po/{id}/review', [PoController::class, 'review'])->name('po.review')->middleware('permission:review po');
+    Route::get('/po/{id}/print',  [PoController::class, 'print'])->name('po.print')->middleware('permission:approve po');
+    Route::put('/po/revisi/{id}', [PoController::class, 'revisi'])->name('po.revisi')->middleware('permission:edit po');
+    // QR validation routes removed for security concerns
 
     // ========== Penerimaan Pembelian ==========
     Route::get('/penerimaan', [PenerimaanPembelianController::class, 'index'])->name('penerimaan.index');
@@ -113,6 +122,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/penerimaan/{id}/approve', [PenerimaanPembelianController::class, 'approve'])->name('penerimaan.approve');
     Route::post('/penerimaan/{id}/revisi', [PenerimaanPembelianController::class, 'revisi'])->name('penerimaan.revisi');
     Route::delete('/penerimaan/{id}', [PenerimaanPembelianController::class, 'destroy'])->name('penerimaan.destroy');
+    Route::get('/penerimaan/{id}/surat-jalan', [PenerimaanPembelianController::class, 'viewSuratJalan'])->name('penerimaan.viewSuratJalan');
 
     // ========== Retur Pembelian ==========
     Route::get('/retur', [ReturPembelianController::class, 'index'])->name('retur.index');

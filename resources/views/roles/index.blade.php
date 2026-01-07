@@ -139,27 +139,75 @@
 
           <div class="mb-2">
             <label class="form-label">Pilih Izin untuk Peran Ini:</label>
-            <div class="row">
-              @forelse($permissions as $permission)
-                <div class="col-md-6 col-lg-4 mb-2">
-                  <div class="form-check">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           name="permissions[]"
-                           value="{{ $permission->name }}"
-                           id="create-permission-{{ $permission->id }}"
-                           {{ (old('form')==='create' && in_array($permission->name, old('permissions', []))) ? 'checked' : '' }}>
-                    <label class="form-check-label" for="create-permission-{{ $permission->id }}">
-                      {{ $permission->name }}
-                    </label>
-                  </div>
-                </div>
-              @empty
-                <div class="col-12">
-                  <p class="text-muted mb-0">Tidak ada izin yang tersedia.</p>
-                </div>
-              @endforelse
-            </div>
+            
+            @php
+              // Kelompokkan permissions berdasarkan kata kunci
+              $grouped = [
+                'Purchase Order' => [],
+                'User Management' => [],
+                'Role Management' => [],
+                'Other' => []
+              ];
+              
+              foreach($permissions as $permission) {
+                if (str_contains($permission->name, ' po')) {
+                  $grouped['Purchase Order'][] = $permission;
+                } elseif (str_contains($permission->name, 'user')) {
+                  $grouped['User Management'][] = $permission;
+                } elseif (str_contains($permission->name, 'role')) {
+                  $grouped['Role Management'][] = $permission;
+                } else {
+                  $grouped['Other'][] = $permission;
+                }
+              }
+            @endphp
+
+            @if($permissions->count() > 0)
+              <div class="accordion" id="createPermissionsAccordion">
+                @foreach($grouped as $category => $perms)
+                  @if(count($perms) > 0)
+                    <div class="accordion-item">
+                      <h2 class="accordion-header" id="create-heading-{{ Str::slug($category) }}">
+                        <button class="accordion-button {{ $loop->first ? '' : 'collapsed' }}" type="button" 
+                                data-bs-toggle="collapse" 
+                                data-bs-target="#create-collapse-{{ Str::slug($category) }}" 
+                                aria-expanded="{{ $loop->first ? 'true' : 'false' }}" 
+                                aria-controls="create-collapse-{{ Str::slug($category) }}">
+                          <strong>{{ $category }}</strong> <span class="badge bg-secondary ms-2">{{ count($perms) }}</span>
+                        </button>
+                      </h2>
+                      <div id="create-collapse-{{ Str::slug($category) }}" 
+                           class="accordion-collapse collapse {{ $loop->first ? 'show' : '' }}" 
+                           aria-labelledby="create-heading-{{ Str::slug($category) }}" 
+                           data-bs-parent="#createPermissionsAccordion">
+                        <div class="accordion-body">
+                          <div class="row">
+                            @foreach($perms as $permission)
+                              <div class="col-md-6 mb-2">
+                                <div class="form-check">
+                                  <input class="form-check-input"
+                                         type="checkbox"
+                                         name="permissions[]"
+                                         value="{{ $permission->name }}"
+                                         id="create-permission-{{ $permission->id }}"
+                                         {{ (old('form')==='create' && in_array($permission->name, old('permissions', []))) ? 'checked' : '' }}>
+                                  <label class="form-check-label" for="create-permission-{{ $permission->id }}">
+                                    {{ $permission->name }}
+                                  </label>
+                                </div>
+                              </div>
+                            @endforeach
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  @endif
+                @endforeach
+              </div>
+            @else
+              <p class="text-muted mb-0">Tidak ada izin yang tersedia.</p>
+            @endif
+
             @error('permissions')
               @if(old('form')==='create')
                 <div class="text-danger small mt-1">{{ $message }}</div>
@@ -211,26 +259,74 @@
 
           <div class="mb-2">
             <label class="form-label">Pilih Izin untuk Peran Ini:</label>
-            <div class="row">
-              @forelse($permissions as $permission)
-                <div class="col-md-6 col-lg-4 mb-2">
-                  <div class="form-check">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           name="permissions[]"
-                           value="{{ $permission->name }}"
-                           id="edit-permission-{{ $permission->id }}">
-                    <label class="form-check-label" for="edit-permission-{{ $permission->id }}">
-                      {{ $permission->name }}
-                    </label>
-                  </div>
-                </div>
-              @empty
-                <div class="col-12">
-                  <p class="text-muted mb-0">Tidak ada izin yang tersedia.</p>
-                </div>
-              @endforelse
-            </div>
+            
+            @php
+              // Kelompokkan permissions berdasarkan kata kunci
+              $groupedEdit = [
+                'Purchase Order' => [],
+                'User Management' => [],
+                'Role Management' => [],
+                'Other' => []
+              ];
+              
+              foreach($permissions as $permission) {
+                if (str_contains($permission->name, ' po')) {
+                  $groupedEdit['Purchase Order'][] = $permission;
+                } elseif (str_contains($permission->name, 'user')) {
+                  $groupedEdit['User Management'][] = $permission;
+                } elseif (str_contains($permission->name, 'role')) {
+                  $groupedEdit['Role Management'][] = $permission;
+                } else {
+                  $groupedEdit['Other'][] = $permission;
+                }
+              }
+            @endphp
+
+            @if($permissions->count() > 0)
+              <div class="accordion" id="editPermissionsAccordion">
+                @foreach($groupedEdit as $category => $perms)
+                  @if(count($perms) > 0)
+                    <div class="accordion-item">
+                      <h2 class="accordion-header" id="edit-heading-{{ Str::slug($category) }}">
+                        <button class="accordion-button {{ $loop->first ? '' : 'collapsed' }}" type="button" 
+                                data-bs-toggle="collapse" 
+                                data-bs-target="#edit-collapse-{{ Str::slug($category) }}" 
+                                aria-expanded="{{ $loop->first ? 'true' : 'false' }}" 
+                                aria-controls="edit-collapse-{{ Str::slug($category) }}">
+                          <strong>{{ $category }}</strong> <span class="badge bg-secondary ms-2">{{ count($perms) }}</span>
+                        </button>
+                      </h2>
+                      <div id="edit-collapse-{{ Str::slug($category) }}" 
+                           class="accordion-collapse collapse {{ $loop->first ? 'show' : '' }}" 
+                           aria-labelledby="edit-heading-{{ Str::slug($category) }}" 
+                           data-bs-parent="#editPermissionsAccordion">
+                        <div class="accordion-body">
+                          <div class="row">
+                            @foreach($perms as $permission)
+                              <div class="col-md-6 mb-2">
+                                <div class="form-check">
+                                  <input class="form-check-input"
+                                         type="checkbox"
+                                         name="permissions[]"
+                                         value="{{ $permission->name }}"
+                                         id="edit-permission-{{ $permission->id }}">
+                                  <label class="form-check-label" for="edit-permission-{{ $permission->id }}">
+                                    {{ $permission->name }}
+                                  </label>
+                                </div>
+                              </div>
+                            @endforeach
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  @endif
+                @endforeach
+              </div>
+            @else
+              <p class="text-muted mb-0">Tidak ada izin yang tersedia.</p>
+            @endif
+
             @error('permissions')
               @if(old('form')==='edit')
                 <div class="text-danger small mt-1">{{ $message }}</div>
