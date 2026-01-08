@@ -73,7 +73,7 @@
                             <h6 class="text-uppercase fw-bold small text-muted mb-2 text-end">Project:</h6>
                             <div class="pe-2 border-end border-3 border-info text-end">
                                 <p class="fw-bolder text-dark mb-0">{{ $po->proyek->nama_proyek ?? '-' }}</p>
-                                <p class="text-muted small mb-0">Transaction ID: #{{ $po->id }}</p>
+                                <p class="text-muted small mb-0">Location: {{ $po->proyek->lokasi ?? '-' }}</p>
                             </div>
                         </div>
                     </div>
@@ -124,7 +124,7 @@
                                 @endif
                                 <tr class="total-row shadow-sm">
                                     <td colspan="4" class="text-end fw-bolder text-primary">GRAND TOTAL</td>
-                                    <td class="text-end fw-bolder text-primary bg-soft-primary" style="font-size: 1.1rem;">
+                                    <td class="text-end fw-bolder text-primary bg-soft-primary">
                                         Rp {{ number_format($grandTotal, 0, ',', '.') }}
                                     </td>
                                 </tr>
@@ -254,6 +254,8 @@
 
 .custom-table-document {
     font-size: 12px;
+    border-collapse: collapse;
+    border: 1px solid #000 !important;
 }
 
 .custom-table-document th {
@@ -261,12 +263,12 @@
     text-transform: uppercase;
     font-weight: 700;
     letter-spacing: 0.5px;
-    border-color: #333 !important;
+    border: 1px solid #000 !important;
 }
 
 .custom-table-document td {
-    border-color: #dee2e6 !important;
-    color: #333;
+    border: 1px solid #000 !important;
+    color: #000000ff;
     padding: 10px 8px !important;
 }
 
@@ -290,7 +292,7 @@
         content: 'Pencetakan dinonaktifkan. Gunakan tombol "Cetak Dokumen".';
         display: block !important;
         margin: 2cm 0 0 0;
-        font-size: 14px;
+        font-size: 12px;
         color: #000;
         visibility: visible !important;
     }
@@ -324,8 +326,30 @@
         -webkit-print-color-adjust: exact;
     }
 
+    /* Compact table rows to save paper */
+    .custom-table-document {
+        font-size: 11px;
+        border-collapse: collapse;
+        border: 1px solid #000 !important;
+    }
+    .custom-table-document,
+    .custom-table-document th,
+    .custom-table-document td {
+        border: 1px solid #000 !important;
+    }
+    .custom-table-document th,
+    .custom-table-document td {
+        padding: 7px 9px !important;
+        line-height: 1 !important;
+    }
+    .custom-table-document .text-end,
+    .custom-table-document .text-center {
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+    }
+
     .total-row td {
-        border-top: 2px solid #000 !important;
+        border-top: 1px solid #000 !important;
     }
 
     .sidebar, .navbar, .footer, .d-print-none, .page-breadcrumb {
