@@ -17,7 +17,11 @@ License: For each use you must have a valid license purchased only from above li
 	<meta name="author" content="NobleUI">
 	<meta name="keywords" content="nobleui, bootstrap, bootstrap 5, bootstrap5, admin, dashboard, template, responsive, css, sass, html, laravel, theme, front-end, ui kit, web">
 
-  <title>MonSis - Artista Group</title>
+  @php
+    $company = \App\Models\Perusahaan::first();
+    $companyName = $company->nama_perusahaan ?? 'Perusahaan';
+  @endphp
+  <title>{{ $companyName }}</title>
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,7 +32,10 @@ License: For each use you must have a valid license purchased only from above li
   <!-- CSRF Token -->
   <meta name="_token" content="{{ csrf_token() }}">
   
-  <link rel="shortcut icon" href="{{ asset('/favicon.ico') }}">
+  {{-- Use company logo for browser tab icon (auto-converted to PNG if needed) --}}
+  <link rel="icon" href="{{ company_favicon_url($company) }}">
+  <link rel="shortcut icon" href="{{ company_favicon_url($company) }}">
+  <link rel="apple-touch-icon" href="{{ company_favicon_url($company) }}">
 
   <!-- plugin css -->
   <link href="{{ asset('assets/fonts/feather-font/css/iconfont.css') }}" rel="stylesheet" />

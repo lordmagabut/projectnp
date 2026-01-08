@@ -71,7 +71,7 @@ class RabPenawaranController extends Controller
     
         $flatRabHeaders = $this->generateFlatHeadersForDropdown($rabHeaders);
 
-        $nomorPenawaran = $this->previewNomorPenawaran();
+        $nomorPenawaran = $this->previewNomorPenawaran($proyek);
     
         $preloadedRabData = [];
         $preloadedArea = null; // Inisialisasi variabel untuk area yang dimuat
@@ -155,7 +155,7 @@ class RabPenawaranController extends Controller
 
             $totalPenawaranBruto = 0.0;
 
-            $nomorPenawaran = $this->lockAndGenerateNomorPenawaran();
+            $nomorPenawaran = $this->lockAndGenerateNomorPenawaran($proyek);
 
             $penawaranHeader = RabPenawaranHeader::create([
                 'proyek_id'              => $proyek->id,
@@ -491,37 +491,41 @@ class RabPenawaranController extends Controller
     /**
      * Hitung nomor penawaran berikutnya tanpa lock (hanya untuk pratinjau di form create).
      */
-    private function previewNomorPenawaran(): string
+    private function previewNomorPenawaran(Proyek $proyek): string
     {
         $year = Carbon::now()->year;
-        $prefix = "DKD/{$year}/";
+        $alias = optional($proyek->perusahaan)->alias ?? 'DKD';
+        $prefix = $alias."/{$year}/".$proyek->id."/";
 
-        $latest = RabPenawaranHeader::whereNotNull('nomor_penawaran')
+        $latest = RabPenawaranHeader::where('proyek_id', $proyek->id)
+            ->whereNotNull('nomor_penawaran')
             ->where('nomor_penawaran', 'like', $prefix.'%')
             ->orderBy('nomor_penawaran', 'desc')
             ->value('nomor_penawaran');
 
         $next = $this->nextSequenceNumber($latest);
 
-        return $prefix . str_pad($next, 3, '0', STR_PAD_LEFT);
+        return $prefix . str_pad($next, 4, '0', STR_PAD_LEFT);
     }
 
     /**
      * Generate nomor penawaran dengan lock di dalam transaksi agar unik dan berurutan.
      */
-    private function lockAndGenerateNomorPenawaran(): string
+    private function lockAndGenerateNomorPenawaran(Proyek $proyek): string
     {
         $year = Carbon::now()->year;
-        $prefix = "DKD/{$year}/";
+        $alias = optional($proyek->perusahaan)->alias ?? 'DKD';
+        $prefix = $alias."/{$year}/".$proyek->id."/";
 
-        $latest = RabPenawaranHeader::where('nomor_penawaran', 'like', $prefix.'%')
+        $latest = RabPenawaranHeader::where('proyek_id', $proyek->id)
+            ->where('nomor_penawaran', 'like', $prefix.'%')
             ->orderBy('nomor_penawaran', 'desc')
             ->lockForUpdate()
             ->value('nomor_penawaran');
 
         $next = $this->nextSequenceNumber($latest);
 
-        return $prefix . str_pad($next, 3, '0', STR_PAD_LEFT);
+        return $prefix . str_pad($next, 4, '0', STR_PAD_LEFT);
     }
 
     private function nextSequenceNumber(?string $latest): int
