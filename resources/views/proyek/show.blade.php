@@ -35,6 +35,11 @@
           </a>
         </li>
         <li class="nav-item flex-grow-1 flex-md-grow-0 text-center" role="presentation">
+          <a class="nav-link" id="gambar-tab" data-bs-toggle="tab" href="#gambarContent" role="tab" aria-controls="gambarContent" aria-selected="false">
+            <i data-feather="image" class="me-1"></i> Gambar Kerja
+          </a>
+        </li>
+        <li class="nav-item flex-grow-1 flex-md-grow-0 text-center" role="presentation">
           <a class="nav-link" id="rab-tab" data-bs-toggle="tab" href="#rabContent" role="tab" aria-controls="rabContent" aria-selected="false">
             <i data-feather="dollar-sign" class="me-1"></i> RAB Proyek
           </a>
@@ -280,6 +285,64 @@
                   </a>
                 @endif
               </div>
+            </div>
+          </div>
+        </div>
+
+        {{-- Tab Gambar Kerja --}}
+        <div class="tab-pane fade" id="gambarContent" role="tabpanel">
+          <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex align-items-center">
+              <i data-feather="image" class="me-2 text-primary"></i>
+              <strong>Dokumen Gambar Kerja</strong>
+            </div>
+            <div class="card-body">
+              @if($proyek->file_gambar_kerja)
+                @php
+                  $gambarPath = asset('storage/' . $proyek->file_gambar_kerja);
+                  $fileExt = strtolower(pathinfo($proyek->file_gambar_kerja, PATHINFO_EXTENSION));
+                  $isPdf = $fileExt === 'pdf';
+                  $isImage = in_array($fileExt, ['jpg','jpeg','png','webp']);
+                @endphp
+
+                <div class="alert alert-success d-flex align-items-center" role="alert">
+                  <i class="fas fa-check-circle me-3 fs-4"></i>
+                  <div>
+                    Gambar kerja sudah diunggah. Pratinjau ditampilkan di bawah, tanpa perlu mengunduh.
+                  </div>
+                </div>
+
+                @if($isPdf)
+                  <div class="border rounded shadow-sm overflow-hidden" style="height: 820px;">
+                    <iframe src="{{ $gambarPath }}#toolbar=1&navpanes=1&scrollbar=1" title="Gambar Kerja" class="w-100 h-100" allowfullscreen></iframe>
+                  </div>
+                @elseif($isImage)
+                  <div class="text-center">
+                    <img src="{{ $gambarPath }}" alt="Gambar Kerja" class="img-fluid rounded shadow-sm" style="max-height: 820px; object-fit: contain;">
+                  </div>
+                @else
+                  <div class="alert alert-info">Format file {{ strtoupper($fileExt) }} tidak didukung untuk pratinjau. Silakan buka di tab baru.</div>
+                @endif
+
+                <div class="mt-3 d-flex gap-2 flex-wrap">
+                  <a href="{{ $gambarPath }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                    <i data-feather="external-link" class="me-1"></i> Buka di Tab Baru
+                  </a>
+                  <a href="{{ $gambarPath }}" download class="btn btn-outline-secondary btn-sm">
+                    <i data-feather="download" class="me-1"></i> Unduh
+                  </a>
+                </div>
+              @else
+                <div class="alert alert-warning d-flex align-items-center" role="alert">
+                  <i class="fas fa-exclamation-triangle me-3 fs-4"></i>
+                  <div>
+                    Belum ada file gambar kerja yang diunggah untuk proyek ini. Unggah melalui halaman Edit Proyek.
+                  </div>
+                </div>
+                <a href="{{ route('proyek.edit', $proyek->id) }}" class="btn btn-warning">
+                  <i data-feather="upload" class="me-1"></i> Unggah Gambar Kerja
+                </a>
+              @endif
             </div>
           </div>
         </div>
