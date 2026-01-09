@@ -33,9 +33,8 @@
   @php $company = \App\Models\Perusahaan::first(); @endphp
   <div class="pdf-header">
     <table>
-      <tr><th>PROYEK</th><td>: {{ $proyek->nama_proyek }}</td></tr>
+      <tr><th>PROYEK</th><td>: {{ $proyek->nama_proyek }} - {{ $proyek->pemberiKerja->nama_pemberi_kerja ?? '—' }}</td></tr>
       <tr><th>KONTRAKTOR</th><td>: {{ $company->nama_perusahaan ?? ($proyek->kontraktor ?? '—') }}</td></tr>
-      <tr><th>LOKASI</th><td>: {{ $proyek->lokasi ?? '—' }}</td></tr>
       <tr><th>PEKERJAAN</th><td>: {{ $proyek->jenis_pekerjaan ?? ($penawaran->nama_penawaran ?? '—') }}</td></tr>
       <tr><th>NOMOR PENAWARAN</th><td>: {{ $penawaran->nomor_penawaran ?? '—' }}</td></tr>
       <tr><th>TANGGAL</th><td>: {{ optional(\Carbon\Carbon::parse($penawaran->tanggal_penawaran ?? now()))->translatedFormat('d F Y') }}</td></tr>
