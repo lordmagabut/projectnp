@@ -28,6 +28,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProyekTaxProfileController;
+use App\Http\Controllers\DataSyncController;
 use App\Http\Controllers\BappController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SertifikatPembayaranController;
@@ -379,5 +380,19 @@ Route::middleware(['auth'])->group(function () {
                 ];
             });
         return response()->json($umList);
+    });
+
+    // ========== Data Sync (HSD, AHSP dari DB Eksternal) ==========
+    Route::prefix('datasync')->name('datasync.')->group(function() {
+        Route::get('/',                          [DataSyncController::class, 'index'])->name('index');
+        Route::get('/get-config',                [DataSyncController::class, 'getConfig'])->name('get-config');
+        Route::post('/save-config',              [DataSyncController::class, 'saveConfig'])->name('save-config');
+        Route::get('/test-connection',           [DataSyncController::class, 'testConnection'])->name('test-connection');
+        Route::get('/compare-hsd-material',      [DataSyncController::class, 'compareHsdMaterial'])->name('compare-hsd-material');
+        Route::get('/compare-hsd-upah',          [DataSyncController::class, 'compareHsdUpah'])->name('compare-hsd-upah');
+        Route::get('/compare-ahsp',              [DataSyncController::class, 'compareAhsp'])->name('compare-ahsp');
+        Route::post('/copy-hsd-material',        [DataSyncController::class, 'copyHsdMaterial'])->name('copy-hsd-material');
+        Route::post('/copy-hsd-upah',            [DataSyncController::class, 'copyHsdUpah'])->name('copy-hsd-upah');
+        Route::post('/copy-ahsp',                [DataSyncController::class, 'copyAhsp'])->name('copy-ahsp');
     });
 });

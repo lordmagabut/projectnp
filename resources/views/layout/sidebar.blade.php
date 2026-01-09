@@ -147,6 +147,23 @@
           </ul>
         </div>
       </li>
+      @endcan
+      @can('manage barang')
+      <li class="nav-item {{ active_class(['datasync/*']) }}">
+        <a class="nav-link" data-bs-toggle="collapse" href="#datasyncMenu" role="button"
+          aria-expanded="{{ is_active_route(['datasync/*']) }}" aria-controls="datasyncMenu">
+          <i class="link-icon" data-feather="database"></i>
+          <span class="link-title">Data Sync</span>
+          <i class="link-arrow" data-feather="chevron-down"></i>
+        </a>
+        <div class="collapse {{ show_class(['datasync/*']) }}" id="datasyncMenu">
+          <ul class="nav sub-menu">
+            <li class="nav-item">
+              <a href="{{ route('datasync.index') }}" class="nav-link {{ active_class(['datasync']) }}">Sinkronisasi Data</a>
+            </li>
+          </ul>
+        </div>
+      </li>
       @endcan 
       <li class="nav-item nav-category">Operasional</li>
       <li class="nav-item {{ active_class(['proyek/*']) }}">
