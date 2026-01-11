@@ -76,7 +76,7 @@
       <img class="logo" src="{{ public_path('storage/'.$proyek->logo_path) }}" alt="logo">
     @endif
     <div style="flex:1">
-      <div class="title">BERITA ACARA PROGRESS PEKERJAAN (BAPP)</div>
+      <div class="title">{{ $bapp->is_final_account ? 'FINAL ACCOUNT' : 'BERITA ACARA PROGRESS PEKERJAAN (BAPP)' }}</div>
       <div class="subtitle">Nomor: <strong>{{ $bapp->nomor_bapp }}</strong></div>
       <table class="meta" cellpadding="0" cellspacing="0">
         <tr><td>Proyek</td>       <td>: <strong>{{ $proyek->nama_proyek }}</strong></td></tr>
@@ -93,15 +93,26 @@
       <tr>
         <th style="width:10%">Kode</th>
         <th>Uraian</th>
-        {{-- Bobot = % proyek (tanpa “%”) --}}
-        <th style="width:9%">Bobot Item</th>
-        <th style="width:11%">Bobot s/d Minggu Lalu</th>
-        <th style="width:10%">Δ Bobot Minggu Ini</th>
-        <th style="width:10%">Bobot Saat Ini</th>
-        {{-- Progress = % terhadap item (dengan “%”) --}}
-        <th style="width:11%">Prog. s/d Minggu Lalu</th>
-        <th style="width:10%">Prog. Minggu Ini</th>
-        <th style="width:10%">Prog. Saat Ini</th>
+        @if($bapp->is_final_account)
+          {{-- Kolom untuk Final Account --}}
+          <th style="width:7%">Qty Kontrak</th>
+          <th style="width:7%">Qty Realisasi</th>
+          <th style="width:7%">Satuan</th>
+          <th style="width:10%">Harga Satuan</th>
+          <th style="width:12%">Nilai Kontrak</th>
+          <th style="width:12%">Nilai Realisasi</th>
+          <th style="width:12%">Adjustment</th>
+        @else
+          {{-- Bobot = % proyek (tanpa "%") --}}
+          <th style="width:9%">Bobot Item</th>
+          <th style="width:11%">Bobot s/d Minggu Lalu</th>
+          <th style="width:10%">Δ Bobot Minggu Ini</th>
+          <th style="width:10%">Bobot Saat Ini</th>
+          {{-- Progress = % terhadap item (dengan "%") --}}
+          <th style="width:11%">Prog. s/d Minggu Lalu</th>
+          <th style="width:10%">Prog. Minggu Ini</th>
+          <th style="width:10%">Prog. Saat Ini</th>
+        @endif
       </tr>
     </thead>
     <tbody>
@@ -128,7 +139,7 @@
           @endphp
           <tr class="row-area">
             <td class="nowrap">{{ $areaCode }}</td>
-            <td colspan="8">{{ strtoupper($areaName) }}</td>
+            <td colspan="{{ $bapp->is_final_account ? 8 : 8 }}">{{ strtoupper($areaName) }}</td>
           </tr>
         @endif
 
@@ -140,46 +151,85 @@
           @endphp
           <tr class="row-header">
             <td class="nowrap">{{ $headerCode }}</td>
-            <td colspan="8">{{ $hdrName }}</td>
+            <td colspan="{{ $bapp->is_final_account ? 8 : 8 }}">{{ $hdrName }}</td>
           </tr>
         @endif
 
         {{-- Baris ITEM --}}
         <tr>
           <td class="nowrap">{{ $it->kode }}</td>
-          <td>{{ $it->uraian }}</td>
+          <td>{{ $it->uraian }}@if($it->is_addendum_item) <em style="color:#d93025">(Addendum)</em>@endif</td>
 
-          {{-- Bobot (angka/desimal, % proyek) --}}
-          <td class="right">{{ $fmt($it->bobot_item) }}</td>
-          <td class="right">{{ $fmt($it->prev_pct) }}</td>
-          <td class="right">{{ $fmt($it->delta_pct) }}</td>
-          <td class="right">{{ $fmt($it->now_pct) }}</td>
+          @if($bapp->is_final_account)
+            {{-- Tampilan Final Account dengan nilai rupiah --}}
+            <td class="right">{{ $fmt($it->qty_kontrak ?? 0) }}</td>
+            <td class="right">{{ $fmt($it->qty_realisasi ?? 0) }}</td>
+            <td class="center">{{ $it->satuan ?? '-' }}</td>
+            <td class="right">{{ $fmt($it->harga ?? 0) }}</td>
+            <td class="right">{{ $fmt($it->nilai_kontrak ?? 0) }}</td>
+            <td class="right">{{ $fmt($it->nilai_realisasi ?? 0) }}</td>
+            <td class="right" style="{{ ($it->nilai_adjustment ?? 0) != 0 ? 'font-weight:700; color:'.($it->nilai_adjustment > 0 ? '#137333' : '#d93025') : '' }}">
+              {{ $fmt($it->nilai_adjustment ?? 0) }}
+            </td>
+          @else
+            {{-- Bobot (angka/desimal, % proyek) --}}
+            <td class="right">{{ $fmt($it->bobot_item) }}</td>
+            <td class="right">{{ $fmt($it->prev_pct) }}</td>
+            <td class="right">{{ $fmt($it->delta_pct) }}</td>
+            <td class="right">{{ $fmt($it->now_pct) }}</td>
 
-          {{-- Progress (% terhadap item) --}}
-          <td class="right">{{ $fmt($it->prev_item_pct) }} %</td>
-          <td class="right">{{ $fmt($it->delta_item_pct) }} %</td>
-          <td class="right">{{ $fmt($it->now_item_pct) }} %</td>
+            {{-- Progress (% terhadap item) --}}
+            <td class="right">{{ $fmt($it->prev_item_pct) }} %</td>
+            <td class="right">{{ $fmt($it->delta_item_pct) }} %</td>
+            <td class="right">{{ $fmt($it->now_item_pct) }} %</td>
+          @endif
         </tr>
       @endforeach
 
-      {{-- TOTAL (jumlah hanya kolom bobot) --}}
-      @php
-        // konversi kembali ke desimal 2 digit dan batasi max 100
-        $totWi    = round($totWiInt / 100, 2);
-        $totPrev  = min(100.00, round($totPrevInt / 100, 2));
-        $totDelta = round($totDeltaInt / 100, 2);
-        $totNow   = min(100.00, round($totNowInt / 100, 2));
-      @endphp
-      <tr class="row-total">
-        <td colspan="2" class="right">TOTAL</td>
-        <td class="right">{{ $fmt($totWi) }}</td>
-        <td class="right">{{ $fmt($totPrev) }}</td>
-        <td class="right">{{ $fmt($totDelta) }}</td>
-        <td class="right">{{ $fmt($totNow) }}</td>
-        <td colspan="3"></td>
-      </tr>
+      {{-- TOTAL --}}
+      @if($bapp->is_final_account)
+        {{-- Total untuk Final Account --}}
+        @php
+          $totNilaiKontrak = $items->sum('nilai_kontrak');
+          $totNilaiRealisasi = $items->sum('nilai_realisasi');
+          $totNilaiAdjustment = $items->sum('nilai_adjustment');
+        @endphp
+        <tr class="row-total">
+          <td colspan="6" class="right">TOTAL</td>
+          <td class="right">{{ $fmt($totNilaiKontrak) }}</td>
+          <td class="right">{{ $fmt($totNilaiRealisasi) }}</td>
+          <td class="right" style="{{ $totNilaiAdjustment != 0 ? 'font-weight:700; color:'.($totNilaiAdjustment > 0 ? '#137333' : '#d93025') : '' }}">
+            {{ $fmt($totNilaiAdjustment) }}
+          </td>
+        </tr>
+      @else
+        {{-- TOTAL (jumlah hanya kolom bobot) untuk BAPP normal --}}
+        @php
+          // konversi kembali ke desimal 2 digit dan batasi max 100
+          $totWi    = round($totWiInt / 100, 2);
+          $totPrev  = min(100.00, round($totPrevInt / 100, 2));
+          $totDelta = round($totDeltaInt / 100, 2);
+          $totNow   = min(100.00, round($totNowInt / 100, 2));
+        @endphp
+        <tr class="row-total">
+          <td colspan="2" class="right">TOTAL</td>
+          <td class="right">{{ $fmt($totWi) }}</td>
+          <td class="right">{{ $fmt($totPrev) }}</td>
+          <td class="right">{{ $fmt($totDelta) }}</td>
+          <td class="right">{{ $fmt($totNow) }}</td>
+          <td colspan="3"></td>
+        </tr>
+      @endif
     </tbody>
   </table>
+
+  @if($bapp->is_final_account && $bapp->final_account_notes)
+    {{-- Catatan Final Account --}}
+    <div style="margin-top:12px; padding:8px; background:#fef7e0; border-left:3px solid #f9ab00;">
+      <strong>Catatan Final Account:</strong><br>
+      {{ $bapp->final_account_notes }}
+    </div>
+  @endif
 
   {{-- Tanda tangan --}}
   <table class="sign">

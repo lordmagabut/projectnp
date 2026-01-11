@@ -52,7 +52,13 @@
       </tr>
       <tr>
         <th>Termin / Progress</th>
-        <td>Ke-{{ $sp->termin_ke }} — Kumulatif {{ rtrim(rtrim(number_format($sp->persen_progress,4,',','.'),'0'),',') }}% — Periode ini {{ rtrim(rtrim(number_format($sp->persen_progress_delta,4,',','.'),'0'),',') }}%</td>
+        <td>
+          @if(optional($sp->bapp)->is_final_account)
+            Ke-{{ $sp->termin_ke }} — <span class="badge bg-warning text-dark">FINAL ACCOUNT</span>
+          @else
+            Ke-{{ $sp->termin_ke }} — Kumulatif {{ rtrim(rtrim(number_format($sp->persen_progress,4,',','.'),'0'),',') }}% — Periode ini {{ rtrim(rtrim(number_format($sp->persen_progress_delta,4,',','.'),'0'),',') }}%
+          @endif
+        </td>
       </tr>
       @php
         $priceMode = strtolower(optional(optional($sp->bapp)->proyek)->penawaran_price_mode ?? 'pisah');
@@ -114,11 +120,19 @@
 
     {{-- Breakdown Perhitungan Nilai Tagihan --}}
     <div class="card mt-4" style="background-color: #f8f9fa;">
-      <div class="card-header bg-primary text-white">
-        <h6 class="mb-0">Breakdown Perhitungan Nilai Tagihan (Periode Ini)</h6>
+      <div class="card-header text-white" style="background-color: {{ optional($sp->bapp)->is_final_account ? '#2196F3' : '#0d6efd' }};">
+        <h6 class="mb-0">
+          @if(optional($sp->bapp)->is_final_account)
+            📊 FINAL ACCOUNT - Breakdown Detail Perhitungan (Rupiah)
+          @else
+            Breakdown Perhitungan Nilai Tagihan (Periode Ini)
+          @endif
+        </h6>
       </div>
       <div class="card-body">
         @php
+          $isFinalAccount = optional($sp->bapp)->is_final_account ?? false;
+          
           // Persen progress periode ini (delta)
           $pctNow = (float)($sp->persen_progress_delta ?? 0);
           
@@ -130,6 +144,16 @@
           $gunakanUM = (bool)($proyek->gunakan_uang_muka ?? false);
           $gunakanRetensi = (bool)($proyek->gunakan_retensi ?? false);
           $pphDipungut = ($proyek->pph_dipungut ?? 'ya') === 'ya';
+          
+          // Final Account Data
+          $nilaiAkhir = $isFinalAccount ? ((float)optional($sp->bapp)->nilai_realisasi_total) : 0.0;
+          $prevNilaiProgressTotal = 0.0;
+          if ($isFinalAccount && optional($sp->bapp)->penawaran_id) {
+            $prevNilaiProgressTotal = \App\Models\SertifikatPembayaran::query()
+              ->where('penawaran_id', $sp->bapp->penawaran_id)
+              ->where('termin_ke', '<', $sp->termin_ke)
+              ->sum('nilai_progress_rp');
+          }
           
           // Hitung breakdown progress Material & Jasa periode ini dari nilai_progress_rp
           $woMat = (float)$sp->nilai_wo_material;
@@ -176,6 +200,117 @@
           $priceMode = strtolower(optional(optional($sp->bapp)->proyek)->penawaran_price_mode ?? 'pisah');
         @endphp
 
+        @if($isFinalAccount)
+        {{-- BREAKDOWN FINAL ACCOUNT --}}
+        <div class="alert alert-info mb-3">
+          <i class="bi bi-info-circle"></i> Perhitungan menggunakan pendekatan <strong>Rupiah</strong> karena ini adalah Final Account dengan realisasi berbeda dari kontrak.
+        </div>
+        
+        <table class="table table-sm table-bordered mb-0">
+          <thead class="table-light">
+            <tr>
+              <th width="5%">No</th>
+              <th>Keterangan</th>
+              <th width="25%" class="text-end">Nilai (Rp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-center fw-bold">1</td>
+              <td><strong>Nilai Akhir Pekerjaan</strong> (Kontrak + Addendum + Adjustment)</td>
+              <td class="text-end fw-bold text-primary">{{ number_format($nilaiAkhir, 2, ',', '.') }}</td>
+            </tr>
+            
+            <tr>
+              <td class="text-center">2</td>
+              <td>Dikurangi: Total yang Sudah Ditagih Sebelumnya</td>
+              <td class="text-end text-danger">-{{ number_format($prevNilaiProgressTotal, 2, ',', '.') }}</td>
+            </tr>
+            
+            <tr class="table-light">
+              <td class="text-center fw-bold">3</td>
+              <td><strong>Sisa yang Belum Ditagih</strong> (1 - 2)</td>
+              <td class="text-end fw-bold">{{ number_format($nilaiAkhir - $prevNilaiProgressTotal, 2, ',', '.') }}</td>
+            </tr>
+            
+            @if($gunakanUM)
+            <tr>
+              <td class="text-center">4</td>
+              <td>Dikurangi: Uang Muka Periode Ini ({{ $fmtPct($sp->pemotongan_um_persen) }}%)</td>
+              <td class="text-end text-danger">-{{ number_format($potUM, 2, ',', '.') }}</td>
+            </tr>
+            @endif
+            
+            <tr class="table-info">
+              <td class="text-center fw-bold">{{ $gunakanUM ? '5' : '4' }}</td>
+              <td><strong>Nilai Progress Periode Ini</strong> ({{ $gunakanUM ? '3 - 4' : '3' }})</td>
+              <td class="text-end fw-bold text-success">{{ number_format(max(0, $nilaiAkhir - $prevNilaiProgressTotal - $potUM), 2, ',', '.') }}</td>
+            </tr>
+            
+            @if($gunakanRetensi)
+            <tr>
+              <td class="text-center">{{ $gunakanUM ? '6' : '5' }}</td>
+              <td>Dikurangi: Retensi {{ $fmtPct($sp->retensi_persen) }}% dari Progress</td>
+              <td class="text-end text-danger">-{{ number_format($potRetensi, 2, ',', '.') }}</td>
+            </tr>
+            @endif
+            
+            <tr class="table-warning">
+              <td class="text-center fw-bold">{{ ($gunakanUM ? 6 : 5) + ($gunakanRetensi ? 1 : 0) }}</td>
+              <td><strong>NILAI TAGIHAN (DPP) Periode Ini</strong></td>
+              <td class="text-end fw-bold" style="font-size: 1.1em;">{{ number_format($totalDPP, 2, ',', '.') }}</td>
+            </tr>
+            
+            @if($priceMode === 'pisah')
+            <tr>
+              <td></td>
+              <td style="padding-left: 30px;">- DPP Material</td>
+              <td class="text-end">{{ number_format($dppMaterial, 2, ',', '.') }}</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td style="padding-left: 30px;">- DPP Jasa</td>
+              <td class="text-end">{{ number_format($dppJasa, 2, ',', '.') }}</td>
+            </tr>
+            @endif
+            
+            <tr>
+              <td class="text-center">{{ ($gunakanUM ? 7 : 6) + ($gunakanRetensi ? 1 : 0) }}</td>
+              <td><strong>PPN {{ $fmtPct($sp->ppn_persen) }}%</strong></td>
+              <td class="text-end">{{ number_format($ppnNilai, 2, ',', '.') }}</td>
+            </tr>
+            
+            <tr class="table-success">
+              @php $rowFinal = ($gunakanUM ? 7 : 6) + ($gunakanRetensi ? 1 : 0) + 1; @endphp
+              <td class="text-center fw-bold">{{ $rowFinal }}</td>
+              <td><strong>TOTAL TAGIHAN ({{ $rowFinal - 1 }} + {{ ($gunakanUM ? 7 : 6) + ($gunakanRetensi ? 1 : 0) }})</strong></td>
+              <td class="text-end fw-bold" style="font-size: 1.2em; color: #0d6efd;">{{ number_format($totalTagihan, 2, ',', '.') }}</td>
+            </tr>
+            
+            @php
+              $tax = optional($proyek->taxProfileAktif);
+              $applyPph = (int)($tax->apply_pph ?? 0) === 1;
+              $pphRate = (float)($tax->pph_rate ?? 0);
+            @endphp
+            
+            @if($applyPph && $pphRate > 0 && $pphDipungut)
+            <tr>
+              <td class="text-center">{{ $rowFinal + 1 }}</td>
+              <td><strong>PPh {{ $fmtPct($pphRate) }}%</strong> (dipotong)</td>
+              <td class="text-end text-danger">-{{ number_format(($totalDibayar * $pphRate / 100), 2, ',', '.') }}</td>
+            </tr>
+            
+            <tr class="table-primary">
+              <td class="text-center fw-bold">{{ $rowFinal + 2 }}</td>
+              <td><strong>TOTAL DITERIMA ({{ $rowFinal }} - {{ $rowFinal + 1 }})</strong></td>
+              <td class="text-end fw-bold" style="font-size: 1.2em;">{{ number_format($totalTagihan - ($totalDibayar * $pphRate / 100), 2, ',', '.') }}</td>
+            </tr>
+            @endif
+          </tbody>
+        </table>
+        
+        @else
+        {{-- BREAKDOWN NORMAL --}}
         <table class="table table-sm table-bordered mb-0">
           <thead class="table-light">
             <tr>
@@ -324,6 +459,7 @@
             @endif
           </tbody>
         </table>
+        @endif
         
         @php
           // Hitung total diterima yang sebenarnya untuk terbilang

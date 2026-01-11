@@ -38,7 +38,7 @@ class BappController extends Controller
         $this->dataset($proyek->id, $penawaranId, $mingguKe, $progress);
 
     // === Rakit baris: berikan nama kolom yang DIPAKAI blade detail ===
-    $rows = $items->map(function($it) use ($Wi,$prevProj,$deltaProj,$prevItem,$deltaItem){
+    $rows = $items->map(function($it) use ($Wi,$prevProj,$deltaProj,$prevItem,$deltaItem,$penawaranId){
         $id    = $it->id;
         $Wi_i  = (float)($Wi[$id] ?? 0);
         $bPrev = (float)($prevProj[$id] ?? 0);            // % proyek kumulatif < N
@@ -48,6 +48,21 @@ class BappController extends Controller
         $pPrev = (float)($prevItem[$id]  ?? 0);           // % item kumulatif < N
         $pDel  = (float)($deltaItem[$id] ?? 0);           // % item minggu N
         $pNow  = round($pPrev + $pDel, 4);
+
+        // Ambil data qty, satuan, harga dari penawaran item
+        $penawaranItem = null;
+        if ($penawaranId > 0) {
+            $penawaranItem = RabPenawaranItem::where('rab_detail_id', $id)
+                ->whereHas('section', function($q) use ($penawaranId) {
+                    $q->where('rab_penawaran_header_id', $penawaranId);
+                })
+                ->first();
+        }
+
+        $qty = $penawaranItem ? (float)($penawaranItem->volume ?? 0) : 0;
+        $satuan = $penawaranItem ? ($penawaranItem->satuan ?? '') : '';
+        $harga = $penawaranItem ? (float)($penawaranItem->harga_satuan_penawaran ?? 0) : 0;
+        $nilaiKontrak = $qty * $harga;
 
         return (object)[
             'id'     => $id,
@@ -62,6 +77,12 @@ class BappController extends Controller
             'pPrevItem' => $pPrev,     // progress s/d minggu lalu (% item)
             'pDeltaItem'=> $pDel,      // progress minggu ini (% item)
             'pNowItem'  => $pNow,      // progress saat ini (% item)
+
+            // === Data penawaran untuk final account ===
+            'qty'       => $qty,
+            'satuan'    => $satuan,
+            'harga'     => $harga,
+            'nilai_kontrak' => $nilaiKontrak,
 
             // === Nama lama (jika ada view lain yang masih memakainya) ===
             'bobot_item'     => $Wi_i,
@@ -117,13 +138,25 @@ class BappController extends Controller
             'minggu_ke'    => ['required','integer','min:1'],
             'tanggal_bapp' => ['required','date'],
             'nomor_bapp'   => ['required','string','max:100','unique:bapps,nomor_bapp'],
-              'notes'        => ['nullable','string','max:1000'],
-              'sign_by'      => ['required','in:sm,pm'],
+            'notes'        => ['nullable','string','max:1000'],
+            'sign_by'      => ['required','in:sm,pm'],
+            'is_final_account' => ['nullable','boolean'],
+            'final_account_notes' => ['nullable','string','max:2000'],
+            'qty_realisasi' => ['nullable','array'],
+            'qty_realisasi.*' => ['nullable','numeric','min:0'],
+            // Addendum items
+            'addendum_items' => ['nullable','array'],
+            'addendum_items.*.kode' => ['required','string','max:50'],
+            'addendum_items.*.uraian' => ['required','string','max:500'],
+            'addendum_items.*.qty' => ['required','numeric','min:0'],
+            'addendum_items.*.satuan' => ['required','string','max:50'],
+            'addendum_items.*.harga' => ['required','numeric','min:0'],
         ]);
 
         $penawaranId = (int)($data['penawaran_id'] ?? 0);
         $mingguKe    = (int)$data['minggu_ke'];
         $progress    = !empty($data['progress_id']) ? RabProgress::find($data['progress_id']) : null;
+        $isFinalAccount = (bool)($data['is_final_account'] ?? false);
 
         // dataset ulang (agar yang tersimpan == yang dipreview)
         [$items,$Wi,$prevProj,$deltaProj,$prevItem,$deltaItem] =
@@ -131,7 +164,7 @@ class BappController extends Controller
 
         $bapp = null; // penting: siapkan referensi untuk dipakai setelah transaksi
 
-        DB::transaction(function () use ($proyek,$data,$items,$Wi,$prevProj,$deltaProj,$prevItem,$deltaItem,&$bapp,$penawaranId) {
+        DB::transaction(function () use ($proyek,$data,$items,$Wi,$prevProj,$deltaProj,$prevItem,$deltaItem,&$bapp,$penawaranId,$isFinalAccount,$r) {
             $bapp = Bapp::create([
                 'proyek_id'        => $proyek->id,
                 'penawaran_id'     => $penawaranId ?: null,
@@ -145,12 +178,16 @@ class BappController extends Controller
                 'total_now_pct'    => 0,
                 'created_by'       => auth()->id(),
                 'notes'            => $data['notes'] ?? null,
-                'sign_by'         => $data['sign_by'],
+                'sign_by'          => $data['sign_by'],
+                'is_final_account' => $isFinalAccount,
+                'final_account_notes' => $data['final_account_notes'] ?? null,
             ]);
 
             $details = [];
             // Gunakan integer arithmetic untuk menghindari floating point error
             $totPrevAccum = $totDeltaAccum = $totNowAccum = 0;  // integer (dalam perseratusan)
+            $totalNilaiKontrak = 0;
+            $totalNilaiRealisasi = 0;
 
             foreach ($items as $it) {
                 $id   = $it->id;
@@ -166,6 +203,36 @@ class BappController extends Controller
                 $dlt_rounded = round($dlt, 2);
                 $now_rounded = round($now, 2);
 
+                // Ambil data penawaran item untuk qty dan harga
+                $penawaranItem = null;
+                if ($penawaranId > 0) {
+                    $penawaranItem = RabPenawaranItem::where('rab_detail_id', $id)
+                        ->whereHas('section', function($q) use ($penawaranId) {
+                            $q->where('rab_penawaran_header_id', $penawaranId);
+                        })
+                        ->first();
+                }
+
+                $qty = $penawaranItem ? (float)($penawaranItem->volume ?? 0) : 0;
+                $satuan = $penawaranItem ? ($penawaranItem->satuan ?? '') : '';
+                $harga = $penawaranItem ? (float)($penawaranItem->harga_satuan_penawaran ?? 0) : 0;
+                $bobotPenawaranItem = $penawaranItem ? (float)($penawaranItem->bobot ?? 0) : 0;
+
+                // Hitung nilai kontrak
+                $nilaiKontrak = $qty * $harga;
+                
+                // Final account: gunakan qty realisasi jika ada
+                $qtyRealisasi = $qty; // default sama dengan kontrak
+                if ($isFinalAccount && isset($data['qty_realisasi'][$id])) {
+                    $qtyRealisasi = (float)$data['qty_realisasi'][$id];
+                }
+                
+                $nilaiRealisasi = $qtyRealisasi * $harga;
+                $nilaiAdjustment = $nilaiRealisasi - $nilaiKontrak;
+
+                $totalNilaiKontrak += $nilaiKontrak;
+                $totalNilaiRealisasi += $nilaiRealisasi;
+
                 $details[] = [
                     'bapp_id'         => $bapp->id,
                     'rab_detail_id'   => $id,
@@ -178,6 +245,14 @@ class BappController extends Controller
                     'prev_item_pct'   => round((float)($prevItem[$id]  ?? 0), 2),
                     'delta_item_pct'  => round((float)($deltaItem[$id] ?? 0), 2),
                     'now_item_pct'    => round(((float)($prevItem[$id] ?? 0) + (float)($deltaItem[$id] ?? 0)), 2),
+                    'qty'             => $qty,
+                    'satuan'          => $satuan,
+                    'harga'           => $harga,
+                    'qty_kontrak'     => $qty,
+                    'qty_realisasi'   => $qtyRealisasi,
+                    'nilai_kontrak'   => $nilaiKontrak,
+                    'nilai_realisasi' => $nilaiRealisasi,
+                    'nilai_adjustment'=> $nilaiAdjustment,
                     'created_at'      => now(),
                     'updated_at'      => now(),
                 ];
@@ -193,10 +268,54 @@ class BappController extends Controller
                 BappDetail::insert($details);
             }
 
+            // Handle addendum items (pekerjaan tambah di luar kontrak)
+            if ($isFinalAccount && !empty($data['addendum_items'])) {
+                $addendumDetails = [];
+                foreach ($data['addendum_items'] as $addItem) {
+                    $qtyAdd = (float)$addItem['qty'];
+                    $hargaAdd = (float)$addItem['harga'];
+                    $nilaiAdd = $qtyAdd * $hargaAdd;
+
+                    $totalNilaiRealisasi += $nilaiAdd; // Tambahkan ke total realisasi
+
+                    $addendumDetails[] = [
+                        'bapp_id'         => $bapp->id,
+                        'rab_detail_id'   => null, // Tidak ada di RAB
+                        'kode'            => $addItem['kode'],
+                        'uraian'          => $addItem['uraian'],
+                        'bobot_item'      => 0, // Tidak masuk perhitungan progress %
+                        'prev_pct'        => 0,
+                        'delta_pct'       => 0,
+                        'now_pct'         => 0,
+                        'prev_item_pct'   => 0,
+                        'delta_item_pct'  => 0,
+                        'now_item_pct'    => 0,
+                        'qty'             => $qtyAdd,
+                        'satuan'          => $addItem['satuan'],
+                        'harga'           => $hargaAdd,
+                        'qty_kontrak'     => 0, // Tidak ada di kontrak
+                        'qty_realisasi'   => $qtyAdd,
+                        'nilai_kontrak'   => 0,
+                        'nilai_realisasi' => $nilaiAdd,
+                        'nilai_adjustment'=> $nilaiAdd, // Full amount adalah adjustment
+                        'is_addendum_item'=> true,
+                        'created_at'      => now(),
+                        'updated_at'      => now(),
+                    ];
+                }
+
+                if (!empty($addendumDetails)) {
+                    BappDetail::insert($addendumDetails);
+                }
+            }
+
             $bapp->update([
                 'total_prev_pct'   => round($totPrevAccum / 100, 2),
                 'total_delta_pct'  => round($totDeltaAccum / 100, 2),
                 'total_now_pct'    => round($totNowAccum / 100, 2),
+                'nilai_kontrak_total' => $totalNilaiKontrak,
+                'nilai_realisasi_total' => $totalNilaiRealisasi,
+                'nilai_adjustment' => $totalNilaiRealisasi - $totalNilaiKontrak,
             ]);
 
         });
@@ -230,38 +349,73 @@ class BappController extends Controller
     {
         abort_if($bapp->proyek_id !== $proyek->id, 404);
 
+        // Validasi opsional untuk tanda terima
         $data = $r->validate([
-            'tanda_terima_pdf' => ['required','file','mimes:pdf','max:10240'], // max ~10MB
+            'tanda_terima_pdf' => ['nullable','file','mimes:pdf','max:10240'], // max ~10MB
         ]);
 
-        $file = $data['tanda_terima_pdf'];
-        $slugNomor = Str::slug($bapp->nomor_bapp ?? 'bapp', '-');
-        $filename = 'tanda-terima-'.$slugNomor.'-'.$bapp->id.'-'.now()->format('YmdHis').'.'.$file->getClientOriginalExtension();
+        $updateData = [
+            'status' => 'submitted',
+        ];
 
-        // hapus file lama hanya jika berasal dari folder tanda terima
-        if ($bapp->file_pdf_path && Str::startsWith($bapp->file_pdf_path, 'bapp/tanda-terima/')) {
-            Storage::disk('public')->delete($bapp->file_pdf_path);
+        // Jika ada upload tanda terima saat submit
+        if ($r->hasFile('tanda_terima_pdf')) {
+            $file = $data['tanda_terima_pdf'];
+            $slugNomor = Str::slug($bapp->nomor_bapp ?? 'bapp', '-');
+            $filename = 'tanda-terima-'.$slugNomor.'-'.$bapp->id.'-'.now()->format('YmdHis').'.'.$file->getClientOriginalExtension();
+
+            // Hapus file lama jika ada
+            if ($bapp->file_pdf_path && Str::startsWith($bapp->file_pdf_path, 'bapp/tanda-terima/')) {
+                Storage::disk('public')->delete($bapp->file_pdf_path);
+            }
+
+            $path = $file->storeAs('bapp/tanda-terima', $filename, 'public');
+            $updateData['file_pdf_path'] = $path;
         }
 
-        $path = $file->storeAs('bapp/tanda-terima', $filename, 'public');
+        $bapp->update($updateData);
 
-        $bapp->update([
-            'status'         => 'submitted',
-            'file_pdf_path'  => $path,
-        ]);
-
-        return back()->with('success','BAPP dikirim untuk persetujuan.');
+        return back()->with('success', $r->hasFile('tanda_terima_pdf') 
+            ? 'BAPP dikirim untuk persetujuan dan tanda terima berhasil disimpan.'
+            : 'BAPP dikirim untuk persetujuan.');
     }
 
-    public function approve(Proyek $proyek, Bapp $bapp)
+    public function approve(Proyek $proyek, Bapp $bapp, Request $r)
     {
         abort_if($bapp->proyek_id !== $proyek->id, 404);
-        $bapp->update([
-            'status'      => 'approved',
-            'approved_by' => auth()->id(),
-            'approved_at' => now(),
+        
+        // Jika belum ada file_pdf_path, maka wajib upload
+        // Jika sudah ada, upload opsional (untuk ganti)
+        $data = $r->validate([
+            'tanda_terima_pdf' => [$bapp->file_pdf_path ? 'nullable' : 'required','file','mimes:pdf','max:10240'], // max ~10MB
         ]);
-        return back()->with('success','BAPP disetujui.');
+
+        $updateData = [
+            'status'         => 'approved',
+            'approved_by'    => auth()->id(),
+            'approved_at'    => now(),
+        ];
+
+        // Jika ada upload baru
+        if ($r->hasFile('tanda_terima_pdf')) {
+            $file = $data['tanda_terima_pdf'];
+            $slugNomor = Str::slug($bapp->nomor_bapp ?? 'bapp', '-');
+            $filename = 'tanda-terima-'.$slugNomor.'-'.$bapp->id.'-'.now()->format('YmdHis').'.'.$file->getClientOriginalExtension();
+
+            // Hapus file lama hanya jika berasal dari folder tanda terima
+            if ($bapp->file_pdf_path && Str::startsWith($bapp->file_pdf_path, 'bapp/tanda-terima/')) {
+                Storage::disk('public')->delete($bapp->file_pdf_path);
+            }
+
+            $path = $file->storeAs('bapp/tanda-terima', $filename, 'public');
+            $updateData['file_pdf_path'] = $path;
+        }
+        
+        $bapp->update($updateData);
+        
+        return back()->with('success', $r->hasFile('tanda_terima_pdf')
+            ? 'BAPP disetujui dan tanda terima berhasil disimpan.'
+            : 'BAPP disetujui.');
     }
 
     public function revise(Proyek $proyek, Bapp $bapp)

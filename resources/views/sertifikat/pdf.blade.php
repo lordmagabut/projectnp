@@ -287,6 +287,19 @@
   $umBefore = max(0, round($umAfter + $umCutNow, 2));
   $umModeLabel = strtoupper($umMode);
   $umCutPct = ($umMode === 'utuh') ? 100 : (isset($sp->pemotongan_um_persen) ? (float)$sp->pemotongan_um_persen : $pctCum);
+  
+  // ==== FINAL ACCOUNT DATA ====
+  $isFinalAccount = optional($bapp)->is_final_account ?? false;
+  $nilaiAkhir = $isFinalAccount ? ((float)optional($bapp)->nilai_realisasi_total) : 0.0;
+  
+  // Hitung total progress sebelumnya untuk breakdown
+  $prevNilaiProgressTotal = 0.0;
+  if ($isFinalAccount && optional($bapp)->penawaran_id) {
+    $prevNilaiProgressTotal = \App\Models\SertifikatPembayaran::query()
+      ->where('penawaran_id', $bapp->penawaran_id)
+      ->where('termin_ke', '<', $terminKe)
+      ->sum('nilai_progress_rp');
+  }
 @endphp
 
 <!-- ================= HALAMAN 1 (narasi kumulatif, tampilkan delta) ================= -->
@@ -295,7 +308,11 @@
     <h2>SERTIFIKAT PEMBAYARAN</h2>
     <div class="subtitle">
       Nomor: {{ $nomorSP }} — {{ $tglSP }} — Progress ke-{{ $terminKe }}
-      / Kumulatif {{ $pct($pctCum,2) }}% — Periode ini {{ $pct($pctNow,2) }}%
+      @if($isFinalAccount)
+        / FINAL ACCOUNT
+      @else
+        / Kumulatif {{ $pct($pctCum,2) }}% — Periode ini {{ $pct($pctNow,2) }}%
+      @endif
     </div>
   </div>
 
@@ -304,7 +321,13 @@
     <tr><td class="label">Tanggal</td><td class="sep">:</td><td class="val">{{ $tglSP }}</td></tr>
     <tr><td class="label">NO PO / WO / SPK</td><td class="sep">:</td><td class="val">{{ $noPOWO }}</td></tr>
     <tr><td class="label">Termin</td><td class="sep">:</td>
-        <td class="val">Kumulatif {{ $pct($pctCum,2) }}% (periode ini {{ $pct($pctNow,2) }}%)</td>
+        <td class="val">
+          @if($isFinalAccount)
+            FINAL ACCOUNT (Termin ke-{{ $terminKe }})
+          @else
+            Kumulatif {{ $pct($pctCum,2) }}% (periode ini {{ $pct($pctNow,2) }}%)
+          @endif
+        </td>
     </tr>
   </table>
 
@@ -364,10 +387,81 @@
     <tr><td class="label">Proyek</td><td class="sep">:</td><td class="val">{{ $namaProyek }}</td></tr>
     <tr><td class="label">Tanggal</td><td class="sep">:</td><td class="val">{{ $tglSP }}</td></tr>
     <tr><td class="label">Progress</td><td class="sep">:</td>
-        <td class="val">Kumulatif {{ $pct($pctCum,2) }}% — Periode ini {{ $pct($pctNow,2) }}% (Termin ke-{{ $terminKe }})</td>
+        <td class="val">
+          @if($isFinalAccount)
+            FINAL ACCOUNT (Termin ke-{{ $terminKe }})
+          @else
+            Kumulatif {{ $pct($pctCum,2) }}% — Periode ini {{ $pct($pctNow,2) }}% (Termin ke-{{ $terminKe }})
+          @endif
+        </td>
     </tr>
   </table>
 
+  @if($isFinalAccount)
+  {{-- BREAKDOWN DETAIL FINAL ACCOUNT dengan Pendekatan Rupiah --}}
+  <div style="background:#f0f8ff; border: 2px solid #2196F3; padding:14px; margin:16px 0; border-radius:4px;">
+    <h3 style="margin:0 0 10px; font-size:14px; font-weight:700; color:#1976D2; text-align:center;">
+      <span style="background:#2196F3; color:white; padding:4px 12px; border-radius:3px;">📊 FINAL ACCOUNT - BREAKDOWN DETAIL RUPIAH</span>
+    </h3>
+    <table style="width:100%; border-collapse:collapse; font-size:11.5px;">
+      <tr>
+        <td style="padding:6px 0; width:5%; vertical-align:top;">1.</td>
+        <td style="padding:6px 0; width:55%;"><strong>Nilai Akhir Pekerjaan</strong> (Kontrak + Addendum + Adjustment)</td>
+        <td style="padding:6px 0; width:40%; text-align:right; font-weight:700; color:#1976D2;">
+          Rp.&nbsp;{{ $fmt($nilaiAkhir) }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0; vertical-align:top;">2.</td>
+        <td style="padding:6px 0;">Dikurangi: Total yang Sudah Ditagih Sebelumnya</td>
+        <td style="padding:6px 0; text-align:right; color:#d32f2f;">
+          - Rp.&nbsp;{{ $fmt($prevNilaiProgressTotal) }}
+        </td>
+      </tr>
+      <tr style="border-top:1px dashed #bbb;">
+        <td style="padding:6px 0; vertical-align:top;">3.</td>
+        <td style="padding:6px 0;"><strong>Sisa yang Belum Ditagih</strong> (1 - 2)</td>
+        <td style="padding:6px 0; text-align:right; font-weight:700;">
+          Rp.&nbsp;{{ $fmt($nilaiAkhir - $prevNilaiProgressTotal) }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0; vertical-align:top;">4.</td>
+        <td style="padding:6px 0;">Dikurangi: Uang Muka Periode Ini ({{ $pct($umCutPct,2) }}%)</td>
+        <td style="padding:6px 0; text-align:right; color:#d32f2f;">
+          - Rp.&nbsp;{{ $fmt($umCutTotal) }}
+        </td>
+      </tr>
+      <tr style="border-top:1px dashed #bbb;">
+        <td style="padding:6px 0; vertical-align:top;">5.</td>
+        <td style="padding:6px 0;"><strong>Nilai Progress Periode Ini</strong> (3 - 4)</td>
+        <td style="padding:6px 0; text-align:right; font-weight:700; color:#0277BD;">
+          Rp.&nbsp;{{ $fmt(max(0, $nilaiAkhir - $prevNilaiProgressTotal - $umCutTotal)) }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0; vertical-align:top;">6.</td>
+        <td style="padding:6px 0;">Dikurangi: Retensi {{ $pct($retPct,2) }}% dari Progress</td>
+        <td style="padding:6px 0; text-align:right; color:#d32f2f;">
+          - Rp.&nbsp;{{ $fmt($retMat + $retJas) }}
+        </td>
+      </tr>
+      <tr style="border-top:2px solid #1976D2; background:#e3f2fd;">
+        <td style="padding:8px 0; vertical-align:top;"><strong>7.</strong></td>
+        <td style="padding:8px 0;"><strong style="font-size:12px;">NILAI TAGIHAN (DPP) Periode Ini</strong> (5 - 6)</td>
+        <td style="padding:8px 0; text-align:right; font-weight:700; font-size:13px; color:#0D47A1;">
+          Rp.&nbsp;{{ $fmt($subMat + $subJas) }}
+        </td>
+      </tr>
+    </table>
+    <div style="margin-top:8px; padding:8px; background:#fff3cd; border-left:4px solid #ff9800; font-size:10.5px; color:#856404;">
+      <strong>ℹ️ Catatan:</strong> Breakdown ini menunjukkan perhitungan detail dengan pendekatan rupiah karena BAPP ini adalah <strong>Final Account</strong> dengan realisasi berbeda dari kontrak.
+    </div>
+  </div>
+  @endif
+
+  @if(!$isFinalAccount)
+  {{-- Tabel Rincian untuk BAPP Normal (bukan Final Account) --}}
   <table class="tbl">
     <colgroup>
       <col class="col-no"><col class="col-ket"><col class="col-mat"><col class="col-jas"><col class="col-total">
@@ -464,6 +558,7 @@
       <td class="right money fw-bold" style="background:#eee;">Rp.&nbsp;{{ $fmt($netAll) }}</td>
     </tr>
   </table>
+  @endif
 
   <table class="sign">
     <tr>

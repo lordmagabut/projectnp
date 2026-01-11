@@ -77,7 +77,14 @@ class SertifikatPembayaranController extends Controller
             $uangMukaIdFromSO = null;
             $priceMode = 'pisah'; // default: pisah (material + upah terpisah)
 
-            if ($b->penawaran) {
+            // Jika BAPP adalah final account, gunakan nilai_realisasi_total
+            if ($b->is_final_account && $b->nilai_realisasi_total > 0) {
+                $nilaiTotal = (float)$b->nilai_realisasi_total;
+                // Bagi 50:50 untuk perhitungan material dan jasa
+                $nilaiMaterial = $nilaiTotal / 2;
+                $nilaiUpah = $nilaiTotal / 2;
+                $priceMode = 'gabung'; // treat as gabung untuk simplicity
+            } elseif ($b->penawaran) {
                 // Tentukan price mode dari proyek
                 $priceMode = (string) (optional($b->proyek)->penawaran_price_mode ?? 'pisah');
 
@@ -331,6 +338,93 @@ class SertifikatPembayaranController extends Controller
     $uang_muka_M     = round($nilai_wo_material * $umPct/100, 2);
     $uang_muka_J     = round($nilai_wo_jasa     * $umPct/100, 2);
 
+    // ---- Cek apakah BAPP adalah Final Account ----
+    $isFinalAccount = $bapp->is_final_account ?? false;
+    
+    if ($isFinalAccount) {
+        // ==== FINAL ACCOUNT LOGIC ====
+        // Nilai tagihan = Nilai Akhir - DP - (Nilai Sertifikat 1 setelah dikurangi DP, sebelum retensi) - (Nilai Sertifikat 2...) - dst
+        
+        // 1. Hitung total nilai yang sudah ditagih periode sebelumnya (nilai_progress_rp)
+        $prevNilaiProgressQuery = SertifikatPembayaran::query();
+        if ($penawaranId) {
+            $prevNilaiProgressQuery->where('penawaran_id', $penawaranId);
+        } else {
+            $prevNilaiProgressQuery->whereHas('bapp', function($q) use ($proyekId) {
+                $q->where('proyek_id', $proyekId);
+            });
+        }
+        $prevNilaiProgressTotal = $prevNilaiProgressQuery
+            ->where('termin_ke', '<', $currentTermin)
+            ->sum('nilai_progress_rp');
+        
+        // 2. Nilai akhir (realisasi) dari BAPP
+        $nilaiAkhir = (float)$bapp->nilai_realisasi_total;
+        
+        // 3. Hitung UM kumulatif
+        $prevUmCutCapped = min($uang_muka_total, $prevUmCutTotal);
+        $prevUmUsed      = $umPenjualan ? (float)$umPenjualan->nominal_digunakan : $prevUmCutCapped;
+        $umSisaAvailable = max(0, $uang_muka_total - max($prevUmCutCapped, $prevUmUsed));
+        
+        if ($umMode === 'utuh') {
+            $um_cut_cum_prev     = $prevUmCutCapped;
+            $pemotongan_um_nilai = $umSisaAvailable;
+            $um_cut_cum_now      = $um_cut_cum_prev + $pemotongan_um_nilai;
+        } else {
+            // Proporsional
+            $desired_cum         = min($uang_muka_total, round($uang_muka_total * $currPct/100, 2));
+            $um_cut_cum_prev     = $prevUmCutCapped;
+            $pemotongan_um_nilai = max(0, $desired_cum - $um_cut_cum_prev);
+            if ($pemotongan_um_nilai > $umSisaAvailable) {
+                $pemotongan_um_nilai = $umSisaAvailable;
+            }
+            $um_cut_cum_now = $um_cut_cum_prev + $pemotongan_um_nilai;
+        }
+        
+        // 4. Nilai progress periode ini = Sisa yang belum ditagih
+        // Nilai Akhir - Total yang sudah ditagih sebelumnya - UM yang dipotong sekarang
+        $nilai_progress_rp = max(0, round($nilaiAkhir - $prevNilaiProgressTotal - $pemotongan_um_nilai, 2));
+        
+        // 5. Progress kumulatif (untuk display/tracking saja)
+        $progress_cum_now  = round($prevNilaiProgressTotal + $nilai_progress_rp + $um_cut_cum_now, 2);
+        $progress_cum_prev = round($prevNilaiProgressTotal + $um_cut_cum_prev, 2);
+        
+        // 6. Retensi
+        $retensiPct = (float) $data['retensi_persen'];
+        $retensi_cum_now  = round($progress_cum_now * $retensiPct/100, 2);
+        $retensi_cum_prev = round($progress_cum_prev * $retensiPct/100, 2);
+        $retensi_nilai    = $retensi_cum_now - $retensi_cum_prev;
+        
+        // 7. Total dibayar periode ini (DPP)
+        $total_dibayar = max(0, round($nilai_progress_rp - $retensi_nilai, 2));
+        
+        // 8. Split material/jasa proporsional
+        $progress_M_now = round($nilai_progress_rp * $propM, 2);
+        $progress_J_now = round($nilai_progress_rp * $propJ, 2);
+        
+        $retensi_M_now = round($retensi_nilai * $propM, 2);
+        $retensi_J_now = round($retensi_nilai * $propJ, 2);
+        
+        $dpp_material = max(0, round($progress_M_now - $retensi_M_now, 2));
+        $dpp_jasa     = max(0, round($progress_J_now - $retensi_J_now, 2));
+        
+        // Rekonsiliasi pembulatan
+        $sumDpp = round($dpp_material + $dpp_jasa, 2);
+        if ($sumDpp !== round($total_dibayar, 2)) {
+            $delta = round($total_dibayar - $sumDpp, 2);
+            if ($dpp_jasa >= $dpp_material) $dpp_jasa += $delta; else $dpp_material += $delta;
+        }
+        
+        // 9. Pemotongan UM persen (untuk display)
+        $pemotongan_um_persen = ($umMode === 'utuh') ? 100.0 : $currPct;
+        
+        // 10. Subtotal kumulatif
+        $subtotal_cum_now  = $progress_cum_now - $um_cut_cum_now - $retensi_cum_now;
+        $subtotal_cum_prev = $progress_cum_prev - $um_cut_cum_prev - $retensi_cum_prev;
+        
+    } else {
+        // ==== BAPP NORMAL (Progress %) ====
+
     // ---- Progress & retensi kumulatif ----
     $progress_cum_now = round($nilai_wo_total * $currPct/100, 2);
     $retensiPct       = (float) $data['retensi_persen'];
@@ -409,6 +503,8 @@ class SertifikatPembayaranController extends Controller
         $delta = round($total_dibayar - $sumDpp, 2);
         if ($dpp_jasa >= $dpp_material) $dpp_jasa += $delta; else $dpp_material += $delta;
     }
+    
+    } // end if ($isFinalAccount) - tutup blok final account vs normal
 
     // ---- PPN & total tagihan (PERIODE INI) ----
     // Jika proyek punya profil pajak aktif dan tidak kena PPN, paksa persen PPN = 0

@@ -725,6 +725,7 @@
           <th class="text-end" style="width:12%">Prog. s/d Lalu (%)</th>
           <th class="text-end" style="width:12%">Prog. Minggu Ini (%)</th>
           <th class="text-end" style="width:12%">Prog. Saat Ini (%)</th>
+          <th class="text-center" style="width:8%">Jenis</th>
           <th class="text-center" style="width:10%">Status</th>
           <th class="text-center" style="width:90px">Aksi</th>
         </tr>
@@ -740,6 +741,13 @@
             <td class="text-end">{{ $fmt(min(100.00, (float)$b->total_prev_pct)) }}</td>
             <td class="text-end text-info fw-semibold">{{ $fmt($b->total_delta_pct) }}</td>
             <td class="text-end text-primary fw-semibold">{{ $fmt(min(100.00, (float)$b->total_now_pct)) }}</td>
+            <td class="text-center">
+              @if($b->is_final_account)
+                <span class="badge bg-warning text-dark" title="Final Account">FINAL</span>
+              @else
+                <span class="badge bg-light text-secondary" title="Normal Progress">Normal</span>
+              @endif
+            </td>
             <td class="text-center">
               @switch($b->status)
                 @case('draft')     <span class="badge bg-warning text-dark">Draft</span> @break
@@ -922,6 +930,7 @@
         <th style="width:11%">Tanggal</th>
         <th style="width:10%">Termin</th>
         <th>No. BAPP</th>
+        <th class="text-center" style="width:8%">Jenis</th>
         @if($priceMode === 'pisah')
           <th class="text-end" style="width:12%">WO Material</th>
           <th class="text-end" style="width:12%">WO Upah</th>
@@ -944,6 +953,13 @@
             <td>{{ \Carbon\Carbon::parse($s->tanggal)->format('d-m-Y') }}</td>
             <td class="text-nowrap">Ke-{{ $s->termin_ke }}</td>
             <td class="text-nowrap">{{ $s->bapp?->nomor_bapp ?? '-' }}</td>
+            <td class="text-center">
+              @if(optional($s->bapp)->is_final_account)
+                <span class="badge bg-warning text-dark" title="Final Account">FINAL</span>
+              @else
+                <span class="badge bg-light text-secondary" title="Normal Progress">Normal</span>
+              @endif
+            </td>
             @if($priceMode === 'pisah')
               <td class="text-end">{{ $rp($s->nilai_wo_material) }}</td>
               <td class="text-end">{{ $rp($s->nilai_wo_jasa) }}</td>

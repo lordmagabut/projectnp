@@ -49,12 +49,9 @@
       </a>
 
       @if($bapp->status === 'submitted')
-        <form method="POST" action="{{ route('bapp.approve', [$proyek->id, $bapp->id]) }}" class="d-inline">
-          @csrf
-          <button class="btn btn-success">
-            <i data-feather="check-circle" class="me-1"></i>Setujui
-          </button>
-        </form>
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#approveModal">
+          <i data-feather="check-circle" class="me-1"></i>Setujui
+        </button>
         <form method="POST" action="{{ route('bapp.revise', [$proyek->id, $bapp->id]) }}" class="d-inline">
           @csrf
           <button class="btn btn-warning">
@@ -85,19 +82,26 @@
     @endif
 
     @if($bapp->status === 'draft')
-      <form method="POST" action="{{ route('bapp.submit', [$proyek->id, $bapp->id]) }}" enctype="multipart/form-data" class="row g-2 align-items-end mb-3">
+      <form method="POST" action="{{ route('bapp.submit', [$proyek->id, $bapp->id]) }}" enctype="multipart/form-data" class="row g-3 mb-3">
         @csrf
-        <div class="col-md-6 col-lg-5">
-          <label class="form-label">Upload Tanda Terima (PDF)</label>
-          <input type="file" name="tanda_terima_pdf" accept="application/pdf" required
+        <div class="col-12">
+          <div class="alert alert-info mb-0">
+            <i data-feather="info" class="me-1"></i>
+            <strong>Opsional:</strong> Anda bisa upload tanda terima sekarang atau nanti saat persetujuan.
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Upload Tanda Terima BAPP (PDF) - Opsional</label>
+          <input type="file" name="tanda_terima_pdf" accept="application/pdf"
                  class="form-control form-control-sm @error('tanda_terima_pdf') is-invalid @enderror">
-          <div class="form-text">Wajib PDF, maks 10MB.</div>
+          <div class="form-text">Upload sekarang untuk keperluan follow up persetujuan. Format: PDF, Max: 10MB</div>
           @error('tanda_terima_pdf') <div class="invalid-feedback">{{ $message }}</div> @enderror
         </div>
-        <div class="col-auto">
-          <button class="btn btn-primary mt-2 mt-md-0">
+        <div class="col-12">
+          <button class="btn btn-primary">
             <i data-feather="send" class="me-1"></i>Kirim untuk Persetujuan
           </button>
+        </div>
         </div>
       </form>
     @endif
@@ -174,6 +178,68 @@
       </table>
     </div>
 
+  </div>
+</div>
+
+{{-- Modal Upload PDF untuk Approve --}}
+<div class="modal fade" id="approveModal" tabindex="-1" aria-labelledby="approveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ route('bapp.approve', [$proyek->id, $bapp->id]) }}" enctype="multipart/form-data">
+        @csrf
+        <div class="modal-header">
+          <h5 class="modal-title" id="approveModalLabel">
+            <i data-feather="check-circle" class="me-2"></i>Setujui BAPP
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          @if($bapp->file_pdf_path)
+            <div class="alert alert-success mb-3">
+              <i data-feather="check-circle" class="me-1"></i>
+              <strong>Tanda terima sudah ada:</strong>
+              <a href="{{ Storage::url($bapp->file_pdf_path) }}" target="_blank" class="alert-link">
+                Lihat File
+              </a>
+            </div>
+            <div class="alert alert-warning">
+              <i data-feather="info" class="me-1"></i>
+              Upload file baru jika ingin mengganti tanda terima yang ada.
+            </div>
+          @else
+            <div class="alert alert-info">
+              <i data-feather="info" class="me-1"></i>
+              Silakan upload file PDF tanda terima kirim BAPP yang sudah ditandatangani.
+            </div>
+          @endif
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Upload Tanda Terima BAPP (PDF)
+              @if(!$bapp->file_pdf_path)
+                <span class="text-danger">*</span>
+              @endif
+            </label>
+            <input type="file" name="tanda_terima_pdf" accept="application/pdf" 
+                   @if(!$bapp->file_pdf_path) required @endif
+                   class="form-control @error('tanda_terima_pdf') is-invalid @enderror">
+            <div class="form-text">
+              @if($bapp->file_pdf_path)
+                Opsional - Upload untuk mengganti file yang ada
+              @else
+                Wajib - Format: PDF, Maksimal: 10MB
+              @endif
+            </div>
+            @error('tanda_terima_pdf') <div class="invalid-feedback">{{ $message }}</div> @enderror
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-success">
+            <i data-feather="check-circle" class="me-1"></i>Setujui & Simpan
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 @endsection
