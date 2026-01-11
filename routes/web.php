@@ -32,6 +32,7 @@ use App\Http\Controllers\DataSyncController;
 use App\Http\Controllers\BappController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SertifikatPembayaranController;
+use App\Http\Controllers\BastController;
 use App\Http\Controllers\PembayaranPembelianController;
 use App\Http\Controllers\PenerimaanPembelianController;
 use App\Http\Controllers\PenerimaanPenjualanController;
@@ -288,8 +289,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/cetak',  [SertifikatPembayaranController::class,'cetak'])->name('cetak'); // PDF portrait
         Route::put('/{id}',        [SertifikatPembayaranController::class,'update'])->name('update');
         Route::delete('/{id}',     [SertifikatPembayaranController::class,'destroy'])->name('destroy');
+    });
 
-
+    Route::prefix('bast')->name('bast.')->group(function () {
+        Route::get('/{id}',        [BastController::class, 'show'])->name('show');
+        Route::post('/{id}/approve', [BastController::class, 'approve'])->name('approve');
+        Route::post('/{id}/ketentuan', [BastController::class, 'updateKetentuan'])->name('updateKetentuan');
+        Route::get('/{id}/pdf',    [BastController::class, 'pdf'])->name('pdf');
     });
 
     Route::get('/proyek/{proyek}/penawaran/{penawaran}/pdf-mixed',

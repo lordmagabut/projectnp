@@ -419,7 +419,7 @@ private function dataset(int $proyekId, ?int $penawaranId, int $mingguKe, ?RabPr
         ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id',$penawaranId))
         ->where('rp.status','final')
         ->where('rp.minggu_ke','<',$mingguKe)
-        ->selectRaw('rpd.rab_detail_id as id, SUM(rpd.pct_item_minggu_ini) as s')
+        ->selectRaw('rpd.rab_detail_id as id, SUM(COALESCE(rpd.pct_item_minggu_ini, 0)) as s')
         ->groupBy('rpd.rab_detail_id')
         ->pluck('s','id')->toArray();
 
@@ -430,7 +430,7 @@ private function dataset(int $proyekId, ?int $penawaranId, int $mingguKe, ?RabPr
             ->groupBy('rab_detail_id')->pluck('s','id')->toArray();
 
         $dNItem = RabProgressDetail::where('rab_progress_id',$progress->id)
-            ->selectRaw('rab_detail_id as id, SUM(pct_item_minggu_ini) as s')
+            ->selectRaw('rab_detail_id as id, SUM(COALESCE(pct_item_minggu_ini, 0)) as s')
             ->groupBy('rab_detail_id')->pluck('s','id')->toArray();
     } else {
         $dNProj = DB::table('rab_progress_detail as rpd')
@@ -447,7 +447,7 @@ private function dataset(int $proyekId, ?int $penawaranId, int $mingguKe, ?RabPr
             ->where('rp.proyek_id',$proyekId)
             ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id',$penawaranId))
             ->where('rp.minggu_ke',$mingguKe)
-            ->selectRaw('rpd.rab_detail_id as id, SUM(rpd.pct_item_minggu_ini) as s')
+            ->selectRaw('rpd.rab_detail_id as id, SUM(COALESCE(rpd.pct_item_minggu_ini, 0)) as s')
             ->groupBy('rpd.rab_detail_id')->pluck('s','id')->toArray();
     }
 

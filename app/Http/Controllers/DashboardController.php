@@ -7,6 +7,8 @@ use App\Models\Proyek;
 use App\Models\RabScheduleDetail;
 use App\Models\RabProgress;
 use App\Models\RabPenawaranHeader;
+use App\Models\Bast;
+use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
@@ -26,14 +28,29 @@ class DashboardController extends Controller
         $totalPembelian = 125000000;
         $totalPendapatan = 175000000;
 
-        // Kurva S (ambil dari schedule detail & progress, mirip ProyekController)
-        $minggu = $akumulasi = $realisasi = [];
+        // Ambil daftar penawaran FINAL untuk proyek yang dipilih
+        $finalPenawarans = collect();
+        $selectedPenawaran = null;
+        $selectedPenawaranId = null;
+        
         if ($selectedProyek) {
             $finalPenawarans = RabPenawaranHeader::where('proyek_id', $selectedProyek)
                 ->where('status', 'final')
                 ->orderBy('tanggal_penawaran')
                 ->get();
-            $selectedId = (int) $request->get('penawaran_id', optional($finalPenawarans->last())->id);
+            
+            // Prioritas: penawaran_id dari request, fallback penawaran terakhir
+            $selectedPenawaranId = $request->get('penawaran_id');
+            if (!$selectedPenawaranId && $finalPenawarans->isNotEmpty()) {
+                $selectedPenawaranId = $finalPenawarans->last()->id;
+            }
+            $selectedPenawaran = $finalPenawarans->firstWhere('id', $selectedPenawaranId);
+        }
+
+        // Kurva S (ambil dari schedule detail & progress, mirip ProyekController)
+        $minggu = $akumulasi = $realisasi = [];
+        if ($selectedProyek && $selectedPenawaranId) {
+            $selectedId = (int) $selectedPenawaranId;
 
             // Rencana
             $scheduleDetailQ = RabScheduleDetail::where('proyek_id', $selectedProyek)
@@ -103,9 +120,44 @@ class DashboardController extends Controller
             }
         }
 
+        // BAST 2 Retention Reminder: cari BAST 2 yang masa retensinya akan berakhir dalam 30 hari
+        $upcomingRetention = Bast::where('jenis_bast', 'bast_2')
+            ->whereNotNull('tanggal_bast')
+            ->whereNotNull('durasi_retensi_hari')
+            ->with('proyek', 'sertifikatPembayaran')
+            ->get()
+            ->filter(function($bast) {
+                if (!$bast->tanggal_bast || !$bast->durasi_retensi_hari) return false;
+                $tanggalBast = Carbon::parse($bast->tanggal_bast);
+                $tanggalJatuhTempo = $tanggalBast->copy()->addDays($bast->durasi_retensi_hari);
+                $selisihHari = now()->diffInDays($tanggalJatuhTempo, false);
+                // Tampilkan jika 0-30 hari lagi jatuh tempo (positif = belum jatuh tempo)
+                return $selisihHari >= 0 && $selisihHari <= 30;
+            })
+            ->map(function($bast) {
+                $tanggalBast = Carbon::parse($bast->tanggal_bast);
+                $tanggalJatuhTempo = $tanggalBast->copy()->addDays($bast->durasi_retensi_hari);
+                $selisihHari = now()->diffInDays($tanggalJatuhTempo, false);
+                return [
+                    'id' => $bast->id,
+                    'proyek_id' => $bast->proyek_id,
+                    'proyek_nama' => $bast->proyek->nama_proyek ?? '-',
+                    'penawaran_nama' => $bast->sertifikatPembayaran?->penawaran?->nama_penawaran ?? '-',
+                    'nomor_bast' => $bast->nomor,
+                    'tanggal_bast' => $tanggalBast->format('d-m-Y'),
+                    'tanggal_jatuh_tempo' => $tanggalJatuhTempo->format('d-m-Y'),
+                    'sisa_hari' => (int)$selisihHari,
+                    'nilai_retensi' => $bast->nilai_retensi ?? 0,
+                ];
+            })
+            ->sortBy('sisa_hari')
+            ->values();
+
         return view('dashboard', compact(
-            'proyeks','selectedProyek','total','aktif','selesai','perencanaan','tertunda',
-            'totalPembelian','totalPendapatan','minggu','akumulasi','realisasi'
+            'proyeks','selectedProyek','finalPenawarans','selectedPenawaran','selectedPenawaranId',
+            'total','aktif','selesai','perencanaan','tertunda',
+            'totalPembelian','totalPendapatan','minggu','akumulasi','realisasi',
+            'upcomingRetention'
         ));
     }
 }

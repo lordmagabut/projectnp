@@ -71,6 +71,12 @@
             <i data-feather="award" class="me-1"></i> Sertifikat Pembayaran
           </a>
         </li>
+        <li class="nav-item flex-grow-1 flex-md-grow-0 text-center" role="presentation">
+          <a class="nav-link" id="bast-tab" data-bs-toggle="tab" href="#bastContent" role="tab"
+            aria-controls="bastContent" aria-selected="false">
+            <i data-feather="file-plus" class="me-1"></i> BAST
+          </a>
+        </li>
 
       </ul>
 
@@ -731,9 +737,9 @@
             <td>{{ \Carbon\Carbon::parse($b->tanggal_bapp)->format('d-m-Y') }}</td>
             <td class="text-nowrap">Minggu ke-{{ $b->minggu_ke }}</td>
             <td>{{ $b->penawaran?->nama_penawaran ?? '-' }}</td>
-            <td class="text-end">{{ $fmt($b->total_prev_pct) }}</td>
+            <td class="text-end">{{ $fmt(min(100.00, (float)$b->total_prev_pct)) }}</td>
             <td class="text-end text-info fw-semibold">{{ $fmt($b->total_delta_pct) }}</td>
-            <td class="text-end text-primary fw-semibold">{{ $fmt($b->total_now_pct) }}</td>
+            <td class="text-end text-primary fw-semibold">{{ $fmt(min(100.00, (float)$b->total_now_pct)) }}</td>
             <td class="text-center">
               @switch($b->status)
                 @case('draft')     <span class="badge bg-warning text-dark">Draft</span> @break
@@ -989,6 +995,160 @@
           </tr>
         @empty
           <tr><td colspan="{{ $priceMode === 'pisah' ? 11 : 9 }}" class="text-center text-muted py-3">Belum ada sertifikat untuk penawaran ini.</td></tr>
+        @endforelse
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{{-- =======================
+     Tab BAST
+======================= --}}
+@php
+  $basts = \App\Models\Bast::query()
+      ->with(['sertifikatPembayaran.bapp.penawaran'])
+      ->where('proyek_id', $proyek->id)
+      ->when($sertifikatPenawaranId, function($q) use ($sertifikatPenawaranId) {
+        $q->whereHas('sertifikatPembayaran.bapp', fn($qq)=>$qq->where('penawaran_id', $sertifikatPenawaranId));
+      })
+      ->orderByDesc('tanggal_bast')
+      ->orderByDesc('id')
+      ->get();
+
+  // Hitung akumulasi retensi dari SEMUA sertifikat pembayaran dalam penawaran yang sama
+  $calculateAccumulatedRetensi = function($bastId) {
+    $bast = \App\Models\Bast::find($bastId);
+    if (!$bast || !$bast->sertifikatPembayaran) {
+      return 0;
+    }
+    
+    $penawaranId = $bast->sertifikatPembayaran->penawaran_id;
+    
+    // Sum semua retensi_nilai dari sertifikat pembayaran dengan penawaran_id yang sama
+    $total = \DB::table('sertifikat_pembayaran')
+        ->where('penawaran_id', $penawaranId)
+        ->sum('retensi_nilai');
+    
+    return (float)($total ?? 0);
+  };
+
+  $statusBadge = function($status) {
+    return match($status) {
+      'approved', 'done' => 'bg-success',
+      'scheduled' => 'bg-warning text-dark',
+      'draft' => 'bg-secondary',
+      default => 'bg-light text-dark',
+    };
+  };
+@endphp
+
+<div class="tab-pane fade" id="bastContent" role="tabpanel">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h5 class="mb-0 d-flex align-items-center">
+      <i data-feather="file-plus" class="me-2"></i>
+      Daftar BAST
+    </h5>
+
+    @if($finalPenawarans->isNotEmpty())
+      <form method="GET" action="{{ route('proyek.show', $proyek->id) }}" class="d-flex align-items-center gap-2">
+        <input type="hidden" name="tab" value="bast">
+        <select name="penawaran_id" class="form-select form-select-sm" onchange="this.form.submit()">
+          @foreach($finalPenawarans as $p)
+            <option value="{{ $p->id }}" {{ (int)$p->id === (int)$sertifikatPenawaranId ? 'selected' : '' }}>
+              {{ $p->nama_penawaran }} ({{ \Carbon\Carbon::parse($p->tanggal_penawaran)->format('d/m/y') }})
+            </option>
+          @endforeach
+        </select>
+        <noscript><button class="btn btn-primary btn-sm">Tampilkan</button></noscript>
+      </form>
+    @endif
+  </div>
+
+  <div class="mb-3">
+    <span class="badge rounded-pill text-bg-light border">
+      <i class="me-1" data-feather="briefcase"></i>
+      Penawaran:
+      {{ optional($finalPenawarans->firstWhere('id',$sertifikatPenawaranId))->nama_penawaran ?? ('#'.$sertifikatPenawaranId) }}
+    </span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th style="width:4%">#</th>
+          <th>Nomor BAST</th>
+          <th style="width:12%">Jenis</th>
+          <th style="width:12%">Status</th>
+          <th style="width:12%">Tanggal BAST</th>
+          <th style="width:14%">Jatuh Tempo Retensi</th>
+          <th class="text-end" style="width:10%">% Retensi</th>
+          <th class="text-end" style="width:14%">Nilai Retensi</th>
+          <th>Sertifikat</th>
+          <th class="text-center" style="width:90px">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        @forelse($basts as $i => $b)
+          @php
+            $jenisLabel = match($b->jenis_bast) {
+              'bast_1' => 'BAST 1',
+              'bast_2' => 'BAST 2',
+              default => strtoupper($b->jenis_bast ?? '-')
+            };
+          @endphp
+          <tr>
+            <td>{{ $i+1 }}</td>
+            <td class="text-nowrap">{{ $b->nomor ?? '-' }}</td>
+            <td><span class="badge text-bg-light border">{{ $jenisLabel }}</span></td>
+            <td>
+              <span class="badge {{ $statusBadge($b->status ?? 'draft') }}">{{ strtoupper($b->status ?? 'draft') }}</span>
+            </td>
+            <td>{{ optional($b->tanggal_bast)->format('d-m-Y') ?? '-' }}</td>
+            <td>{{ optional($b->tanggal_jatuh_tempo_retensi)->format('d-m-Y') ?? '-' }}</td>
+            <td class="text-end">{{ $b->persen_retensi !== null ? number_format((float)$b->persen_retensi, 2, ',', '.') . ' %' : '-' }}</td>
+            <td class="text-end fw-semibold text-primary">{{ $rp($calculateAccumulatedRetensi($b->id)) }}</td>
+            <td class="text-nowrap">
+              {{ $b->sertifikatPembayaran?->nomor ?? '-' }}
+              @if($b->sertifikatPembayaran?->termin_ke)
+                <span class="text-muted">(Termin {{ $b->sertifikatPembayaran?->termin_ke }})</span>
+              @endif
+            </td>
+            <td class="text-center">
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                  Menu Aksi
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <a href="{{ route('bast.show', $b->id) }}" class="dropdown-item">
+                      <i data-feather="eye" class="me-2"></i>Detail
+                    </a>
+                  </li>
+                  @if(($b->status ?? 'draft') !== 'approved')
+                    <li>
+                      <form action="{{ route('bast.approve', $b->id) }}" method="POST">
+                        @csrf
+                        <button type="submit" class="dropdown-item" onclick="return confirm('Setujui BAST {{ $b->nomor }}?');">
+                          <i data-feather="check-circle" class="me-2"></i>Setujui
+                        </button>
+                      </form>
+                    </li>
+                  @endif
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <a target="_blank" href="{{ route('bast.pdf', $b->id) }}" class="dropdown-item">
+                      <i data-feather="download" class="me-2"></i>Unduh PDF
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </td>
+          </tr>
+        @empty
+          <tr>
+            <td colspan="10" class="text-center text-muted py-3">Belum ada BAST untuk penawaran ini.</td>
+          </tr>
         @endforelse
       </tbody>
     </table>

@@ -164,11 +164,11 @@
 
       {{-- TOTAL (jumlah hanya kolom bobot) --}}
       @php
-        // konversi kembali ke desimal 2 digit
+        // konversi kembali ke desimal 2 digit dan batasi max 100
         $totWi    = round($totWiInt / 100, 2);
-        $totPrev  = round($totPrevInt / 100, 2);
+        $totPrev  = min(100.00, round($totPrevInt / 100, 2));
         $totDelta = round($totDeltaInt / 100, 2);
-        $totNow   = round($totNowInt / 100, 2);
+        $totNow   = min(100.00, round($totNowInt / 100, 2));
       @endphp
       <tr class="row-total">
         <td colspan="2" class="right">TOTAL</td>

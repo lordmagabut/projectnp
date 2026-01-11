@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 use App\Models\SertifikatPembayaran;
@@ -11,6 +12,7 @@ use App\Models\Bapp;
 use App\Models\ProyekTaxProfile;
 use App\Models\SalesOrder;
 use App\Models\FakturPenjualan;
+use App\Services\BastService;
 
 class SertifikatPembayaranController extends Controller
 {
@@ -501,6 +503,16 @@ class SertifikatPembayaranController extends Controller
             
             $umPenjualan->updateNominalDigunakan($pemotongan_um_nilai);
         }
+    }
+
+    // Auto-generate BAST 1 & BAST 2 ketika progress kumulatif sudah 100%
+    try {
+        BastService::ensureForSertifikat($sp);
+    } catch (\Throwable $e) {
+        Log::warning('Gagal auto-generate BAST dari Sertifikat Pembayaran', [
+            'sp_id' => $sp->id ?? null,
+            'error' => $e->getMessage(),
+        ]);
     }
     
     return redirect()->route('sertifikat.show', $sp->id)->with('success','Sertifikat tersimpan (delta).');

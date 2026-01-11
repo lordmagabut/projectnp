@@ -87,6 +87,11 @@ class SertifikatPembayaran extends Model
         return $this->belongsTo(\App\Models\Bapp::class);
     }
 
+    public function penawaran()
+    {
+        return $this->belongsTo(\App\Models\RabPenawaranHeader::class, 'penawaran_id');
+    }
+
     /* ======================= SCOPES ========================= */
     public function scopeForProyek($q, $proyekId)
     {
@@ -175,6 +180,12 @@ class SertifikatPembayaran extends Model
                     round((float)$m->persen_progress - (float)$m->persen_progress_prev, 4)
                 );
             }
+        });
+
+        // Hapus BAST terkait ketika sertifikat pembayaran dihapus
+        static::deleting(function (self $m) {
+            // Hapus semua BAST yang terkait dengan sertifikat pembayaran ini
+            \App\Models\Bast::where('sertifikat_pembayaran_id', $m->id)->delete();
         });
     }
 

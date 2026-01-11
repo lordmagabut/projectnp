@@ -6,18 +6,21 @@
 
   $fmt = fn($n)=>number_format((float)$n, 2, ',', '.');
   $bapp->loadMissing('details','penawaran');
-  // hindari drift: akumulasi integer (x100)
-  $totWiInt = $totPrevInt = $totDeltaInt = $totNowInt = 0;
+  
+  // Hitung total dengan precision tinggi, lalu batasi max 100
+  $totWi = $totPrev = $totDelta = $totNow = 0;
   foreach ($bapp->details as $d) {
-    $totWiInt    += (int) round(((float)$d->bobot_item) * 100);
-    $totPrevInt  += (int) round(((float)$d->prev_pct) * 100);
-    $totDeltaInt += (int) round(((float)$d->delta_pct) * 100);
-    $totNowInt   += (int) round(((float)$d->now_pct) * 100);
+    $totWi    += (float)$d->bobot_item;
+    $totPrev  += (float)$d->prev_pct;
+    $totDelta += (float)$d->delta_pct;
+    $totNow   += (float)$d->now_pct;
   }
-  $totWi    = round($totWiInt / 100, 2);
-  $totPrev  = round($totPrevInt / 100, 2);
-  $totDelta = round($totDeltaInt / 100, 2);
-  $totNow   = round($totNowInt / 100, 2);
+  
+  // Batasi maksimal 100.00 untuk progress
+  $totWi    = round($totWi, 2);
+  $totPrev  = min(100.00, round($totPrev, 2));
+  $totDelta = round($totDelta, 2);
+  $totNow   = min(100.00, round($totNow, 2));
 @endphp
 
 <div class="card shadow-sm animate__animated animate__fadeIn">

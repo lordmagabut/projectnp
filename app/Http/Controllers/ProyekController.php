@@ -336,9 +336,9 @@ public function update(Request $request, $id)
             'id'                  => $row->id,
             'minggu_ke'           => $mingguN,
             'tanggal'             => $row->tanggal,
-            'progress_sebelumnya' => round($prev, 2),
+            'progress_sebelumnya' => min(100.00, round($prev, 2)),
             'pertumbuhan'         => $deltaThis,
-            'progress_saat_ini'   => round($prev + $deltaThis, 2),
+            'progress_saat_ini'   => min(100.00, round($prev + $deltaThis, 2)),
             'status'              => $row->status,
         ];
         }

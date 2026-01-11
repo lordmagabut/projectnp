@@ -235,7 +235,7 @@ $prevPctItemMap = DB::table('rab_progress_detail as rpd')
     ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
     ->where('rp.status', 'final') 
     ->whereIn('rpd.rab_detail_id', $detailIds)
-    ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.pct_item_minggu_ini) as s'))
+    ->selectRaw('rpd.rab_detail_id, COALESCE(SUM(rpd.pct_item_minggu_ini), 0) as s')
     ->groupBy('rpd.rab_detail_id')
     ->pluck('s','rpd.rab_detail_id')
     ->toArray();
@@ -329,7 +329,7 @@ $realizedMap = $prevMap;
             ->where('sd.proyek_id', $proyek->id)
             ->when($penawaranId, fn($q)=>$q->where('sd.penawaran_id', $penawaranId))
             ->whereIn('pi.rab_detail_id', $detailIds)
-            ->select('pi.rab_detail_id as did', DB::raw('SUM(sd.bobot_mingguan) as s'))
+            ->selectRaw('pi.rab_detail_id as did, SUM(sd.bobot_mingguan) as s')
             ->groupBy('pi.rab_detail_id')
             ->pluck('s', 'did')->toArray();
 
@@ -356,7 +356,7 @@ $realizedMap = $prevMap;
             ->when($penawaranId, fn($q)=>$q->where('rp.penawaran_id', $penawaranId))
             ->where('rp.status', 'final')
             ->whereIn('rpd.rab_detail_id', $detailIds)
-            ->select('rpd.rab_detail_id', DB::raw('SUM(rpd.pct_item_minggu_ini) as s'))
+            ->selectRaw('rpd.rab_detail_id, COALESCE(SUM(rpd.pct_item_minggu_ini), 0) as s')
             ->groupBy('rpd.rab_detail_id')
             ->pluck('s','rpd.rab_detail_id')->toArray();
 
@@ -794,13 +794,13 @@ private function realizedToDateMap(int $proyekId, ?int $penawaranId, int $uptoWe
 
         // Δ minggu ini (% ITEM) pada progress yang sedang dilihat
             $deltaPctDetails = RabProgressDetail::where('rab_progress_id', $progress->id)
-                ->select('rab_detail_id', 'pct_item_minggu_ini')
+                ->selectRaw('rab_detail_id, COALESCE(pct_item_minggu_ini, 0) as pct_item_minggu_ini')
                 ->get();
         
             $deltaPctMap = [];
             $deltaPctInt = [];
             foreach ($deltaPctDetails as $d) {
-                $deltaPctInt[$d->rab_detail_id] = ($deltaPctInt[$d->rab_detail_id] ?? 0) + (int)round((float)$d->pct_item_minggu_ini * 100);
+                $deltaPctInt[$d->rab_detail_id] = ($deltaPctInt[$d->rab_detail_id] ?? 0) + (int)round((float)($d->pct_item_minggu_ini ?? 0) * 100);
             }
             foreach ($deltaPctInt as $did => $v) {
                 $deltaPctMap[$did] = round($v / 100, 2);
@@ -814,13 +814,13 @@ private function realizedToDateMap(int $proyekId, ?int $penawaranId, int $uptoWe
             ->where('rp.status', 'final')              // hanya FINAL, revisi/draft diabaikan
             ->where('rp.minggu_ke', '<', $mingguKe)
             ->whereIn('rpd.rab_detail_id', $detailIds)
-            ->select('rpd.rab_detail_id', 'rpd.pct_item_minggu_ini')
+            ->selectRaw('rpd.rab_detail_id, COALESCE(rpd.pct_item_minggu_ini, 0) as pct_item_minggu_ini')
             ->get();
 
         $prevPctItemMap = [];
         $prevPctInt = [];
         foreach ($prevPctItemRows as $row) {
-            $prevPctInt[$row->rab_detail_id] = ($prevPctInt[$row->rab_detail_id] ?? 0) + (int)round((float)$row->pct_item_minggu_ini * 100);
+            $prevPctInt[$row->rab_detail_id] = ($prevPctInt[$row->rab_detail_id] ?? 0) + (int)round((float)($row->pct_item_minggu_ini ?? 0) * 100);
         }
         foreach ($prevPctInt as $did => $v) {
             $prevPctItemMap[$did] = round($v / 100, 2);
@@ -1234,7 +1234,8 @@ public function destroy(Proyek $proyek, RabProgress $progress)
         ->where('rp.minggu_ke','<',$mingguKe)
         ->whereIn('rpd.rab_detail_id',$detailIds)
         ->groupBy('rpd.rab_detail_id')
-        ->pluck(DB::raw('SUM(rpd.pct_item_minggu_ini)'),'rpd.rab_detail_id')->toArray();
+        ->selectRaw('rpd.rab_detail_id, SUM(rpd.pct_item_minggu_ini) as pct_sum')
+        ->pluck('pct_sum','rpd.rab_detail_id')->toArray();
 
     $prevProj = DB::table('rab_progress_detail as rpd')
         ->join('rab_progress as rp','rp.id','=','rpd.rab_progress_id')
@@ -1244,12 +1245,14 @@ public function destroy(Proyek $proyek, RabProgress $progress)
         ->where('rp.minggu_ke','<',$mingguKe)
         ->whereIn('rpd.rab_detail_id',$detailIds)
         ->groupBy('rpd.rab_detail_id')
-        ->pluck(DB::raw('SUM(rpd.bobot_minggu_ini)'),'rpd.rab_detail_id')->toArray();
+        ->selectRaw('rpd.rab_detail_id, SUM(rpd.bobot_minggu_ini) as bobot_sum')
+        ->pluck('bobot_sum','rpd.rab_detail_id')->toArray();
 
     // Delta milik progress yang sedang diedit (draft revisi)
     $currDeltaPct = RabProgressDetail::where('rab_progress_id',$progress->id)
+        ->selectRaw('rab_detail_id, COALESCE(SUM(pct_item_minggu_ini), 0) as delta_sum')
         ->groupBy('rab_detail_id')
-        ->pluck(DB::raw('SUM(pct_item_minggu_ini)'),'rab_detail_id')->toArray();
+        ->pluck('delta_sum','rab_detail_id')->toArray();
 
     // now_pct = prevPct + deltaPct(draft)
     $prevMap = [];
@@ -1404,16 +1407,27 @@ if (\Schema::hasColumn($sdTbl, 'rab_detail_id')) {
         ->where('rp.status','final')
         ->where('rp.minggu_ke','<',$mingguKe)
         ->whereIn('rpd.rab_detail_id',$detailIds)
+        ->selectRaw('rpd.rab_detail_id, COALESCE(SUM(rpd.pct_item_minggu_ini), 0) as pct_sum')
         ->groupBy('rpd.rab_detail_id')
-        ->pluck(DB::raw('SUM(rpd.pct_item_minggu_ini)'),'rpd.rab_detail_id')->toArray();
+        ->pluck('pct_sum','rpd.rab_detail_id')->toArray();
 
     DB::transaction(function() use ($request,$progress,$detailIds,$bobotSnap,$prevPctItem,$nowPctById){
         // replace semua detail progress ini
         RabProgressDetail::where('rab_progress_id',$progress->id)->delete();
 
+        // HITUNG prev project progress (dalam % proyek) untuk constraint
+        $prevProjTotal = 0.0;
+        foreach ($detailIds as $did) {
+            $prevPct = (float)($prevPctItem[$did] ?? 0.0);
+            $bobotItem = (float)($bobotSnap[$did] ?? 0.0);
+            $prevProjTotal += $bobotItem * ($prevPct / 100.0);
+        }
+        $prevProjTotal = round($prevProjTotal, 2);
+
         // Gunakan akumulasi raw lalu koreksi selisih setelah dibulatkan per-item
         $rows = [];
         $totDeltaProj_raw = 0.0;  // akumulasi delta proyek (raw)
+        $totDeltaPct_raw = 0.0;   // akumulasi delta % item (raw)
         
         foreach ($detailIds as $did) {
             $bobotItem = (float)($bobotSnap[$did] ?? 0.0);
@@ -1426,6 +1440,7 @@ if (\Schema::hasColumn($sdTbl, 'rab_detail_id')) {
 
             // Akumulasi raw (tanpa dibulatkan per-item)
             $totDeltaProj_raw += $deltaProj_Raw;
+            $totDeltaPct_raw  += $deltaPctRaw;
 
             // Bulatkan untuk penyimpanan
             $deltaPct  = round($deltaPctRaw, 2);
@@ -1444,15 +1459,56 @@ if (\Schema::hasColumn($sdTbl, 'rab_detail_id')) {
 
         // Hitung total delta yang benar dari akumulasi raw
         $totalDeltaProjCorrect = round($totDeltaProj_raw, 2);
+        $totalDeltaPctCorrect  = round($totDeltaPct_raw, 2);
         
-        // Jika ada perbedaan rounding, koreksi item pertama
-        if (count($rows) > 0 && $totalDeltaProjCorrect != round(array_sum(array_column($rows, 'bobot_minggu_ini')), 2)) {
-            $currentSum = round(array_sum(array_column($rows, 'bobot_minggu_ini')), 2);
-            $diff = $totalDeltaProjCorrect - $currentSum;
-            if (abs($diff) > 0.001) {
-                // Koreksi item pertama untuk memastikan total tepat
-                $rows[0]['bobot_minggu_ini'] = round((float)$rows[0]['bobot_minggu_ini'] + $diff, 2);
+        // Batasi agar total progress proyek tidak melebihi 100 (berdasarkan % proyek)
+        if ($prevProjTotal >= 100.00) {
+            // Sudah penuh, delta harus nol
+            $totalDeltaPctCorrect  = 0.0;
+            $totalDeltaProjCorrect = 0.0;
+        } else {
+            if ($prevProjTotal + $totalDeltaProjCorrect > 100.00) {
+                $totalDeltaProjCorrect = round(100.00 - $prevProjTotal, 2);
             }
+            // Untuk % item, tidak dibatasi oleh total proyek karena per-item bisa 0..100
+        }
+        
+        // Jika ada perbedaan rounding, koreksi dengan aman (tanpa menjadikan baris pertama 0 jika bisa dihindari)
+        if (count($rows) > 0) {
+            $currentProjSum = round(array_sum(array_column($rows, 'bobot_minggu_ini')), 2);
+            $projDiff = $totalDeltaProjCorrect - $currentProjSum;
+
+            $currentPctSum = round(array_sum(array_column($rows, 'pct_item_minggu_ini')), 2);
+            $pctDiff = $totalDeltaPctCorrect - $currentPctSum;
+
+            $applySafe = function(array &$rows, string $col, float $diff): void {
+                if (abs($diff) <= 0.001) return;
+                if ($diff > 0) {
+                    // Tambahkan ke baris dengan nilai terbesar agar tidak mempengaruhi baris kecil
+                    $colVals = array_column($rows, $col);
+                    $idx = $colVals ? array_search(max($colVals), $colVals) : 0;
+                    $rows[$idx][$col] = round((float)$rows[$idx][$col] + $diff, 2);
+                    return;
+                }
+                // diff negatif: kurangi dari baris-baris terbesar tanpa membuat negatif
+                $remaining = -$diff;
+                // urutkan index berdasarkan nilai kolom desc
+                $indices = array_keys($rows);
+                usort($indices, function($a,$b) use ($rows,$col){
+                    return ($rows[$b][$col] <=> $rows[$a][$col]);
+                });
+                foreach ($indices as $i) {
+                    $val = (float)$rows[$i][$col];
+                    if ($val <= 0) continue;
+                    $take = min($remaining, $val);
+                    $rows[$i][$col] = round($val - $take, 2);
+                    $remaining = round($remaining - $take, 2);
+                    if ($remaining <= 0.001) break;
+                }
+            };
+
+            $applySafe($rows, 'bobot_minggu_ini', $projDiff);
+            $applySafe($rows, 'pct_item_minggu_ini', $pctDiff);
         }
 
         if (!empty($rows)) DB::table('rab_progress_detail')->insert($rows);
