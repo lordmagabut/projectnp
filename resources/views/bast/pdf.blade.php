@@ -12,7 +12,7 @@
         body {
             font-family: 'Arial', sans-serif;
             font-size: 9pt;
-            line-height: 1.3;
+            line-height: 1.5;
             color: #000;
             margin: 0;
             padding: 0;
@@ -135,7 +135,7 @@
             font-size: 9pt;
         }
         .signature-space {
-            height: 45px;
+            height: 90px;
         }
         .signature-name {
             font-weight: bold;
@@ -164,18 +164,42 @@
         <table class="info-table">
             <tr>
                 <td>
-                    <span class="label">Nomor</span>: {{ $bast->nomor ?? '-' }}
+                    <table style="width: 100%; border: none;">
+                        <tr>
+                            <td style="width: 80px; border: none; padding: 0;">Nomor</td>
+                            <td style="width: 5px; border: none; padding: 0;">:</td>
+                            <td style="border: none; padding: 0;">{{ $bast->nomor ?? '-' }}</td>
+                        </tr>
+                    </table>
                 </td>
                 <td>
-                    <span class="label">Proyek</span>: {{ $bast->sertifikatPembayaran?->penawaran?->nama_penawaran ?? '-' }}
+                    <table style="width: 100%; border: none;">
+                        <tr>
+                            <td style="width: 80px; border: none; padding: 0;">Proyek</td>
+                            <td style="width: 5px; border: none; padding: 0;">:</td>
+                            <td style="border: none; padding: 0;">{{ $bast->sertifikatPembayaran?->penawaran?->nama_penawaran ?? '-' }}</td>
+                        </tr>
+                    </table>
                 </td>
             </tr>
             <tr>
                 <td>
-                    <span class="label">Tanggal</span>: {{ optional($bast->tanggal_bast)->format('d F Y') ?? '-' }}
+                    <table style="width: 100%; border: none;">
+                        <tr>
+                            <td style="width: 80px; border: none; padding: 0;">Tanggal</td>
+                            <td style="width: 5px; border: none; padding: 0;">:</td>
+                            <td style="border: none; padding: 0;">{{ optional($bast->tanggal_bast)->format('d F Y') ?? '-' }}</td>
+                        </tr>
+                    </table>
                 </td>
                 <td>
-                    <span class="label">SPK No.</span>: {{ $bast->proyek?->no_spk ?? '-' }}
+                    <table style="width: 100%; border: none;">
+                        <tr>
+                            <td style="width: 80px; border: none; padding: 0;">SPK No.</td>
+                            <td style="width: 5px; border: none; padding: 0;">:</td>
+                            <td style="border: none; padding: 0;">{{ $bast->proyek?->no_spk ?? '-' }}</td>
+                        </tr>
+                    </table>
                 </td>
             </tr>
         </table>
