@@ -110,11 +110,9 @@
             @method('PUT')
 
             <div class="mb-3">
-                <label for="kode" class="form-label d-flex align-items-center"><i data-feather="hash" class="me-2 text-muted"></i> Kode Material <span class="text-danger">*</span></label>
-                <input type="text" class="form-control @error('kode') is-invalid @enderror" id="kode" name="kode" value="{{ old('kode', $material->kode) }}" required>
-                @error('kode')
-                    <div class="invalid-feedback">{{ $message }}</div>
-                @enderror
+                <label for="kode" class="form-label">Kode Material (Tetap)</label>
+                <input type="text" class="form-control" id="kode" readonly style="background-color: #e9ecef; font-weight: 600; color: #0d6efd;" value="{{ $material->kode }}">
+                <small class="text-muted d-block mt-1">Kode tidak dapat diubah setelah dibuat</small>
             </div>
 
             <div class="mb-3">

@@ -24,16 +24,16 @@ class AhspController extends Controller
 
     public function create()
     {
+        $nextKode = AhspHeader::generateKode();
         $kategoris = AhspKategori::all();
         $materials = HsdMaterial::orderBy('nama')->get();
         $upahs = HsdUpah::orderBy('jenis_pekerja')->get();
-        return view('ahsp.create', compact('kategoris', 'materials', 'upahs'));
+        return view('ahsp.create', compact('nextKode', 'kategoris', 'materials', 'upahs'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'kode_pekerjaan' => 'required|string|max:50|unique:ahsp_header',
             'nama_pekerjaan' => 'required|string|max:255',
             'satuan'         => 'required|string|max:20',
             'kategori_id'    => 'nullable|exists:ahsp_kategori,id',
@@ -46,6 +46,9 @@ class AhspController extends Controller
 
         DB::beginTransaction();
         try {
+            // Auto-generate kode
+            $kode = AhspHeader::generateKode();
+            
             $total_harga_sebenarnya = 0;
 
             foreach ($request->items as $item) {
@@ -59,7 +62,7 @@ class AhspController extends Controller
             $rounded = (int) ceil($total_harga_sebenarnya / 1000) * 1000;
 
             $header = AhspHeader::create([
-                'kode_pekerjaan' => $request->kode_pekerjaan,
+                'kode_pekerjaan' => $kode,
                 'nama_pekerjaan' => $request->nama_pekerjaan,
                 'satuan'         => $request->satuan,
                 'kategori_id'    => $request->kategori_id,
@@ -165,7 +168,6 @@ class AhspController extends Controller
         }
 
         $request->validate([
-            'kode_pekerjaan' => 'required|string|max:50|unique:ahsp_header,kode_pekerjaan,' . $id,
             'nama_pekerjaan' => 'required|string|max:255',
             'satuan'         => 'required|string|max:20',
             'kategori_id'    => 'nullable|exists:ahsp_kategori,id',
@@ -196,7 +198,6 @@ class AhspController extends Controller
             $rounded = (int) ceil($total_harga_sebenarnya / 1000) * 1000;
 
             $ahsp->update([
-                'kode_pekerjaan' => $request->kode_pekerjaan,
                 'nama_pekerjaan' => $request->nama_pekerjaan,
                 'satuan'         => $request->satuan,
                 'kategori_id'    => $request->kategori_id,

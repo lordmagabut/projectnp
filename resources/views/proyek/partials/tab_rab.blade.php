@@ -50,6 +50,12 @@
             <i class="fas fa-plus-circle me-2 text-primary"></i> Buat/Edit RAB Manual
           </a>
         </li>
+        <li><hr class="dropdown-divider"></li>
+        <li>
+          <a class="dropdown-item d-flex align-items-center" href="{{ route('rab.export', $proyek->id) }}">
+            <i class="fas fa-file-excel me-2 text-success"></i> Export RAB ke Excel
+          </a>
+        </li>
         <li>
           <a class="dropdown-item d-flex align-items-center" href="{{ route('rab.template') }}">
             <i class="fas fa-download me-2 text-success"></i> Download Template Import

@@ -13,8 +13,9 @@
             @csrf @method('PUT')
 
             <div class="mb-3">
-                <label for="kode" class="form-label">Kode</label>
-                <input type="text" name="kode" id="kode" class="form-control" required value="{{ old('kode', $upah->kode) }}">
+                <label for="kode" class="form-label">Kode (Tetap)</label>
+                <input type="text" class="form-control" id="kode" readonly style="background-color: #e9ecef; font-weight: 600; color: #0d6efd;" value="{{ $upah->kode }}">
+                <small class="text-muted d-block mt-1">Kode tidak dapat diubah setelah dibuat</small>
             </div>
 
             <div class="mb-3">

@@ -12,13 +12,13 @@ class HsdUpahController extends Controller
 {
     public function create()
     {
-        return view('hsd_upah.create');
+        $nextKode = HsdUpah::generateKode();
+        return view('hsd_upah.create', compact('nextKode'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'kode'          => 'required|string|max:50|unique:hsd_upah,kode',
             'jenis_pekerja' => 'required|string|max:255',
             'satuan'        => 'required|string|max:50',
             'harga_satuan'  => 'required|numeric|min:0',
@@ -26,7 +26,16 @@ class HsdUpahController extends Controller
         ]);
 
         DB::transaction(function () use ($request) {
-            $upah = HsdUpah::create($request->only('kode','jenis_pekerja','satuan','harga_satuan','keterangan'));
+            // Auto-generate kode
+            $kode = HsdUpah::generateKode();
+            
+            $upah = HsdUpah::create([
+                'kode'          => $kode,
+                'jenis_pekerja' => $request->jenis_pekerja,
+                'satuan'        => $request->satuan,
+                'harga_satuan'  => $request->harga_satuan,
+                'keterangan'    => $request->keterangan,
+            ]);
 
             // LOG: create
             ActivityLog::create([
@@ -59,7 +68,6 @@ class HsdUpahController extends Controller
         $upah = HsdUpah::findOrFail($id);
 
         $request->validate([
-            'kode'          => 'required|string|max:50|unique:hsd_upah,kode,' . $upah->id,
             'jenis_pekerja' => 'required|string|max:255',
             'satuan'        => 'required|string|max:50',
             'harga_satuan'  => 'required|numeric|min:0',

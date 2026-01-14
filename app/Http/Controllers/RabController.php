@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Imports\RABImport;
+use App\Exports\RABExport;
 use App\Models\RabHeader;
 use App\Models\RabDetail;
 use App\Models\RabKategori;
@@ -64,6 +65,14 @@ class RabController extends Controller
         }
 
         return redirect()->route('proyek.show', $request->proyek_id)->with('success', 'RAB berhasil diimport!');
+    }
+
+    public function export($proyek_id)
+    {
+        $proyek = Proyek::findOrFail($proyek_id);
+        $fileName = 'RAB_' . str_replace(' ', '_', $proyek->nama_proyek) . '_' . date('Ymd_His') . '.xlsx';
+
+        return Excel::download(new RABExport($proyek_id), $fileName);
     }
 
     public function reset($proyek_id)

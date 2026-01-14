@@ -12,13 +12,13 @@ class HsdMaterialController extends Controller
 {
     public function create()
     {
-        return view('hsd_material.create');
+        $nextKode = HsdMaterial::generateKode();
+        return view('hsd_material.create', compact('nextKode'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'kode'         => 'required|string|max:50|unique:hsd_material,kode',
             'nama'         => 'required|string|max:255',
             'satuan'       => 'required|string|max:50',
             'harga_satuan' => 'required|numeric|min:0',
@@ -26,7 +26,16 @@ class HsdMaterialController extends Controller
         ]);
 
         DB::transaction(function () use ($request) {
-            $material = HsdMaterial::create($request->only('kode','nama','satuan','harga_satuan','keterangan'));
+            // Auto-generate kode
+            $kode = HsdMaterial::generateKode();
+            
+            $material = HsdMaterial::create([
+                'kode'         => $kode,
+                'nama'         => $request->nama,
+                'satuan'       => $request->satuan,
+                'harga_satuan' => $request->harga_satuan,
+                'keterangan'   => $request->keterangan,
+            ]);
 
             // LOG: create
             ActivityLog::create([
@@ -59,7 +68,6 @@ class HsdMaterialController extends Controller
         $material = HsdMaterial::findOrFail($id);
 
         $request->validate([
-            'kode'         => 'required|string|max:50|unique:hsd_material,kode,' . $material->id,
             'nama'         => 'required|string|max:255',
             'satuan'       => 'required|string|max:50',
             'harga_satuan' => 'required|numeric|min:0',

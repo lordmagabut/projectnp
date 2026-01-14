@@ -221,6 +221,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/rab/{proyek_id}',                 [RabController::class, 'index'])->name('rab.index');
     Route::get('/proyek/{proyek_id}/rab',          [RabController::class, 'input'])->name('rab.input');
     Route::post('/rab/import',                     [RabController::class, 'import'])->name('rab.import');
+    Route::get('/rab/export/{proyek_id}',          [RabController::class, 'export'])->name('rab.export');
     Route::delete('/rab/reset/{proyek_id}',        [RabController::class, 'reset'])->name('rab.reset');
 
     // Template import RAB

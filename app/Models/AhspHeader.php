@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class AhspHeader extends Model
 {
@@ -31,5 +32,26 @@ class AhspHeader extends Model
     public function getTotalUpahAttribute()
     {
         return $this->details->where('tipe', 'upah')->sum('subtotal');
+    }
+
+    /**
+     * Generate kode otomatis dengan format AHSP-nnnnn
+     * Contoh: AHSP-00001, AHSP-00002, dst
+     */
+    public static function generateKode()
+    {
+        $lastRecord = self::orderByDesc('id')->first();
+        $lastNumber = 0;
+
+        if ($lastRecord && $lastRecord->kode_pekerjaan) {
+            // Ekstrak angka dari kode terakhir (format: AHSP-nnnnn)
+            $matches = [];
+            if (preg_match('/AHSP-(\d+)/', $lastRecord->kode_pekerjaan, $matches)) {
+                $lastNumber = intval($matches[1]);
+            }
+        }
+
+        $newNumber = $lastNumber + 1;
+        return sprintf('AHSP-%05d', $newNumber);
     }
 }

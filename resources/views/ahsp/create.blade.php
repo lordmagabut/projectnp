@@ -116,9 +116,12 @@
 
             <div class="row mb-3">
                 <div class="col-md-4">
-                    <label class="form-label">Kode Pekerjaan <span class="text-danger">*</span></label>
-                    <input type="text" name="kode_pekerjaan" class="form-control @error('kode_pekerjaan') is-invalid @enderror" value="{{ old('kode_pekerjaan') }}" required>
-                    @error('kode_pekerjaan') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    <label class="form-label">Kode Pekerjaan (Auto-generated)</label>
+                    @php
+                        $kodeValue = $nextKode ?? 'AHSP-00001';
+                    @endphp
+                    <input type="text" class="form-control" value="{{ $kodeValue }}" readonly style="background-color: #e9ecef; font-weight: 600; color: #0d6efd;">
+                    <small class="text-muted d-block mt-1">Kode akan di-assign otomatis dengan format AHSP-nnnnn</small>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Nama Pekerjaan <span class="text-danger">*</span></label>
