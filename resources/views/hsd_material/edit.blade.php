@@ -111,7 +111,7 @@
 
             <div class="mb-3">
                 <label for="kode" class="form-label">Kode Material (Tetap)</label>
-                <input type="text" class="form-control" id="kode" readonly style="background-color: #e9ecef; font-weight: 600; color: #0d6efd;" value="{{ $material->kode }}">
+                <input type="text" class="form-control" id="kode" name="kode" readonly style="background-color: #e9ecef; font-weight: 600; color: #0d6efd;" value="{{ old('kode', $material->kode) }}">
                 <small class="text-muted d-block mt-1">Kode tidak dapat diubah setelah dibuat</small>
             </div>
 

@@ -75,6 +75,10 @@ class HsdMaterialController extends Controller
             'sumber'       => 'nullable|string|max:255',
         ]);
 
+        if ($request->filled('kode') && $request->kode !== $material->kode) {
+            return back()->withErrors(['kode' => 'Kode material tidak boleh diubah.'])->withInput();
+        }
+
         DB::transaction(function () use ($request, $material) {
             // nilai sebelum
             $before = $material->only(['kode','nama','satuan','harga_satuan','keterangan']);
@@ -91,9 +95,7 @@ class HsdMaterialController extends Controller
                 ]);
             }
 
-            // update utama
             $material->update([
-                'kode'         => $request->kode,
                 'nama'         => $request->nama,
                 'satuan'       => $request->satuan,
                 'harga_satuan' => $request->harga_satuan,

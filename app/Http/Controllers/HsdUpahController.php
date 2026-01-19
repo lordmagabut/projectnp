@@ -88,8 +88,8 @@ class HsdUpahController extends Controller
                 ]);
             }
 
+            // Keep kode immutable; do not overwrite from request
             $upah->update([
-                'kode'          => $request->kode,
                 'jenis_pekerja' => $request->jenis_pekerja,
                 'satuan'        => $request->satuan,
                 'harga_satuan'  => $request->harga_satuan,
