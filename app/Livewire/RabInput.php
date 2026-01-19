@@ -92,16 +92,19 @@ class RabInput extends Component
         } elseif ($propertyName === 'newItem.ahsp_id') {
             if (!empty($this->newItem['ahsp_id'])) {
                 $komp = $this->getAhspKomponen((int) $this->newItem['ahsp_id']);
-                $this->newItem['deskripsi']      = $komp['nama'];
+                // Jangan override deskripsi jika pengguna sudah mengetik manual
+                if (!isset($this->newItem['deskripsi']) || trim((string)$this->newItem['deskripsi']) === '') {
+                    $this->newItem['deskripsi'] = $komp['nama'];
+                }
                 $this->newItem['satuan']         = $komp['satuan'];
-                $this->newItem['harga_material'] = (float)$komp['harga_material']; // <—
-                $this->newItem['harga_upah']     = (float)$komp['harga_upah'];     // <—
+                $this->newItem['harga_material'] = (float)$komp['harga_material'];
+                $this->newItem['harga_upah']     = (float)$komp['harga_upah'];
                 $this->newItem['harga_satuan']   = (float)$komp['harga_gabungan'];
             } else {
-                $this->newItem['deskripsi'] = '';
+                // Biarkan deskripsi tetap, hanya reset field turunan
                 $this->newItem['satuan']    = '';
-                $this->newItem['harga_material'] = 0; // <—
-                $this->newItem['harga_upah']     = 0; // <—
+                $this->newItem['harga_material'] = 0;
+                $this->newItem['harga_upah']     = 0;
                 $this->newItem['harga_satuan']   = 0;
             }
         }
@@ -479,7 +482,7 @@ class RabInput extends Component
             $d->ahsp_id = $this->editingDetailAhspId;
             $komp = $this->getAhspKomponen((int)$this->editingDetailAhspId);
             $d->satuan         = $komp['satuan'];
-            $d->deskripsi      = $komp['nama'];
+            // Jangan override deskripsi — tetap gunakan input manual dari pengguna
             $d->harga_material = (float)$komp['harga_material'];
             $d->harga_upah     = (float)$komp['harga_upah'];
             $d->harga_satuan   = (float)$komp['harga_gabungan'];

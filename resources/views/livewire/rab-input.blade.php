@@ -351,8 +351,7 @@
           const d = e.params?.data || {};
           @this.set('newItem.ahsp_id', d.id, true);
           @this.set('newItem.satuan', d.satuan ?? '', true);
-          const parts = (d.text || '').split(' - ');
-          @this.set('newItem.deskripsi', parts.slice(1).join(' - '), true);
+          // Jangan override deskripsi/spesifikasi agar input manual tetap tersimpan
         });
 
         // Preselect bila ada nilai existing
