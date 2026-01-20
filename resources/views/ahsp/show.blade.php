@@ -64,6 +64,12 @@
             <a href="{{ route('ahsp.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
                 <i class="fas fa-arrow-left me-1"></i> Kembali ke Daftar
             </a>
+            <form action="{{ route('ahsp.duplicate', $ahsp->id) }}" method="POST" class="d-inline-block" onsubmit="return confirm('Apakah Anda yakin ingin menduplikasi AHSP ini?');">
+                @csrf
+                <button type="submit" class="btn btn-sm btn-info rounded-pill" title="Duplikat AHSP">
+                    <i class="fas fa-copy me-1"></i> Duplikat
+                </button>
+            </form>
             <a href="{{ route('ahsp.edit', $ahsp->id) }}" class="btn btn-sm btn-primary rounded-pill" title="Edit AHSP">
                 <i class="fas fa-edit me-1"></i> Edit
             </a>

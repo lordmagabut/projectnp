@@ -293,7 +293,7 @@ class AhspController extends Controller
                 'user_agent'  => request()->userAgent(),
             ]);
 
-            return redirect()->route('ahsp.index')->with('success', 'AHSP berhasil diduplikasi menjadi: ' . $newAhsp->nama_pekerjaan);
+            return redirect()->route('ahsp.show', $newAhsp->id)->with('success', 'AHSP berhasil diduplikasi menjadi: ' . $newAhsp->nama_pekerjaan);
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect()->back()->with('error', 'Gagal menduplikasi AHSP: ' . $e->getMessage());
