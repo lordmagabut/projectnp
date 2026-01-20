@@ -1,0 +1,16 @@
+# Configuration untuk mendukung upload 100MB
+
+# Set upload max filesize ke 100MB
+php_value upload_max_filesize 100M
+
+# Set post max size ke 100MB  
+php_value post_max_size 100M
+
+# Set max execution time untuk upload besar
+php_value max_execution_time 300
+
+# Set max input time untuk upload besar
+php_value max_input_time 300
+
+# Memori yang dialokasikan untuk script
+php_value memory_limit 256M
