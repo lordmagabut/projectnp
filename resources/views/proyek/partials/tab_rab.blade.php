@@ -299,7 +299,9 @@
             </tbody>
             <tfoot class="table-light">
               <tr>
-                <td colspan="7" class="text-end fw-semibold">TOTAL HASIL</td>
+                <td colspan="7" class="text-end fw-semibold">TOTAL HASIL
+                  <div class="small text-muted">Total Volume: <span id="excelLikeTotVolRab">0</span></div>
+                </td>
                 <td class="text-end fw-semibold" id="excelLikeTotMatRab">Rp 0</td>
                 <td class="text-end fw-semibold" id="excelLikeTotJasaRab">Rp 0</td>
                 <td class="text-end fw-bold" id="excelLikeTotAllRab">Rp 0</td>
@@ -399,6 +401,7 @@ header_kode=1.1 | kode=1.1.1 | deskripsi=Land Clearing | satuan=m2 | volume=53.5
     const totM  = document.getElementById('excelLikeTotMatRab');
     const totJ  = document.getElementById('excelLikeTotJasaRab');
     const totA  = document.getElementById('excelLikeTotAllRab');
+    const totV  = document.getElementById('excelLikeTotVolRab');
 
     const fmtRp = n => 'Rp ' + (Number(n||0)).toLocaleString('id-ID', {maximumFractionDigits:0});
     const esc   = s => (s||'').replace(/[&<>"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
@@ -422,11 +425,11 @@ header_kode=1.1 | kode=1.1.1 | deskripsi=Land Clearing | satuan=m2 | volume=53.5
 
       if (!tokens.length) {
         tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Ketik kata kunci untuk menampilkan hasil…</td></tr>';
-        totM.textContent = fmtRp(0); totJ.textContent = fmtRp(0); totA.textContent = fmtRp(0);
+        totM.textContent = fmtRp(0); totJ.textContent = fmtRp(0); totA.textContent = fmtRp(0); totV.textContent = (0).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2});
         return;
       }
 
-      let sumM=0, sumJ=0, sumA=0, rows=[];
+      let sumM=0, sumJ=0, sumA=0, sumV=0, rows=[];
 
       ALL_ITEMS.forEach(it=>{
         const bucket = [it.kode, it.uraian, it.spesifikasi, it.area].join(' ').toLowerCase();
@@ -440,7 +443,8 @@ header_kode=1.1 | kode=1.1.1 | deskripsi=Land Clearing | satuan=m2 | volume=53.5
         const tJas = uJas * (it.volume || 0);
         const tAll = tMat + tJas;
 
-        sumM += tMat; sumJ += tJas; sumA += tAll;
+        const tVol = Number(it.volume || 0);
+        sumM += tMat; sumJ += tJas; sumA += tAll; sumV += tVol;
 
         rows.push(`
           <tr>
@@ -465,6 +469,7 @@ header_kode=1.1 | kode=1.1.1 | deskripsi=Land Clearing | satuan=m2 | volume=53.5
       totM.textContent = fmtRp(sumM);
       totJ.textContent = fmtRp(sumJ);
       totA.textContent = fmtRp(sumA);
+      totV.textContent = sumV.toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2});
     }
 
     qEl?.addEventListener('input',  filterAndRender);
