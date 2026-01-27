@@ -220,6 +220,96 @@
       </div>
     @endif
 
+    {{-- Excel-like filter: kumpulkan data item dari headers/details lalu render UI cari --}}
+    @php
+      $flatItemsRab = [];
+      foreach($headers as $h) {
+        $hdrKode = optional($h)->kode ?? '';
+        $hdrNama = optional($h)->deskripsi ?? '';
+        foreach(($h->rabDetails ?? []) as $d) {
+          $vol = (float)($d->volume ?? 0);
+          // try multiple possible price fields (from penawaran vs master RAB)
+          $unitMat = (float)($d->harga_material_penawaran_item ?? $d->harga_material ?? $d->harga_satuan ?? 0);
+          $unitJasa = (float)($d->harga_upah_penawaran_item ?? $d->harga_upah ?? 0);
+          // if still zero but there's a combined harga_satuan, use it as material
+          if ($unitMat == 0 && isset($d->harga_satuan) && (float)$d->harga_satuan > 0) {
+            $unitMat = (float)$d->harga_satuan;
+          }
+          $flatItemsRab[] = [
+            'kode' => (string)($d->kode ?? ''),
+            'uraian' => (string)($d->deskripsi ?? ''),
+            'spesifikasi' => (string)($d->spesifikasi ?? ''),
+            'area' => (string)($d->area ?? ''),
+            'header_kode' => (string)$hdrKode,
+            'header_nama' => (string)$hdrNama,
+            'volume' => $vol,
+            'satuan' => (string)($d->satuan ?? ''),
+            'unit_mat' => $unitMat,
+            'unit_jasa' => $unitJasa,
+            'tot_mat' => $unitMat * $vol,
+            'tot_jasa' => $unitJasa * $vol,
+          ];
+        }
+      }
+    @endphp
+
+    <div class="card mb-4 mt-4 animate__animated animate__fadeInUp">
+      <div class="card-header bg-light d-flex align-items-center justify-content-between">
+        <h5 class="mb-0 text-primary"><i class="fas fa-filter me-2"></i> Pekerjaan Per Item (Cari)</h5>
+      </div>
+      <div class="card-body">
+        <div class="row g-2 align-items-end mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Ketik kata kunci (contoh: <code>plafond</code>)</label>
+            <input id="excelLikeQueryRab" type="text" class="form-control" placeholder="Cari di kode, uraian, spesifikasi, atau area…">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Mode Pencarian</label>
+            <select id="excelLikeModeRab" class="form-select">
+              <option value="any">Mengandung salah satu kata</option>
+              <option value="all" selected>Harus mengandung semua kata</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <div class="form-check mt-4">
+              <input class="form-check-input" type="checkbox" value="1" id="excelLikeUseDiscountRab" checked>
+              <label class="form-check-label" for="excelLikeUseDiscountRab">Gunakan diskon global (jika ada)</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover table-bordered table-sm align-middle" id="tbl-excel-like-rab">
+            <thead class="table-light">
+              <tr>
+                <th style="width:10%">Kode</th>
+                <th>Uraian / Spesifikasi</th>
+                <th style="width:10%">Area</th>
+                <th class="text-end" style="width:10%">Volume</th>
+                <th style="width:8%">Sat</th>
+                <th class="text-end" style="width:11%">Hrg Sat Material</th>
+                <th class="text-end" style="width:11%">Hrg Sat Jasa</th>
+                <th class="text-end" style="width:11%">Total Material</th>
+                <th class="text-end" style="width:11%">Total Jasa</th>
+                <th class="text-end" style="width:11%">Total (Mat+Jasa)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="10" class="text-center text-muted py-3">Ketik kata kunci untuk menampilkan hasil…</td></tr>
+            </tbody>
+            <tfoot class="table-light">
+              <tr>
+                <td colspan="7" class="text-end fw-semibold">TOTAL HASIL</td>
+                <td class="text-end fw-semibold" id="excelLikeTotMatRab">Rp 0</td>
+                <td class="text-end fw-semibold" id="excelLikeTotJasaRab">Rp 0</td>
+                <td class="text-end fw-bold" id="excelLikeTotAllRab">Rp 0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -295,5 +385,91 @@ header_kode=1.1 | kode=1.1.1 | deskripsi=Land Clearing | satuan=m2 | volume=53.5
 @push('custom-scripts')
 <script>
   if (typeof feather !== 'undefined') { feather.replace(); }
+</script>
+
+<script>
+  (function(){
+    const ALL_ITEMS = @json($flatItemsRab);
+    const DISC_COEF = 1.0; // default, project-level discount not applied here
+
+    const qEl   = document.getElementById('excelLikeQueryRab');
+    const modeEl= document.getElementById('excelLikeModeRab');
+    const discEl= document.getElementById('excelLikeUseDiscountRab');
+    const tbody = document.querySelector('#tbl-excel-like-rab tbody');
+    const totM  = document.getElementById('excelLikeTotMatRab');
+    const totJ  = document.getElementById('excelLikeTotJasaRab');
+    const totA  = document.getElementById('excelLikeTotAllRab');
+
+    const fmtRp = n => 'Rp ' + (Number(n||0)).toLocaleString('id-ID', {maximumFractionDigits:0});
+    const esc   = s => (s||'').replace(/[&<>"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+    const mark  = (text, tokens) => {
+      if (!tokens.length) return esc(text||'');
+      let out = esc(text||'');
+      tokens.forEach(t=>{
+        if(!t) return;
+        const re = new RegExp('('+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig');
+        out = out.replace(re, '<mark>$1</mark>');
+      });
+      return out;
+    };
+
+    function filterAndRender(){
+      if(!tbody) return;
+      const raw = (qEl?.value || '').trim();
+      const tokens = raw.split(/\s+/).filter(Boolean);
+      const mode   = modeEl?.value || 'all';
+      const useDisc= !!discEl?.checked;
+
+      if (!tokens.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Ketik kata kunci untuk menampilkan hasil…</td></tr>';
+        totM.textContent = fmtRp(0); totJ.textContent = fmtRp(0); totA.textContent = fmtRp(0);
+        return;
+      }
+
+      let sumM=0, sumJ=0, sumA=0, rows=[];
+
+      ALL_ITEMS.forEach(it=>{
+        const bucket = [it.kode, it.uraian, it.spesifikasi, it.area].join(' ').toLowerCase();
+        const ok = (mode==='any') ? tokens.some(t=>bucket.includes(t.toLowerCase())) : tokens.every(t=>bucket.includes(t.toLowerCase()));
+        if (!ok) return;
+
+        const coef = useDisc ? DISC_COEF : 1.0;
+        const uMat = (it.unit_mat || 0) * coef;
+        const uJas = (it.unit_jasa || 0) * coef;
+        const tMat = uMat * (it.volume || 0);
+        const tJas = uJas * (it.volume || 0);
+        const tAll = tMat + tJas;
+
+        sumM += tMat; sumJ += tJas; sumA += tAll;
+
+        rows.push(`
+          <tr>
+            <td>${mark(it.kode, tokens)}</td>
+            <td>
+              <div class="fw-semibold">${mark(it.uraian, tokens)}</div>
+              ${it.spesifikasi ? `<div class="text-muted small">${mark(it.spesifikasi, tokens)}</div>` : ``}
+            </td>
+            <td>${mark(it.area, tokens)}</td>
+            <td class="text-end">${(it.volume ?? 0).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+            <td>${esc(it.satuan)}</td>
+            <td class="text-end">${fmtRp(uMat)}</td>
+            <td class="text-end">${fmtRp(uJas)}</td>
+            <td class="text-end">${fmtRp(tMat)}</td>
+            <td class="text-end">${fmtRp(tJas)}</td>
+            <td class="text-end fw-semibold">${fmtRp(tAll)}</td>
+          </tr>
+        `);
+      });
+
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="10" class="text-center text-muted py-3">Tidak ada item yang cocok.</td></tr>';
+      totM.textContent = fmtRp(sumM);
+      totJ.textContent = fmtRp(sumJ);
+      totA.textContent = fmtRp(sumA);
+    }
+
+    qEl?.addEventListener('input',  filterAndRender);
+    modeEl?.addEventListener('change', filterAndRender);
+    discEl?.addEventListener('change', filterAndRender);
+  })();
 </script>
 @endpush
