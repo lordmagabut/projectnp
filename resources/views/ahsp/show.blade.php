@@ -53,6 +53,55 @@
     .badge.bg-success {
         background-color: #28a745 !important;
     }
+
+
+    /* Cetak: sembunyikan elemen yang tidak perlu saat print */
+    @media print {
+        @page {
+            size: A4;
+            margin: 12mm;
+        }
+
+        html, body {
+            width: 210mm;
+        }
+
+        .no-print,
+        .no-print * {
+            display: none !important;
+            visibility: hidden !important;
+        }
+
+
+        .card {
+            box-shadow: none;
+        }
+        .table-bordered thead th {
+            background-color: #ffffff !important;
+        }
+
+        /* Hindari pemotongan yang buruk pada tabel saat pindah halaman */
+        table { page-break-inside: auto; }
+        tr    { page-break-inside: avoid; page-break-after: auto; }
+        thead { display: table-header-group; }
+        tfoot { display: table-footer-group; }
+
+        /* Pastikan tabel pas A4: lebar penuh dan tipografi efisien */
+        .table {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        .table th, .table td {
+            word-break: break-word;
+            white-space: normal;
+            font-size: 11pt;
+            padding: 6pt 6pt;
+        }
+        .table thead th {
+            font-size: 11pt;
+            padding: 6pt 6pt;
+        }
+    }
 </style>
 @endpush
 
@@ -60,7 +109,7 @@
 <div id="ahsp-{{ $ahsp->id }}" class="card animate__animated animate__fadeInDown">
     <div class="card-header">
         <h4 class="card-title mb-0"><i class="fas fa-info-circle me-2"></i> Detail Analisa Harga Satuan Pekerjaan</h4>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 no-print">
             <a href="{{ route('ahsp.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill">
                 <i class="fas fa-arrow-left me-1"></i> Kembali ke Daftar
             </a>
@@ -70,12 +119,17 @@
                     <i class="fas fa-copy me-1"></i> Duplikat
                 </button>
             </form>
+            <button type="button" class="btn btn-sm btn-outline-dark rounded-pill" onclick="window.print()" title="Cetak">
+                <i class="fas fa-print me-1"></i> Cetak
+            </button>
             <a href="{{ route('ahsp.edit', $ahsp->id) }}" class="btn btn-sm btn-primary rounded-pill" title="Edit AHSP">
                 <i class="fas fa-edit me-1"></i> Edit
             </a>
         </div>
     </div>
     <div class="card-body">
+        
+
         <h5 class="mb-3 text-primary"><i class="fas fa-clipboard-list me-2"></i> Informasi Umum</h5>
         <table class="table table-borderless mb-4">
             <tr>

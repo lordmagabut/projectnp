@@ -325,6 +325,11 @@
         $sectionMat  = $hasItems ? $section->items->sum(fn($it)=>(float)($it->harga_material_penawaran_item ?? 0) * (float)($it->volume ?? 0)) : 0;
         $sectionJasa = $hasItems ? $section->items->sum(fn($it)=>(float)($it->harga_upah_penawaran_item ?? 0)     * (float)($it->volume ?? 0)) : 0;
         $sectionTotal = $sectionMat + $sectionJasa;
+
+        // indentation: hitung kedalaman kode header (jumlah titik)
+        $sectionHeaderKode = optional($section->rabHeader)->kode ?? '';
+        $sectionHeaderDepth = is_string($sectionHeaderKode) ? substr_count($sectionHeaderKode, '.') : 0;
+        $sectionHeaderPad = $sectionHeaderDepth * 12; // px per level for header display
       @endphp
 
       <div class="card mb-3 animate__animated animate__fadeInUp animate__faster">
@@ -335,9 +340,9 @@
                aria-expanded="false"
                aria-controls="sectionCollapse{{ $section->id }}"
              @endif>
-          <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2">
             <i class="fas fa-folder me-2"></i>
-            {{ $section->rabHeader->kode ?? 'N/A' }} - {{ $section->rabHeader->deskripsi ?? 'Bagian RAB Tidak Ditemukan' }}
+            <div style="padding-left: {{ $sectionHeaderPad }}px">{{ $section->rabHeader->kode ?? 'N/A' }} - {{ $section->rabHeader->deskripsi ?? 'Bagian RAB Tidak Ditemukan' }}</div>
             @if($hasItems)
               <span class="ms-3 badge bg-dark">Profit: {{ number_format($section->profit_percentage, 2, ',', '.') }}%</span>
               <span class="ms-2 badge bg-dark">Overhead: {{ number_format($section->overhead_percentage, 2, ',', '.') }}%</span>
@@ -389,7 +394,13 @@
                         <tr class="row-area"><td colspan="8">Area: {{ $areaName }}</td></tr>
                       @endif
 
-                      @foreach($items as $item)
+                        @foreach($items as $item)
+                        @php
+                          $itemKode = (string)($item->kode ?? '');
+                          $itemDepth = is_string($itemKode) ? substr_count($itemKode, '.') : 0;
+                          $relativeDepth = max(0, $itemDepth - $sectionHeaderDepth);
+                          $itemPad = $relativeDepth * 10; // px per level for items
+                        @endphp
                         @php
                           $vol      = (float) ($item->volume ?? 0);
                           $unitMat  = (float) ($item->harga_material_penawaran_item ?? 0);
@@ -399,7 +410,7 @@
                           $subMaterial += $totMat; $subJasa += $totJasa;
                         @endphp
                         <tr>
-                          <td>{{ $item->kode }}</td>
+                          <td style="padding-left: {{ $itemPad }}px">{{ $item->kode }}</td>
                           <td>
                             {{ $item->deskripsi }}
                             @if(!empty($item->spesifikasi))

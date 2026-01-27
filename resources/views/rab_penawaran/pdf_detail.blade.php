@@ -130,6 +130,7 @@ body { font-family:'DejaVu Sans',sans-serif; font-size:10px; line-height:1.4; co
                         $secKode = optional($section->rabHeader)->kode ?? '';
                         $secDesc = optional($section->rabHeader)->deskripsi ?? '';
                         $subMaterial = 0; $subJasa = 0;
+                        $secDepth = is_string($secKode) ? substr_count($secKode, '.') : 0;
                     @endphp
 
                     @if($secKode && strpos($secKode, '.') !== false)
@@ -165,7 +166,13 @@ body { font-family:'DejaVu Sans',sans-serif; font-size:10px; line-height:1.4; co
                                 $uraian1baris = mb_strimwidth($item->deskripsi ?? '', 0, 100, '…', 'UTF-8');
                             @endphp
                             <tr>
-                                <td>{{ $item->kode }}</td>
+                                @php
+                                    $itemKode = (string)$item->kode;
+                                    $itemDepth = is_string($itemKode) ? substr_count($itemKode, '.') : 0;
+                                    $relative = max(0, $itemDepth - $secDepth);
+                                    $pad = $relative * 8;
+                                @endphp
+                                <td style="padding-left: {{ $pad }}px">{{ $item->kode }}</td>
                                 <td class="desc nowrap">
                                     {{ $uraian1baris }}
                                     @if(!empty($item->spesifikasi))

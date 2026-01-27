@@ -100,13 +100,15 @@
           if ($kode==='' || strpos($kode,'.')===false) continue;
 
           $secTotal = 0;
+          $depth = is_string($kode) ? substr_count($kode, '.') : 0;
+          $pad = $depth * 8;
           foreach ($sec->items as $it) {
             $v = (float)($it->volume ?? 0);
             $secTotal += ((float)($it->harga_material_penawaran_item ?? 0) + (float)($it->harga_upah_penawaran_item ?? 0)) * $v;
           }
         @endphp
         <tr>
-          <td>{{ $kode }}</td>
+          <td style="padding-left: {{ $pad }}px">{{ $kode }}</td>
           <td>{{ $desc }}</td>
           <td class="text-end currency">{!! rupiah_or_blank($secTotal) !!}</td>
         </tr>

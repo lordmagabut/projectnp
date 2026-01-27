@@ -126,6 +126,8 @@
                 $hasDetails = $h->rabDetails && $h->rabDetails->count() > 0;
                 $collapseId = 'collapse-'.$h->id;
                 $rowClass = $isHeaderUtama ? 'bg-light fw-bold text-primary' : '';
+                $headerDepth = max(0, substr_count((string)$h->kode, '.'));
+                $headerPad = $headerDepth * 18; // pixels per level
               @endphp
 
               <tr class="{{ $rowClass }} {{ $hasDetails ? 'accordion-toggle cursor-pointer' : '' }}"
@@ -135,8 +137,8 @@
                     aria-expanded="false"
                     aria-controls="{{ $collapseId }}"
                   @endif>
-                <td>{{ $h->kode }}</td>
-                <td>
+                <td style="padding-left: {{ $headerPad }}px">{{ $h->kode }}</td>
+                <td style="padding-left: {{ $headerPad }}px">
                   {{ $h->deskripsi }}
                   @if($hasDetails)
                     <i class="fas fa-chevron-down float-end collapse-icon"></i>
@@ -175,17 +177,22 @@
                                 </td>
                               </tr>
                             @endif
-                            @foreach($groupedDetails as $d)
-                              <tr>
-                                <td>{{ $d->kode }}</td>
-                                <td>{{ $d->deskripsi }}</td>
-                                <td>{{ $d->spesifikasi ?: '-' }}</td>
-                                <td>{{ $d->satuan }}</td>
-                                <td class="text-end">{{ number_format($d->volume, 2, ',', '.') }}</td>
-                                <td class="text-end">Rp {{ number_format($d->harga_satuan, 0, ',', '.') }}</td>
-                                <td class="text-end fw-bold">Rp {{ number_format($d->total, 0, ',', '.') }}</td>
-                              </tr>
-                            @endforeach
+                              @foreach($groupedDetails as $d)
+                                @php
+                                  $detailDepth = max(0, substr_count((string)$d->kode, '.'));
+                                  $relativeDepth = max(0, $detailDepth - $headerDepth);
+                                  $detailPad = $relativeDepth * 14; // smaller indent for details
+                                @endphp
+                                <tr>
+                                  <td style="padding-left: {{ $detailPad }}px">{{ $d->kode }}</td>
+                                  <td>{{ $d->deskripsi }}</td>
+                                  <td>{{ $d->spesifikasi ?: '-' }}</td>
+                                  <td>{{ $d->satuan }}</td>
+                                  <td class="text-end">{{ number_format($d->volume, 2, ',', '.') }}</td>
+                                  <td class="text-end">Rp {{ number_format($d->harga_satuan, 0, ',', '.') }}</td>
+                                  <td class="text-end fw-bold">Rp {{ number_format($d->total, 0, ',', '.') }}</td>
+                                </tr>
+                              @endforeach
                           @endforeach
                         </tbody>
                       </table>

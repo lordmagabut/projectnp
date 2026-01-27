@@ -119,9 +119,11 @@
             $secMat  += (float)($it->harga_material_penawaran_item ?? 0) * $v;
             $secJasa += (float)($it->harga_upah_penawaran_item     ?? 0) * $v;
           }
+          $depth = is_string($kode) ? substr_count($kode, '.') : 0;
+          $pad = $depth * 8;
         @endphp
         <tr>
-          <td>{{ $kode }}</td>
+          <td style="padding-left: {{ $pad }}px">{{ $kode }}</td>
           <td>{{ $desc }}</td>
           <td class="text-end currency">{!! rupiah_or_blank($secMat) !!}</td>
           <td class="text-end currency">{!! rupiah_or_blank($secJasa) !!}</td>
