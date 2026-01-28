@@ -169,6 +169,32 @@
   </div>
 </div>
 
+{{-- Modal untuk preview AHSP yang berbeda --}}
+<div class="modal fade" id="previewDifferentAhspModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i data-feather="eye" class="me-2"></i>Perbandingan Detail AHSP
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="previewDifferentContent">
+        <div class="text-center py-5">
+          <div class="spinner-border" role="status"></div>
+          <p class="mt-2">Memuat detail...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+        <button type="button" class="btn btn-primary" id="confirmDifferentSyncBtn" onclick="confirmDifferentSync()">
+          <i data-feather="download" class="me-1"></i>Update dengan Data Eksternal
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @endsection
 
 @push('custom-scripts')
@@ -448,11 +474,21 @@ function renderDifferent(type, pairs) {
   `;
 
   pairs.forEach((pair, idx) => {
+    // Tombol preview hanya untuk AHSP
+    const previewBtn = type === 'ahsp' ? `
+      <button class="btn btn-xs btn-info" title="Lihat Detail" onclick="showAhspDifferentPreview('${pair.external.id}', '${pair.local.id}')">
+        <i data-feather="eye" style="width:14px;height:14px;"></i>
+      </button>
+    ` : '';
+
     html += `
       <div class="card mb-3">
-        <div class="card-header d-flex align-items-center">
-          <input type="checkbox" class="item-checkbox me-2" data-id="${pair.external.id}" data-section="different-${type}">
-          <strong>${pair.local.kode || pair.local.kode_pekerjaan}</strong>
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <div class="d-flex align-items-center">
+            <input type="checkbox" class="item-checkbox me-2" data-id="${pair.external.id}" data-section="different-${type}">
+            <strong>${pair.local.kode || pair.local.kode_pekerjaan}</strong>
+          </div>
+          ${previewBtn}
         </div>
         <div class="card-body">
           <div class="row">
@@ -926,6 +962,256 @@ async function confirmSync() {
   modal.hide();
 
   await performSync(window.pendingSyncType, window.pendingSyncId);
+}
+
+async function showAhspDifferentPreview(externalId, localId) {
+  // Buka modal dan load preview untuk AHSP berbeda
+  const modal = new bootstrap.Modal(document.getElementById('previewDifferentAhspModal'));
+  modal.show();
+
+  const contentDiv = document.getElementById('previewDifferentContent');
+  contentDiv.innerHTML = `
+    <div class="text-center py-5">
+      <div class="spinner-border" role="status"></div>
+      <p class="mt-2">Memuat detail perbandingan...</p>
+    </div>
+  `;
+
+  // Store untuk digunakan saat confirm sync
+  window.pendingDifferentExternalId = externalId;
+  window.pendingDifferentLocalId = localId;
+
+  try {
+    const res = await fetch('{{ route("datasync.get-ahsp-details") }}?id=' + externalId, {
+      headers: {
+        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+      }
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      const externalHeader = data.external.header;
+      const externalDetails = data.external.details;
+      const existingHeader = data.existing.header;
+      const existingDetails = data.existing.details;
+      const hasExisting = data.hasExisting;
+
+      let html = '';
+
+      // Alert info
+      html += `
+        <div class="alert alert-warning mb-3">
+          <i data-feather="alert-circle" class="me-2" style="width: 16px;"></i>
+          <strong>Data Berbeda:</strong> Pilih tombol Update di bawah untuk mengganti data lokal dengan data eksternal.
+        </div>
+      `;
+
+      // Header comparison - side by side
+      html += `
+        <div class="mb-4">
+          <h6 class="fw-bold mb-3">
+            <i data-feather="copy" class="me-1" style="width: 16px;"></i>
+            Informasi Header
+          </h6>
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card border-secondary h-100">
+                <div class="card-header bg-light">
+                  <strong>Data Lokal (Saat Ini)</strong>
+                </div>
+                <div class="card-body p-2 small">
+                  <p class="mb-1"><strong>Kode:</strong> ${existingHeader.kode_pekerjaan}</p>
+                  <p class="mb-1"><strong>Nama:</strong> ${existingHeader.nama_pekerjaan}</p>
+                  <p class="mb-1"><strong>Satuan:</strong> ${existingHeader.satuan}</p>
+                  <p class="mb-0"><strong>Total Harga:</strong> <br>Rp <span class="fw-bold text-danger">${parseFloat(existingHeader.total_harga).toLocaleString('id-ID')}</span></p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card border-success h-100">
+                <div class="card-header bg-light">
+                  <strong>Data Eksternal (Baru)</strong>
+                </div>
+                <div class="card-body p-2 small">
+                  <p class="mb-1"><strong>Kode:</strong> ${externalHeader.kode_pekerjaan}</p>
+                  <p class="mb-1"><strong>Nama:</strong> ${externalHeader.nama_pekerjaan}</p>
+                  <p class="mb-1"><strong>Satuan:</strong> ${externalHeader.satuan}</p>
+                  <p class="mb-0"><strong>Total Harga:</strong> <br>Rp <span class="fw-bold text-success">${parseFloat(externalHeader.total_harga).toLocaleString('id-ID')}</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Details comparison - tabs
+      html += `
+        <div class="mb-3">
+          <h6 class="fw-bold mb-2">
+            <i data-feather="layers" class="me-1" style="width: 16px;"></i>
+            Komponen Penyusun
+          </h6>
+          <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="diff-local-tab" data-bs-toggle="tab" data-bs-target="#diff-local" type="button" role="tab">
+                Lokal (${existingDetails.length})
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="diff-external-tab" data-bs-toggle="tab" data-bs-target="#diff-external" type="button" role="tab">
+                Eksternal (${externalDetails.length})
+              </button>
+            </li>
+          </ul>
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="diff-local" role="tabpanel">
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                  <thead class="table-light">
+                    <tr>
+                      <th width="70">Tipe</th>
+                      <th>Kode</th>
+                      <th>Nama</th>
+                      <th width="60">Satuan</th>
+                      <th width="80">Koefisien</th>
+                      <th width="90">Harga</th>
+                      <th width="90">Subtotal</th>
+                      <th width="60">Diskon %</th>
+                      <th width="80">PPN %</th>
+                      <th width="100">Final</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+      `;
+
+      existingDetails.forEach(detail => {
+        html += `
+          <tr>
+            <td><span class="badge ${detail.tipe === 'material' ? 'bg-info' : 'bg-warning text-dark'}">${detail.tipe === 'material' ? 'Mat' : 'Upah'}</span></td>
+            <td><code class="small">${detail.source_kode}</code></td>
+            <td><small>${detail.source_nama}</small></td>
+            <td><small>${detail.satuan}</small></td>
+            <td class="text-end"><small>${parseFloat(detail.koefisien).toLocaleString('id-ID', {maximumFractionDigits: 4})}</small></td>
+            <td class="text-end"><small>Rp ${parseFloat(detail.harga_satuan).toLocaleString('id-ID')}</small></td>
+            <td class="text-end"><small>Rp ${parseFloat(detail.subtotal).toLocaleString('id-ID')}</small></td>
+            <td class="text-end"><small>${parseFloat(detail.diskon_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+            <td class="text-end"><small>${parseFloat(detail.ppn_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+            <td class="text-end"><small><strong>Rp ${parseFloat(detail.subtotal_final).toLocaleString('id-ID')}</strong></small></td>
+          </tr>
+        `;
+      });
+
+      html += `
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="tab-pane fade" id="diff-external" role="tabpanel">
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                  <thead class="table-light">
+                    <tr>
+                      <th width="70">Tipe</th>
+                      <th>Kode</th>
+                      <th>Nama</th>
+                      <th width="60">Satuan</th>
+                      <th width="80">Koefisien</th>
+                      <th width="90">Harga</th>
+                      <th width="90">Subtotal</th>
+                      <th width="60">Diskon %</th>
+                      <th width="80">PPN %</th>
+                      <th width="100">Final</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+      `;
+
+      externalDetails.forEach(detail => {
+        html += `
+          <tr>
+            <td><span class="badge ${detail.tipe === 'material' ? 'bg-info' : 'bg-warning text-dark'}">${detail.tipe === 'material' ? 'Mat' : 'Upah'}</span></td>
+            <td><code class="small">${detail.source_kode}</code></td>
+            <td><small>${detail.source_nama}</small></td>
+            <td><small>${detail.satuan}</small></td>
+            <td class="text-end"><small>${parseFloat(detail.koefisien).toLocaleString('id-ID', {maximumFractionDigits: 4})}</small></td>
+            <td class="text-end"><small>Rp ${parseFloat(detail.harga_satuan).toLocaleString('id-ID')}</small></td>
+            <td class="text-end"><small>Rp ${parseFloat(detail.subtotal).toLocaleString('id-ID')}</small></td>
+            <td class="text-end"><small>${parseFloat(detail.diskon_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+            <td class="text-end"><small>${parseFloat(detail.ppn_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+            <td class="text-end"><small><strong>Rp ${parseFloat(detail.subtotal_final).toLocaleString('id-ID')}</strong></small></td>
+          </tr>
+        `;
+      });
+
+      html += `
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-info mb-0">
+          <i data-feather="info" class="me-2" style="width: 16px; height: 16px;"></i>
+          <strong>Verifikasi:</strong> Pastikan perbandingan di atas sudah benar sebelum melanjutkan update.
+        </div>
+      `;
+
+      contentDiv.innerHTML = html;
+      feather.replace();
+    } else {
+      contentDiv.innerHTML = `
+        <div class="alert alert-danger mb-0">
+          <i data-feather="alert-circle" class="me-2"></i>
+          ${data.message || 'Gagal memuat detail AHSP'}
+        </div>
+      `;
+    }
+  } catch (error) {
+    contentDiv.innerHTML = `
+      <div class="alert alert-danger mb-0">
+        <i data-feather="alert-circle" class="me-2"></i>
+        Error: ${error.message}
+      </div>
+    `;
+  }
+}
+
+async function confirmDifferentSync() {
+  if (!window.pendingDifferentExternalId) {
+    alert('Data tidak valid');
+    return;
+  }
+
+  const modal = bootstrap.Modal.getInstance(document.getElementById('previewDifferentAhspModal'));
+  modal.hide();
+
+  // Perform sync for different AHSP
+  if (!confirm('Update AHSP ini dengan data eksternal?')) return;
+
+  const route = '{{ route("datasync.resync-ahsp", ["id" => "__ID__"]) }}'.replace('__ID__', window.pendingDifferentExternalId);
+
+  try {
+    const res = await fetch(route, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+      }
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      alert('✓ AHSP berhasil diupdate');
+      loadComparison('ahsp'); // Reload
+    } else {
+      alert('Error: ' + data.message);
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
 }
 
 async function performSync(type, id) {

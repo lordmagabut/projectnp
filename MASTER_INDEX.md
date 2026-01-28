@@ -45,6 +45,16 @@
 | File | Purpose | Read Time | Best For |
 |------|---------|-----------|----------|
 | [IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) | **Completion Report** | 10 min | Project status |
+| [DATASYNC_DIFFERENT_PREVIEW_COMPLETION.md](DATASYNC_DIFFERENT_PREVIEW_COMPLETION.md) | **Datasync Modal Feature** | 8 min | Feature status |
+
+---
+
+## 🔄 DataSync Features Documentation
+
+| File | Purpose | Read Time | Best For |
+|------|---------|-----------|----------|
+| [DATASYNC_DIFFERENT_PREVIEW_IMPLEMENTATION.md](DATASYNC_DIFFERENT_PREVIEW_IMPLEMENTATION.md) | **Detailed Implementation Guide** | 15 min | Developers |
+| [DATASYNC_DIFFERENT_PREVIEW_QUICKREF.md](DATASYNC_DIFFERENT_PREVIEW_QUICKREF.md) | **Quick Reference** | 5 min | Quick lookup |
 
 ---
 
