@@ -946,7 +946,11 @@ class DataSyncController extends Controller
                         'external' => $extItem
                     ];
                 } else {
-                    $result['same'][] = $localItem;
+                    // For "same" items, return external data (untuk digunakan di resync)
+                    // tapi keep local ID juga untuk keperluan lain
+                    $sameItem = (array)$extItem;
+                    $sameItem['local_id'] = $localItem->id;  // store local ID untuk reference
+                    $result['same'][] = (object)$sameItem;
                 }
             }
         }
