@@ -221,7 +221,95 @@ class DataSyncController extends Controller
                 ->orderBy('kode_pekerjaan')
                 ->get();
 
-            $comparison = $this->buildComparison($local, $external, 'kode_pekerjaan');
+            // Build comparison dengan special handling untuk AHSP
+            $comparison = [
+                'only_local' => [],
+                'only_external' => [],
+                'different' => [],
+                'same' => [],
+            ];
+
+            $externalKeys = $external->pluck('kode_pekerjaan')->toArray();
+            $localKeys = $local->pluck('kode_pekerjaan')->toArray();
+
+            // Only in local
+            foreach ($local as $item) {
+                if (!in_array($item->kode_pekerjaan, $externalKeys)) {
+                    $comparison['only_local'][] = $item;
+                }
+            }
+
+            // Check external & compare with local
+            foreach ($external as $extItem) {
+                $localItem = $local->firstWhere('kode_pekerjaan', $extItem->kode_pekerjaan);
+
+                if (!$localItem) {
+                    $comparison['only_external'][] = $extItem;
+                } else {
+                    // AHSP comparison: compare header + count of details
+                    $isDifferent = false;
+
+                    // Compare header fields
+                    if ($localItem->nama_pekerjaan != $extItem->nama_pekerjaan ||
+                        $localItem->satuan != $extItem->satuan ||
+                        $localItem->total_harga != $extItem->total_harga) {
+                        $isDifferent = true;
+                    }
+
+                    // Compare detail count
+                    if (!$isDifferent) {
+                        $localDetailCount = $localItem->details->count();
+                        $externalDetailCount = DB::connection('external')
+                            ->table('ahsp_detail')
+                            ->where('ahsp_id', $extItem->id)
+                            ->count();
+
+                        if ($localDetailCount != $externalDetailCount) {
+                            $isDifferent = true;
+                        }
+                    }
+
+                    // If same count, compare detail content
+                    if (!$isDifferent && $localItem->details->count() > 0) {
+                        $externalDetails = DB::connection('external')
+                            ->table('ahsp_detail')
+                            ->where('ahsp_id', $extItem->id)
+                            ->get()
+                            ->keyBy(function($item) {
+                                return $item->tipe . '-' . $item->referensi_id;
+                            });
+
+                        foreach ($localItem->details as $localDetail) {
+                            $key = $localDetail->tipe . '-' . $localDetail->referensi_id;
+                            $extDetail = $externalDetails->get($key);
+
+                            if (!$extDetail) {
+                                $isDifferent = true;
+                                break;
+                            }
+
+                            // Compare detail fields
+                            if ($localDetail->koefisien != $extDetail->koefisien ||
+                                $localDetail->harga_satuan != $extDetail->harga_satuan ||
+                                ($localDetail->subtotal_final ?? $localDetail->subtotal) != ($extDetail->subtotal_final ?? $extDetail->subtotal)) {
+                                $isDifferent = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($isDifferent) {
+                        $comparison['different'][] = [
+                            'local' => $localItem,
+                            'external' => $extItem
+                        ];
+                    } else {
+                        $sameItem = (array)$extItem;
+                        $sameItem['local_id'] = $localItem->id;
+                        $comparison['same'][] = (object)$sameItem;
+                    }
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -543,6 +631,9 @@ class DataSyncController extends Controller
 
             // Enrich external details dengan nama dari source (material/upah)
             $enrichedExternalDetails = [];
+            $externalTotalMaterial = 0;
+            $externalTotalUpah = 0;
+
             foreach ($externalDetails as $detail) {
                 $sourceData = null;
                 $sourceNama = 'N/A';
@@ -565,6 +656,15 @@ class DataSyncController extends Controller
                     }
                 }
 
+                $subtotalFinal = $detail->subtotal_final ?? $detail->subtotal;
+                
+                // Hitung total per tipe
+                if ($detail->tipe === 'material') {
+                    $externalTotalMaterial += $subtotalFinal;
+                } elseif ($detail->tipe === 'upah') {
+                    $externalTotalUpah += $subtotalFinal;
+                }
+
                 $enrichedExternalDetails[] = [
                     'tipe' => $detail->tipe,
                     'source_kode' => $sourceData ? ($sourceData->kode ?? 'N/A') : 'N/A',
@@ -577,9 +677,14 @@ class DataSyncController extends Controller
                     'ppn_persen' => $detail->ppn_persen ?? 0,
                     'diskon_nominal' => $detail->diskon_nominal ?? 0,
                     'ppn_nominal' => $detail->ppn_nominal ?? 0,
-                    'subtotal_final' => $detail->subtotal_final ?? $detail->subtotal,
+                    'subtotal_final' => $subtotalFinal,
                 ];
             }
+
+            // Update external header dengan calculated total harga
+            $externalHeaderArray = (array) $externalHeader;
+            $externalHeaderArray['total_harga'] = $externalTotalMaterial + $externalTotalUpah;
+            $externalHeader = (object) $externalHeaderArray;
 
             // Ambil existing details dari lokal jika ada
             $existingDetails = [];
