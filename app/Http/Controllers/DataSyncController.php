@@ -412,17 +412,56 @@ class DataSyncController extends Controller
                     $headerId = $newHeader->id;
                 }
 
-                // Copy details
+                // Copy details - dengan remapping referensi_id berdasarkan kode (bukan ID eksternal)
                 $externalDetails = DB::connection('external')
                     ->table('ahsp_detail')
                     ->where('ahsp_id', $externalId)
                     ->get();
 
                 foreach ($externalDetails as $detail) {
+                    $localReferensiId = $detail->referensi_id; // default: ID eksternal
+
+                    // Jika tipe adalah material atau upah, lakukan remapping via kode
+                    if ($detail->tipe === 'material') {
+                        // Ambil kode dari HSD Material eksternal berdasarkan referensi_id
+                        $externalSource = DB::connection('external')
+                            ->table('hsd_material')
+                            ->where('id', $detail->referensi_id)
+                            ->first(['kode']);
+
+                        if ($externalSource) {
+                            // Cari ID lokal yang punya kode yang sama
+                            $localSource = HsdMaterial::where('kode', $externalSource->kode)->first();
+                            if ($localSource) {
+                                $localReferensiId = $localSource->id;
+                            } else {
+                                // Jika tidak ditemukan, gunakan referensi_id asli (fallback)
+                                \Log::warning("HSD Material kode {$externalSource->kode} tidak ditemukan di lokal saat sync AHSP {$externalId}");
+                            }
+                        }
+                    } elseif ($detail->tipe === 'upah') {
+                        // Ambil kode dari HSD Upah eksternal berdasarkan referensi_id
+                        $externalSource = DB::connection('external')
+                            ->table('hsd_upah')
+                            ->where('id', $detail->referensi_id)
+                            ->first(['kode']);
+
+                        if ($externalSource) {
+                            // Cari ID lokal yang punya kode yang sama
+                            $localSource = HsdUpah::where('kode', $externalSource->kode)->first();
+                            if ($localSource) {
+                                $localReferensiId = $localSource->id;
+                            } else {
+                                // Jika tidak ditemukan, gunakan referensi_id asli (fallback)
+                                \Log::warning("HSD Upah kode {$externalSource->kode} tidak ditemukan di lokal saat sync AHSP {$externalId}");
+                            }
+                        }
+                    }
+
                     AhspDetail::create([
                         'ahsp_id' => $headerId,
                         'tipe' => $detail->tipe,
-                        'referensi_id' => $detail->referensi_id,
+                        'referensi_id' => $localReferensiId,  // ← SUDAH DI-REMAP
                         'koefisien' => $detail->koefisien,
                         'harga_satuan' => $detail->harga_satuan,
                         'subtotal' => $detail->subtotal,
