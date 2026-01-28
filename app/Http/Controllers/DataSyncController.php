@@ -227,6 +227,7 @@ class DataSyncController extends Controller
                 'only_external' => [],
                 'different' => [],
                 'same' => [],
+                'suspicious' => [],  // Kode sama tapi nama berbeda - PERLU REVIEW!
             ];
 
             $externalKeys = $external->pluck('kode_pekerjaan')->toArray();
@@ -246,67 +247,84 @@ class DataSyncController extends Controller
                 if (!$localItem) {
                     $comparison['only_external'][] = $extItem;
                 } else {
-                    // AHSP comparison: compare header + count of details
-                    $isDifferent = false;
+                    // Check apakah nama pekerjaan sama
+                    // Jika nama berbeda JAUH, ini suspicious - mungkin kode di-reuse untuk pekerjaan berbeda
+                    $nameSimilarity = similar_text(
+                        strtolower($localItem->nama_pekerjaan),
+                        strtolower($extItem->nama_pekerjaan),
+                        $percent
+                    );
 
-                    // Compare header fields
-                    if ($localItem->nama_pekerjaan != $extItem->nama_pekerjaan ||
-                        $localItem->satuan != $extItem->satuan ||
-                        $localItem->total_harga != $extItem->total_harga) {
-                        $isDifferent = true;
-                    }
-
-                    // Compare detail count
-                    if (!$isDifferent) {
-                        $localDetailCount = $localItem->details->count();
-                        $externalDetailCount = DB::connection('external')
-                            ->table('ahsp_detail')
-                            ->where('ahsp_id', $extItem->id)
-                            ->count();
-
-                        if ($localDetailCount != $externalDetailCount) {
-                            $isDifferent = true;
-                        }
-                    }
-
-                    // If same count, compare detail content
-                    if (!$isDifferent && $localItem->details->count() > 0) {
-                        $externalDetails = DB::connection('external')
-                            ->table('ahsp_detail')
-                            ->where('ahsp_id', $extItem->id)
-                            ->get()
-                            ->keyBy(function($item) {
-                                return $item->tipe . '-' . $item->referensi_id;
-                            });
-
-                        foreach ($localItem->details as $localDetail) {
-                            $key = $localDetail->tipe . '-' . $localDetail->referensi_id;
-                            $extDetail = $externalDetails->get($key);
-
-                            if (!$extDetail) {
-                                $isDifferent = true;
-                                break;
-                            }
-
-                            // Compare detail fields
-                            if ($localDetail->koefisien != $extDetail->koefisien ||
-                                $localDetail->harga_satuan != $extDetail->harga_satuan ||
-                                ($localDetail->subtotal_final ?? $localDetail->subtotal) != ($extDetail->subtotal_final ?? $extDetail->subtotal)) {
-                                $isDifferent = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if ($isDifferent) {
-                        $comparison['different'][] = [
+                    // Jika similaritas < 60%, masuk suspicious (PERLU REVIEW MANUAL)
+                    if ($percent < 60) {
+                        $comparison['suspicious'][] = [
                             'local' => $localItem,
-                            'external' => $extItem
+                            'external' => $extItem,
+                            'similarity' => round($percent, 2)
                         ];
                     } else {
-                        $sameItem = (array)$extItem;
-                        $sameItem['local_id'] = $localItem->id;
-                        $comparison['same'][] = (object)$sameItem;
+                        // Nama cukup mirip, lanjut compare content seperti biasa
+                        $isDifferent = false;
+
+                        // Compare header fields
+                        if ($localItem->nama_pekerjaan != $extItem->nama_pekerjaan ||
+                            $localItem->satuan != $extItem->satuan ||
+                            $localItem->total_harga != $extItem->total_harga) {
+                            $isDifferent = true;
+                        }
+
+                        // Compare detail count
+                        if (!$isDifferent) {
+                            $localDetailCount = $localItem->details->count();
+                            $externalDetailCount = DB::connection('external')
+                                ->table('ahsp_detail')
+                                ->where('ahsp_id', $extItem->id)
+                                ->count();
+
+                            if ($localDetailCount != $externalDetailCount) {
+                                $isDifferent = true;
+                            }
+                        }
+
+                        // If same count, compare detail content
+                        if (!$isDifferent && $localItem->details->count() > 0) {
+                            $externalDetails = DB::connection('external')
+                                ->table('ahsp_detail')
+                                ->where('ahsp_id', $extItem->id)
+                                ->get()
+                                ->keyBy(function($item) {
+                                    return $item->tipe . '-' . $item->referensi_id;
+                                });
+
+                            foreach ($localItem->details as $localDetail) {
+                                $key = $localDetail->tipe . '-' . $localDetail->referensi_id;
+                                $extDetail = $externalDetails->get($key);
+
+                                if (!$extDetail) {
+                                    $isDifferent = true;
+                                    break;
+                                }
+
+                                // Compare detail fields
+                                if ($localDetail->koefisien != $extDetail->koefisien ||
+                                    $localDetail->harga_satuan != $extDetail->harga_satuan ||
+                                    ($localDetail->subtotal_final ?? $localDetail->subtotal) != ($extDetail->subtotal_final ?? $extDetail->subtotal)) {
+                                    $isDifferent = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if ($isDifferent) {
+                            $comparison['different'][] = [
+                                'local' => $localItem,
+                                'external' => $extItem
+                            ];
+                        } else {
+                            $sameItem = (array)$extItem;
+                            $sameItem['local_id'] = $localItem->id;
+                            $comparison['same'][] = (object)$sameItem;
+                        }
                     }
                 }
             }

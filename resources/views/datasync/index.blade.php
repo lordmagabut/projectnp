@@ -391,7 +391,7 @@ function renderComparison(type, data) {
 
       <div class="accordion-item">
         <h2 class="accordion-header">
-          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#only-local-${type}">
+          <button class="accordion-button ${data.only_local.length === 0 ? 'collapsed' : ''}" type="button" data-bs-toggle="collapse" data-bs-target="#only-local-${type}">
             <span class="badge bg-secondary me-2">${data.only_local.length}</span>
             Hanya Ada di Database Lokal
           </button>
@@ -402,6 +402,22 @@ function renderComparison(type, data) {
           </div>
         </div>
       </div>
+
+      ${data.suspicious && data.suspicious.length > 0 ? `
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#suspicious-${type}">
+            <span class="badge bg-danger me-2">${data.suspicious.length}</span>
+            ⚠️ PERLU REVIEW - Kode Sama Tapi Nama Berbeda Jauh!
+          </button>
+        </h2>
+        <div id="suspicious-${type}" class="accordion-collapse collapse show" data-bs-parent="#accordion-${type}">
+          <div class="accordion-body">
+            ${renderSuspicious(type, data.suspicious)}
+          </div>
+        </div>
+      </div>
+      ` : ''}
 
       <div class="accordion-item">
         <h2 class="accordion-header">
@@ -500,6 +516,64 @@ function renderDifferent(type, pairs) {
               <h6 class="text-primary">Eksternal (Baru)</h6>
               ${renderItemDetails(pair.external, fields, pair.local)}
             </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  return html;
+}
+
+function renderSuspicious(type, pairs) {
+  if (pairs.length === 0) return '<p class="text-muted">Tidak ada item suspicious.</p>';
+
+  const fields = getFieldsForType(type);
+  let html = `
+    <div class="alert alert-danger mb-3">
+      <i data-feather="alert-triangle" class="me-2"></i>
+      <strong>⚠️ PERHATIAN:</strong> Item-item di bawah memiliki <strong>kode sama tapi nama pekerjaan berbeda JAUH</strong>!
+      <br><small>Ini bisa mengindikasikan kode pekerjaan yang di-reuse untuk pekerjaan berbeda di kedua database.
+      <br>Pastikan ini BENAR sebelum melakukan sync, karena bisa menyebabkan data loss yang tidak dapat dipulihkan!</small>
+    </div>
+  `;
+
+  pairs.forEach((pair) => {
+    const similarity = pair.similarity || 0;
+    const similarityColor = similarity > 40 ? 'warning' : 'danger';
+
+    html += `
+      <div class="card mb-3 border-danger">
+        <div class="card-header bg-danger text-white">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <strong>🔴 ${pair.local.kode_pekerjaan}</strong>
+              <br><small>Kesamaan Nama: <strong>${similarity}%</strong></small>
+            </div>
+            <button class="btn btn-sm btn-outline-light" onclick="showSuspiciousDetail('${pair.local.id}', '${pair.external.id}', '${type}')">
+              <i data-feather="eye" class="me-1"></i>Review Detail
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <h6 class="text-muted">🔴 Lokal (Saat Ini)</h6>
+              ${renderItemDetails(pair.local, fields)}
+            </div>
+            <div class="col-md-6">
+              <h6 class="text-danger">🔴 Eksternal (Berbeda)</h6>
+              ${renderItemDetails(pair.external, fields, pair.local)}
+            </div>
+          </div>
+          <hr>
+          <div class="alert alert-warning mb-0">
+            <strong>Pertanyaan yang harus dijawab:</strong>
+            <ul class="mb-0 mt-2">
+              <li>Apakah ini memang pekerjaan yang sama hanya dengan deskripsi berbeda?</li>
+              <li>Atau ini adalah dua pekerjaan berbeda yang kebetulan dapat kode yang sama?</li>
+              <li>Mana yang benar - lokal atau eksternal? Atau butuh kombinasi keduanya?</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -663,6 +737,19 @@ async function copySelected(type, section) {
   } catch (error) {
     alert('Error: ' + error.message);
   }
+}
+
+async function showSuspiciousDetail(localId, externalId, type) {
+  alert(`⚠️ ALERT - SUSPICIOUS ITEM\n\n` +
+    `Local ID: ${localId}\n` +
+    `External ID: ${externalId}\n\n` +
+    `Nama pekerjaan berbeda JAUH antara lokal dan eksternal.\n\n` +
+    `⚠️ JANGAN SYNC SECARA OTOMATIS!\n\n` +
+    `Pilihan:\n` +
+    `1. Manual Review: Buka kedua AHSP di tab terpisah untuk compare detail\n` +
+    `2. Keep Lokal: Abaikan eksternal, gunakan versi lokal\n` +
+    `3. Use Eksternal: Jika yakin eksternal lebih benar\n\n` +
+    `Untuk sync manual, hubungi administrator.`);
 }
 
 async function resyncItem(type, id) {
