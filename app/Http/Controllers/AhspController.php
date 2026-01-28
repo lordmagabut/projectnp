@@ -41,6 +41,8 @@ class AhspController extends Controller
             'items.*.tipe'   => 'required|in:material,upah',
             'items.*.referensi_id' => 'required|numeric',
             'items.*.koefisien' => 'required|numeric|min:0',
+            'items.*.diskon_persen' => 'nullable|numeric|min:0|max:100',
+            'items.*.ppn_persen' => 'nullable|numeric|min:0|max:100',
             'total_harga_pembulatan' => 'required|numeric|min:0',
         ]);
 
@@ -56,7 +58,25 @@ class AhspController extends Controller
                     ? HsdMaterial::findOrFail($item['referensi_id'])->harga_satuan
                     : HsdUpah::findOrFail($item['referensi_id'])->harga_satuan;
 
-                $total_harga_sebenarnya += ($harga_satuan * $item['koefisien']);
+                $subtotal = $harga_satuan * $item['koefisien'];
+                $diskonPersen = (float)($item['diskon_persen'] ?? 0);
+                $ppnPersen = (float)($item['ppn_persen'] ?? 0);
+                
+                // Normalize percentage: if input is 0-1 range (decimal), multiply by 100
+                if ($diskonPersen > 0 && $diskonPersen < 1) {
+                    $diskonPersen = $diskonPersen * 100;
+                }
+                if ($ppnPersen > 0 && $ppnPersen < 1) {
+                    $ppnPersen = $ppnPersen * 100;
+                }
+                
+                // Hitung subtotal final dengan diskon & ppn
+                $diskonNominal = $subtotal * ($diskonPersen / 100);
+                $subtotalSetelahDiskon = $subtotal - $diskonNominal;
+                $ppnNominal = $subtotalSetelahDiskon * ($ppnPersen / 100);
+                $subtotalFinal = $subtotalSetelahDiskon + $ppnNominal;
+
+                $total_harga_sebenarnya += $subtotalFinal;
             }
 
             $rounded = (int) ceil($total_harga_sebenarnya / 1000) * 1000;
@@ -76,6 +96,17 @@ class AhspController extends Controller
                     ? HsdMaterial::findOrFail($item['referensi_id'])->harga_satuan
                     : HsdUpah::findOrFail($item['referensi_id'])->harga_satuan;
 
+                $diskonPersen = (float)($item['diskon_persen'] ?? 0);
+                $ppnPersen = (float)($item['ppn_persen'] ?? 0);
+                
+                // Normalize percentage: if input is 0-1 range (decimal), multiply by 100
+                if ($diskonPersen > 0 && $diskonPersen < 1) {
+                    $diskonPersen = $diskonPersen * 100;
+                }
+                if ($ppnPersen > 0 && $ppnPersen < 1) {
+                    $ppnPersen = $ppnPersen * 100;
+                }
+
                 AhspDetail::create([
                     'ahsp_id'      => $header->id,
                     'tipe'         => $item['tipe'],
@@ -83,6 +114,9 @@ class AhspController extends Controller
                     'koefisien'    => $item['koefisien'],
                     'harga_satuan' => $harga_satuan,
                     'subtotal'     => $harga_satuan * $item['koefisien'],
+                    'diskon_persen' => $diskonPersen,
+                    'ppn_persen' => $ppnPersen,
+                    // Model boot akan auto-calculate diskon_nominal, ppn_nominal, subtotal_final
                 ]);
             }
 
@@ -175,6 +209,8 @@ class AhspController extends Controller
             'items.*.tipe'   => 'required|in:material,upah',
             'items.*.referensi_id' => 'required|numeric',
             'items.*.koefisien' => 'required|numeric|min:0',
+            'items.*.diskon_persen' => 'nullable|numeric|min:0|max:100',
+            'items.*.ppn_persen' => 'nullable|numeric|min:0|max:100',
             'total_harga_pembulatan' => 'required|numeric|min:0',
         ]);
 
@@ -192,7 +228,26 @@ class AhspController extends Controller
                     ? HsdMaterial::findOrFail($item['referensi_id'])->harga_satuan
                     : HsdUpah::findOrFail($item['referensi_id'])->harga_satuan;
 
-                $total_harga_sebenarnya += ($harga_satuan * $item['koefisien']);
+                $subtotal = $harga_satuan * $item['koefisien'];
+                
+                // Calculate diskon & ppn
+                $diskon_persen = isset($item['diskon_persen']) ? (float)$item['diskon_persen'] : 0;
+                $ppn_persen = isset($item['ppn_persen']) ? (float)$item['ppn_persen'] : 0;
+                
+                // Normalize percentage: if input is 0-1 range (decimal), multiply by 100
+                if ($diskon_persen > 0 && $diskon_persen < 1) {
+                    $diskon_persen = $diskon_persen * 100;
+                }
+                if ($ppn_persen > 0 && $ppn_persen < 1) {
+                    $ppn_persen = $ppn_persen * 100;
+                }
+                
+                $diskon_nominal = $subtotal * ($diskon_persen / 100);
+                $subtotal_setelah_diskon = $subtotal - $diskon_nominal;
+                $ppn_nominal = $subtotal_setelah_diskon * ($ppn_persen / 100);
+                $subtotal_final = $subtotal_setelah_diskon + $ppn_nominal;
+                
+                $total_harga_sebenarnya += $subtotal_final;
             }
 
             $rounded = (int) ceil($total_harga_sebenarnya / 1000) * 1000;
@@ -213,6 +268,17 @@ class AhspController extends Controller
                     ? HsdMaterial::findOrFail($item['referensi_id'])->harga_satuan
                     : HsdUpah::findOrFail($item['referensi_id'])->harga_satuan;
 
+                $diskon_persen = isset($item['diskon_persen']) ? (float)$item['diskon_persen'] : 0;
+                $ppn_persen = isset($item['ppn_persen']) ? (float)$item['ppn_persen'] : 0;
+                
+                // Normalize percentage: if input is 0-1 range (decimal), multiply by 100
+                if ($diskon_persen > 0 && $diskon_persen < 1) {
+                    $diskon_persen = $diskon_persen * 100;
+                }
+                if ($ppn_persen > 0 && $ppn_persen < 1) {
+                    $ppn_persen = $ppn_persen * 100;
+                }
+
                 AhspDetail::create([
                     'ahsp_id'      => $ahsp->id,
                     'tipe'         => $item['tipe'],
@@ -220,6 +286,8 @@ class AhspController extends Controller
                     'koefisien'    => $item['koefisien'],
                     'harga_satuan' => $harga_satuan,
                     'subtotal'     => $harga_satuan * $item['koefisien'],
+                    'diskon_persen' => $diskon_persen,
+                    'ppn_persen' => $ppn_persen,
                 ]);
             }
 

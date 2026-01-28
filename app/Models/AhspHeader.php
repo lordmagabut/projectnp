@@ -26,12 +26,16 @@ class AhspHeader extends Model
 
     public function getTotalMaterialAttribute()
     {
-        return $this->details->where('tipe', 'material')->sum('subtotal');
+        return $this->details->where('tipe', 'material')->sum(function($d) {
+            return $d->subtotal_final ?? $d->subtotal;
+        });
     }
 
     public function getTotalUpahAttribute()
     {
-        return $this->details->where('tipe', 'upah')->sum('subtotal');
+        return $this->details->where('tipe', 'upah')->sum(function($d) {
+            return $d->subtotal_final ?? $d->subtotal;
+        });
     }
 
     /**

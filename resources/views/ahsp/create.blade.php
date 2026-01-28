@@ -158,12 +158,15 @@
                 <table class="table table-bordered" id="item-table">
                     <thead>
                         <tr>
-                            <th style="width: 15%">Tipe</th>
-                            <th style="width: 35%">Item</th>
-                            <th style="width: 10%">Satuan</th>
-                            <th style="width: 15%">Koefisien</th>
-                            <th style="width: 15%" class="text-end">Harga Satuan</th>
-                            <th style="width: 15%" class="text-end">Subtotal</th>
+                            <th style="width: 12%">Tipe</th>
+                            <th style="width: 25%">Item</th>
+                            <th style="width: 8%">Satuan</th>
+                            <th style="width: 10%">Koefisien</th>
+                            <th style="width: 12%" class="text-end">Harga Satuan</th>
+                            <th style="width: 10%" class="text-end">Subtotal</th>
+                            <th style="width: 8%" class="text-center">Diskon %</th>
+                            <th style="width: 8%" class="text-center">PPN %</th>
+                            <th style="width: 12%" class="text-end">Final</th>
                             <th style="width: 5%"></th>
                         </tr>
                     </thead>
@@ -261,6 +264,13 @@
             </td>
             <td class="harga-satuan text-end">Rp 0</td>
             <td class="subtotal text-end">Rp 0</td>
+            <td>
+                <input type="number" name="items[${rowIndex}][diskon_persen]" class="form-control form-control-sm diskon-input text-center" step="0.01" value="0" min="0" max="100" placeholder="0">
+            </td>
+            <td>
+                <input type="number" name="items[${rowIndex}][ppn_persen]" class="form-control form-control-sm ppn-input text-center" step="0.01" value="0" min="0" max="100" placeholder="0">
+            </td>
+            <td class="subtotal-final text-end">Rp 0</td>
             <td class="text-center">
                 <button type="button" class="btn btn-sm btn-danger rounded" onclick="removeRow(this)">
                     <i class="fas fa-trash-alt"></i>
@@ -316,6 +326,16 @@
             window.updateSubtotal(this);
         });
 
+        // Event listener untuk perubahan Diskon
+        itemTableBody.on('input', '.diskon-input', function() {
+            window.updateSubtotal($(this).closest('tr').find('.koefisien-input')[0]);
+        });
+
+        // Event listener untuk perubahan PPN
+        itemTableBody.on('input', '.ppn-input', function() {
+            window.updateSubtotal($(this).closest('tr').find('.koefisien-input')[0]);
+        });
+
         // Panggil addItemRow() saat DOM siap untuk menginisialisasi satu baris awal
         window.addItemRow();
     });
@@ -327,19 +347,36 @@
         const satuan = selected?.dataset?.satuan || '-';
         const koef = parseFloat(input.value || 0);
         const subtotal = harga * koef;
+        
+        // Ambil diskon dan ppn
+        const diskonPersen = parseFloat(row.find('.diskon-input').val() || 0);
+        const ppnPersen = parseFloat(row.find('.ppn-input').val() || 0);
+        
+        // Hitung diskon nominal
+        const diskonNominal = subtotal * (diskonPersen / 100);
+        
+        // Hitung subtotal setelah diskon
+        const subtotalSetelahDiskon = subtotal - diskonNominal;
+        
+        // Hitung ppn nominal
+        const ppnNominal = subtotalSetelahDiskon * (ppnPersen / 100);
+        
+        // Hitung final
+        const subtotalFinal = subtotalSetelahDiskon + ppnNominal;
 
         row.find('.satuan').text(satuan);
         row.find('.harga-satuan').text(window.formatRupiah(harga));
         row.find('.subtotal').text(window.formatRupiah(subtotal));
+        row.find('.subtotal-final').text(window.formatRupiah(subtotalFinal));
         window.updateTotalHarga();
     }
 
     window.updateTotalHarga = function() {
         let totalSebenarnya = 0;
         document.querySelectorAll('#item-body tr').forEach(row => {
-            const subtotalText = row.querySelector('.subtotal').innerText;
-            const subtotalValue = parseFloat(subtotalText.replace('Rp ', '').replace(/\./g, '').replace(/,/g, '.') || 0);
-            totalSebenarnya += subtotalValue;
+            const subtotalFinalText = row.querySelector('.subtotal-final').innerText;
+            const subtotalFinalValue = parseFloat(subtotalFinalText.replace('Rp ', '').replace(/\./g, '').replace(/,/g, '.') || 0);
+            totalSebenarnya += subtotalFinalValue;
         });
 
         const totalPembulatan = window.roundUpToNearestThousand(totalSebenarnya);

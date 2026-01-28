@@ -458,6 +458,17 @@ class DataSyncController extends Controller
                         }
                     }
 
+                    $diskonPersen = (float)($detail->diskon_persen ?? 0);
+                    $ppnPersen = (float)($detail->ppn_persen ?? 0);
+                    
+                    // Normalize percentage: if input is 0-1 range (decimal), multiply by 100
+                    if ($diskonPersen > 0 && $diskonPersen < 1) {
+                        $diskonPersen = $diskonPersen * 100;
+                    }
+                    if ($ppnPersen > 0 && $ppnPersen < 1) {
+                        $ppnPersen = $ppnPersen * 100;
+                    }
+                    
                     AhspDetail::create([
                         'ahsp_id' => $headerId,
                         'tipe' => $detail->tipe,
@@ -465,7 +476,10 @@ class DataSyncController extends Controller
                         'koefisien' => $detail->koefisien,
                         'harga_satuan' => $detail->harga_satuan,
                         'subtotal' => $detail->subtotal,
+                        'diskon_persen' => $diskonPersen,
+                        'ppn_persen' => $ppnPersen,
                     ]);
+                    // Model boot() akan auto-calculate diskon_nominal, ppn_nominal, subtotal_final
                 }
 
                 $copied++;
@@ -559,6 +573,11 @@ class DataSyncController extends Controller
                     'koefisien' => $detail->koefisien,
                     'harga_satuan' => $detail->harga_satuan,
                     'subtotal' => $detail->subtotal,
+                    'diskon_persen' => $detail->diskon_persen ?? 0,
+                    'ppn_persen' => $detail->ppn_persen ?? 0,
+                    'diskon_nominal' => $detail->diskon_nominal ?? 0,
+                    'ppn_nominal' => $detail->ppn_nominal ?? 0,
+                    'subtotal_final' => $detail->subtotal_final ?? $detail->subtotal,
                 ];
             }
 
@@ -590,6 +609,11 @@ class DataSyncController extends Controller
                         'koefisien' => $detail->koefisien,
                         'harga_satuan' => $detail->harga_satuan,
                         'subtotal' => $detail->subtotal,
+                        'diskon_persen' => $detail->diskon_persen ?? 0,
+                        'ppn_persen' => $detail->ppn_persen ?? 0,
+                        'diskon_nominal' => $detail->diskon_nominal ?? 0,
+                        'ppn_nominal' => $detail->ppn_nominal ?? 0,
+                        'subtotal_final' => $detail->subtotal_final ?? $detail->subtotal,
                     ];
                 }
             }
@@ -835,6 +859,17 @@ class DataSyncController extends Controller
                     }
                 }
 
+                $diskonPersen = (float)($detail->diskon_persen ?? 0);
+                $ppnPersen = (float)($detail->ppn_persen ?? 0);
+                
+                // Normalize percentage: if input is 0-1 range (decimal), multiply by 100
+                if ($diskonPersen > 0 && $diskonPersen < 1) {
+                    $diskonPersen = $diskonPersen * 100;
+                }
+                if ($ppnPersen > 0 && $ppnPersen < 1) {
+                    $ppnPersen = $ppnPersen * 100;
+                }
+                
                 AhspDetail::create([
                     'ahsp_id' => $headerId,
                     'tipe' => $detail->tipe,
@@ -842,7 +877,10 @@ class DataSyncController extends Controller
                     'koefisien' => $detail->koefisien,
                     'harga_satuan' => $detail->harga_satuan,
                     'subtotal' => $detail->subtotal,
+                    'diskon_persen' => $diskonPersen,
+                    'ppn_persen' => $ppnPersen,
                 ]);
+                // Model boot() akan auto-calculate diskon_nominal, ppn_nominal, subtotal_final
             }
 
             DB::commit();

@@ -113,12 +113,15 @@
                 <table class="table table-bordered" id="item-table">
                     <thead>
                         <tr>
-                            <th style="width: 15%">Tipe</th>
-                            <th style="width: 35%">Item</th>
-                            <th style="width: 10%">Satuan</th>
-                            <th style="width: 15%">Koefisien</th>
-                            <th style="width: 15%" class="text-end">Harga Satuan</th>
-                            <th style="width: 15%" class="text-end">Subtotal</th>
+                            <th style="width: 12%">Tipe</th>
+                            <th style="width: 25%">Item</th>
+                            <th style="width: 8%">Satuan</th>
+                            <th style="width: 10%">Koefisien</th>
+                            <th style="width: 12%" class="text-end">Harga Satuan</th>
+                            <th style="width: 10%" class="text-end">Subtotal</th>
+                            <th style="width: 8%" class="text-center">Diskon %</th>
+                            <th style="width: 8%" class="text-center">PPN %</th>
+                            <th style="width: 12%" class="text-end">Final</th>
                             <th style="width: 5%"></th>
                         </tr>
                     </thead>
@@ -174,6 +177,17 @@
                             </td>
                             <td class="subtotal text-end">
                                 Rp {{ number_format(old('items.'.$i.'.subtotal', $d->subtotal), 0, ',', '.') }}
+                            </td>
+                            <td>
+                                <input type="number" name="items[{{ $i }}][diskon_persen]" class="form-control form-control-sm diskon-input text-center"
+                                    step="0.01" value="{{ old('items.'.$i.'.diskon_persen', $d->diskon_persen ?? 0) }}" min="0" max="100" placeholder="0">
+                            </td>
+                            <td>
+                                <input type="number" name="items[{{ $i }}][ppn_persen]" class="form-control form-control-sm ppn-input text-center"
+                                    step="0.01" value="{{ old('items.'.$i.'.ppn_persen', $d->ppn_persen ?? 0) }}" min="0" max="100" placeholder="0">
+                            </td>
+                            <td class="subtotal-final text-end">
+                                Rp {{ number_format(old('items.'.$i.'.subtotal_final', $d->subtotal_final ?? $d->subtotal), 0, ',', '.') }}
                             </td>
                             <td class="text-center">
                                 <button type="button" class="btn btn-sm btn-danger rounded" onclick="removeRow(this)">
@@ -261,24 +275,31 @@
         const row = document.createElement('tr');
 
         row.innerHTML = `
-            <td>
-                <select name="items[${rowIndex}][tipe]" class="form-select tipe-select">
+            <td style="width: 12%;">
+                <select name="items[${rowIndex}][tipe]" class="form-select form-select-sm tipe-select">
                     <option value="material">Material</option>
                     <option value="upah">Upah</option>
                 </select>
             </td>
-            <td>
-                <select name="items[${rowIndex}][referensi_id]" class="form-select item-dropdown">
+            <td style="width: 25%;">
+                <select name="items[${rowIndex}][referensi_id]" class="form-select form-select-sm item-dropdown">
                     ${(materials||[]).map(m => `<option value="${m.id}" data-harga="${m.harga_satuan}" data-satuan="${m.satuan}">${m.nama}</option>`).join('')}
                 </select>
             </td>
-            <td class="satuan text-center">-</td>
-            <td>
-                <input type="number" name="items[${rowIndex}][koefisien]" class="form-control koefisien-input" step="0.0001" value="0">
+            <td class="satuan text-center" style="width: 8%;">-</td>
+            <td style="width: 10%;">
+                <input type="number" name="items[${rowIndex}][koefisien]" class="form-control form-control-sm koefisien-input text-center" step="0.0001" value="0">
             </td>
-            <td class="harga-satuan text-end">Rp 0</td>
-            <td class="subtotal text-end">Rp 0</td>
-            <td class="text-center">
+            <td class="harga-satuan text-end" style="width: 12%;">Rp 0</td>
+            <td class="subtotal text-end" style="width: 10%;">Rp 0</td>
+            <td style="width: 8%;">
+                <input type="number" name="items[${rowIndex}][diskon_persen]" class="form-control form-control-sm diskon-input text-center" step="0.01" value="0" min="0" max="100" placeholder="0">
+            </td>
+            <td style="width: 8%;">
+                <input type="number" name="items[${rowIndex}][ppn_persen]" class="form-control form-control-sm ppn-input text-center" step="0.01" value="0" min="0" max="100" placeholder="0">
+            </td>
+            <td class="subtotal-final text-end" style="width: 12%;">Rp 0</td>
+            <td class="text-center" style="width: 5%;">
                 <button type="button" class="btn btn-sm btn-danger rounded" onclick="removeRow(this)">
                     <i class="fas fa-trash-alt"></i>
                 </button>
@@ -332,6 +353,12 @@
         // input koef -> calc subtotal
         itemTableBody.on('input', '.koefisien-input', function(){ window.updateSubtotal(this); });
 
+        // input diskon % -> calc subtotal
+        itemTableBody.on('input', '.diskon-input', function(){ window.updateSubtotal($(this).closest('tr').find('.koefisien-input')[0]); });
+
+        // input ppn % -> calc subtotal
+        itemTableBody.on('input', '.ppn-input', function(){ window.updateSubtotal($(this).closest('tr').find('.koefisien-input')[0]); });
+
         // first init totals
         window.updateTotalHarga();
 
@@ -380,10 +407,27 @@
         const satuan = selected?.dataset?.satuan || '-';
         const koef  = parseFloat(input.value || 0);
         const subtotal = harga * koef;
+        
+        // Ambil diskon dan ppn
+        const diskonPersen = parseFloat(row.find('.diskon-input').val() || 0);
+        const ppnPersen = parseFloat(row.find('.ppn-input').val() || 0);
+        
+        // Hitung diskon nominal
+        const diskonNominal = subtotal * (diskonPersen / 100);
+        
+        // Hitung subtotal setelah diskon
+        const subtotalSetelahDiskon = subtotal - diskonNominal;
+        
+        // Hitung ppn nominal
+        const ppnNominal = subtotalSetelahDiskon * (ppnPersen / 100);
+        
+        // Hitung final
+        const subtotalFinal = subtotalSetelahDiskon + ppnNominal;
 
         row.find('.satuan').text(satuan);
         row.find('.harga-satuan').text(window.formatRupiah(harga));
         row.find('.subtotal').text(window.formatRupiah(subtotal));
+        row.find('.subtotal-final').text(window.formatRupiah(subtotalFinal));
 
         // sinkronkan hidden fields
         row.find('input[name$="[harga_satuan_detail]"]').val(harga);
@@ -395,7 +439,7 @@
     window.updateTotalHarga = function(){
         let totalSebenarnya = 0;
         document.querySelectorAll('#item-body tr').forEach(row => {
-            const txt = row.querySelector('.subtotal')?.innerText || 'Rp 0';
+            const txt = row.querySelector('.subtotal-final')?.innerText || 'Rp 0';
             const val = parseFloat(txt.replace('Rp ','').replace(/\./g,'').replace(/,/g,'.')) || 0;
             totalSebenarnya += val;
         });

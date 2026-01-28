@@ -165,16 +165,31 @@
         </table>
 
         <h5 class="mb-3 text-primary"><i class="fas fa-tools me-2"></i> Komponen Material / Upah</h5>
+        
+        {{-- Informasi tentang perhitungan Diskon & PPN --}}
+        @if($ahsp->details->where('diskon_persen', '>', 0)->count() > 0 || $ahsp->details->where('ppn_persen', '>', 0)->count() > 0)
+        <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Catatan Perhitungan:</strong> AHSP ini memiliki <strong>Diskon dan/atau PPN</strong>. 
+            Kolom <strong>Final</strong> menunjukkan nilai setelah dikurangi diskon dan ditambah PPN.
+            <br><small>Formula: Subtotal → kurangi Diskon % → tambah PPN % → Final</small>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        @endif
+
         <div class="table-responsive">
             <table class="table table-bordered">
                 <thead class="table-light">
                     <tr>
-                        <th style="width: 15%">Tipe</th>
-                        <th style="width: 30%">Item</th>
-                        <th style="width: 10%">Satuan</th>
-                        <th style="width: 15%" class="text-end">Koefisien</th>
-                        <th style="width: 15%" class="text-end">Harga Satuan</th>
-                        <th style="width: 15%" class="text-end">Subtotal</th>
+                        <th style="width: 12%">Tipe</th>
+                        <th style="width: 25%">Item</th>
+                        <th style="width: 8%">Satuan</th>
+                        <th style="width: 10%" class="text-end">Koefisien</th>
+                        <th style="width: 12%" class="text-end">Harga Satuan</th>
+                        <th style="width: 10%" class="text-end">Subtotal</th>
+                        <th style="width: 8%" class="text-center">Diskon %</th>
+                        <th style="width: 8%" class="text-center">PPN %</th>
+                        <th style="width: 12%" class="text-end">Final</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -201,28 +216,35 @@
                         <td class="text-end">{{ number_format($d->koefisien, 4, ',', '.') }}</td>
                         <td class="text-end">Rp {{ number_format($d->harga_satuan, 0, ',', '.') }}</td>
                         <td class="text-end">Rp {{ number_format($d->subtotal, 0, ',', '.') }}</td>
+                        <td class="text-center">{{ number_format($d->diskon_persen ?? 0, 2, ',', '.') }}%</td>
+                        <td class="text-center">{{ number_format($d->ppn_persen ?? 0, 2, ',', '.') }}%</td>
+                        <td class="text-end"><strong>Rp {{ number_format($d->subtotal_final ?? $d->subtotal, 0, ',', '.') }}</strong></td>
                     </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     @php
-                        $totalMaterial = $ahsp->details->where('tipe', 'material')->sum('subtotal');
-                        $totalUpah = $ahsp->details->where('tipe', 'upah')->sum('subtotal');
+                        $totalMaterial = $ahsp->details->where('tipe', 'material')->sum(function($d) {
+                            return $d->subtotal_final ?? $d->subtotal;
+                        });
+                        $totalUpah = $ahsp->details->where('tipe', 'upah')->sum(function($d) {
+                            return $d->subtotal_final ?? $d->subtotal;
+                        });
                     @endphp
                     <tr class="table-light">
-                        <th colspan="5" class="text-end">Total Material</th>
+                        <th colspan="8" class="text-end">Total Material (setelah Diskon & PPN)</th>
                         <th class="text-end">Rp {{ number_format($totalMaterial, 0, ',', '.') }}</th>
                     </tr>
                     <tr class="table-light">
-                        <th colspan="5" class="text-end">Total Upah</th>
+                        <th colspan="8" class="text-end">Total Upah (setelah Diskon & PPN)</th>
                         <th class="text-end">Rp {{ number_format($totalUpah, 0, ',', '.') }}</th>
                     </tr>
                     <tr>
-                        <th colspan="5" class="text-end">Total Harga Sebenarnya</th>
+                        <th colspan="8" class="text-end">Total Harga Sebenarnya</th>
                         <th class="text-end fw-bold">Rp {{ number_format($ahsp->total_harga, 0, ',', '.') }}</th>
                     </tr>
                     <tr>
-                        <th colspan="5" class="text-end">Total Harga Pembulatan</th>
+                        <th colspan="8" class="text-end">Total Harga Pembulatan</th>
                         <th class="text-end fw-bold text-primary">Rp {{ number_format($ahsp->total_harga_pembulatan ?? 0, 0, ',', '.') }}</th>
                     </tr>
                 </tfoot>

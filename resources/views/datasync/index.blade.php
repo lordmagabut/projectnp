@@ -764,9 +764,13 @@ async function showAhspPreview(id) {
                       <th width="70">Tipe</th>
                       <th>Kode</th>
                       <th>Nama</th>
-                      <th width="80">Satuan</th>
-                      <th width="100">Koefisien</th>
-                      <th width="120">Subtotal</th>
+                      <th width="60">Satuan</th>
+                      <th width="80">Koefisien</th>
+                      <th width="90">Harga</th>
+                      <th width="90">Subtotal</th>
+                      <th width="60">Diskon %</th>
+                      <th width="80">PPN %</th>
+                      <th width="100">Final</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -780,7 +784,11 @@ async function showAhspPreview(id) {
               <td><small>${detail.source_nama}</small></td>
               <td><small>${detail.satuan}</small></td>
               <td class="text-end"><small>${parseFloat(detail.koefisien).toLocaleString('id-ID', {maximumFractionDigits: 4})}</small></td>
+              <td class="text-end"><small>Rp ${parseFloat(detail.harga_satuan).toLocaleString('id-ID')}</small></td>
               <td class="text-end"><small>Rp ${parseFloat(detail.subtotal).toLocaleString('id-ID')}</small></td>
+              <td class="text-end"><small>${parseFloat(detail.diskon_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+              <td class="text-end"><small>${parseFloat(detail.ppn_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+              <td class="text-end"><small><strong>Rp ${parseFloat(detail.subtotal_final).toLocaleString('id-ID')}</strong></small></td>
             </tr>
           `;
         });
@@ -798,9 +806,13 @@ async function showAhspPreview(id) {
                       <th width="70">Tipe</th>
                       <th>Kode</th>
                       <th>Nama</th>
-                      <th width="80">Satuan</th>
-                      <th width="100">Koefisien</th>
-                      <th width="120">Subtotal</th>
+                      <th width="60">Satuan</th>
+                      <th width="80">Koefisien</th>
+                      <th width="90">Harga</th>
+                      <th width="90">Subtotal</th>
+                      <th width="60">Diskon %</th>
+                      <th width="80">PPN %</th>
+                      <th width="100">Final</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -814,7 +826,11 @@ async function showAhspPreview(id) {
               <td><small>${detail.source_nama}</small></td>
               <td><small>${detail.satuan}</small></td>
               <td class="text-end"><small>${parseFloat(detail.koefisien).toLocaleString('id-ID', {maximumFractionDigits: 4})}</small></td>
+              <td class="text-end"><small>Rp ${parseFloat(detail.harga_satuan).toLocaleString('id-ID')}</small></td>
               <td class="text-end"><small>Rp ${parseFloat(detail.subtotal).toLocaleString('id-ID')}</small></td>
+              <td class="text-end"><small>${parseFloat(detail.diskon_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+              <td class="text-end"><small>${parseFloat(detail.ppn_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+              <td class="text-end"><small><strong>Rp ${parseFloat(detail.subtotal_final).toLocaleString('id-ID')}</strong></small></td>
             </tr>
           `;
         });
@@ -835,9 +851,13 @@ async function showAhspPreview(id) {
                   <th width="70">Tipe</th>
                   <th>Kode</th>
                   <th>Nama</th>
-                  <th width="80">Satuan</th>
-                  <th width="100">Koefisien</th>
-                  <th width="120">Subtotal</th>
+                  <th width="60">Satuan</th>
+                  <th width="80">Koefisien</th>
+                  <th width="90">Harga</th>
+                  <th width="90">Subtotal</th>
+                  <th width="60">Diskon %</th>
+                  <th width="80">PPN %</th>
+                  <th width="100">Final</th>
                 </tr>
               </thead>
               <tbody>
@@ -851,7 +871,11 @@ async function showAhspPreview(id) {
               <td><small>${detail.source_nama}</small></td>
               <td><small>${detail.satuan}</small></td>
               <td class="text-end"><small>${parseFloat(detail.koefisien).toLocaleString('id-ID', {maximumFractionDigits: 4})}</small></td>
+              <td class="text-end"><small>Rp ${parseFloat(detail.harga_satuan).toLocaleString('id-ID')}</small></td>
               <td class="text-end"><small>Rp ${parseFloat(detail.subtotal).toLocaleString('id-ID')}</small></td>
+              <td class="text-end"><small>${parseFloat(detail.diskon_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+              <td class="text-end"><small>${parseFloat(detail.ppn_persen).toLocaleString('id-ID', {maximumFractionDigits: 2})}%</small></td>
+              <td class="text-end"><small><strong>Rp ${parseFloat(detail.subtotal_final).toLocaleString('id-ID')}</strong></small></td>
             </tr>
           `;
         });
