@@ -398,6 +398,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/compare-hsd-material',      [DataSyncController::class, 'compareHsdMaterial'])->name('compare-hsd-material');
         Route::get('/compare-hsd-upah',          [DataSyncController::class, 'compareHsdUpah'])->name('compare-hsd-upah');
         Route::get('/compare-ahsp',              [DataSyncController::class, 'compareAhsp'])->name('compare-ahsp');
+        Route::get('/get-ahsp-details',          [DataSyncController::class, 'getAhspDetails'])->name('get-ahsp-details');
         Route::post('/copy-hsd-material',        [DataSyncController::class, 'copyHsdMaterial'])->name('copy-hsd-material');
         Route::post('/copy-hsd-upah',            [DataSyncController::class, 'copyHsdUpah'])->name('copy-hsd-upah');
         Route::post('/copy-ahsp',                [DataSyncController::class, 'copyAhsp'])->name('copy-ahsp');

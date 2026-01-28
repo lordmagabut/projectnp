@@ -142,6 +142,33 @@
     </div>
   </div>
 </div>
+
+<!-- Modal untuk Preview AHSP Details -->
+<div class="modal fade" id="previewAhspModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i data-feather="eye" class="me-2"></i>Preview AHSP yang Akan Di-Sync
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="previewContent">
+        <div class="text-center py-5">
+          <div class="spinner-border" role="status"></div>
+          <p class="mt-2">Memuat detail...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-primary" id="confirmSyncBtn" onclick="confirmSync()">
+          <i data-feather="check" class="me-1"></i>Lanjutkan Sync
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @endsection
 
 @push('custom-scripts')
@@ -603,6 +630,281 @@ async function copySelected(type, section) {
 }
 
 async function resyncItem(type, id) {
+  // Hanya AHSP yang perlu preview detail
+  if (type === 'ahsp') {
+    await showAhspPreview(id);
+  } else {
+    // Material dan Upah langsung sync
+    await performSync(type, id);
+  }
+}
+
+async function showAhspPreview(id) {
+  // Buka modal dan load preview
+  const modal = new bootstrap.Modal(document.getElementById('previewAhspModal'));
+  modal.show();
+
+  const contentDiv = document.getElementById('previewContent');
+  contentDiv.innerHTML = `
+    <div class="text-center py-5">
+      <div class="spinner-border" role="status"></div>
+      <p class="mt-2">Memuat detail AHSP...</p>
+    </div>
+  `;
+
+  // Store id untuk digunakan saat confirm sync
+  window.pendingSyncId = id;
+  window.pendingSyncType = 'ahsp';
+
+  try {
+    const res = await fetch('{{ route("datasync.get-ahsp-details") }}?id=' + id, {
+      headers: {
+        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+      }
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      const externalHeader = data.external.header;
+      const externalDetails = data.external.details;
+      const existingHeader = data.existing.header;
+      const existingDetails = data.existing.details;
+      const hasExisting = data.hasExisting;
+
+      let html = '';
+
+      // Header comparison
+      if (hasExisting) {
+        html += `
+          <div class="mb-3">
+            <h6 class="fw-bold mb-2">
+              <i data-feather="copy" class="me-1" style="width: 16px;"></i>
+              Informasi Header
+            </h6>
+            <div class="row">
+              <div class="col-md-6">
+                <div class="card border-secondary">
+                  <div class="card-header bg-light">
+                    <strong>Data Lokal (Saat Ini)</strong>
+                  </div>
+                  <div class="card-body p-2 small">
+                    <p class="mb-1"><strong>Kode:</strong> ${existingHeader.kode_pekerjaan}</p>
+                    <p class="mb-1"><strong>Nama:</strong> ${existingHeader.nama_pekerjaan}</p>
+                    <p class="mb-1"><strong>Satuan:</strong> ${existingHeader.satuan}</p>
+                    <p class="mb-0"><strong>Total Harga:</strong> <br>Rp ${parseFloat(existingHeader.total_harga).toLocaleString('id-ID')}</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card border-primary">
+                  <div class="card-header bg-light">
+                    <strong>Data Eksternal (Baru)</strong>
+                  </div>
+                  <div class="card-body p-2 small">
+                    <p class="mb-1"><strong>Kode:</strong> ${externalHeader.kode_pekerjaan}</p>
+                    <p class="mb-1"><strong>Nama:</strong> ${externalHeader.nama_pekerjaan}</p>
+                    <p class="mb-1"><strong>Satuan:</strong> ${externalHeader.satuan}</p>
+                    <p class="mb-0"><strong>Total Harga:</strong> <br>Rp ${parseFloat(externalHeader.total_harga).toLocaleString('id-ID')}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="alert alert-info mb-3">
+            <i data-feather="info" class="me-2" style="width: 16px;"></i>
+            <strong>AHSP baru:</strong> Data ini belum ada di database lokal.
+          </div>
+          <div class="mb-3">
+            <h6 class="fw-bold mb-2">Informasi Header (Baru)</h6>
+            <div class="card bg-light">
+              <div class="card-body p-3 small">
+                <p class="mb-1"><strong>Kode:</strong> ${externalHeader.kode_pekerjaan}</p>
+                <p class="mb-1"><strong>Nama:</strong> ${externalHeader.nama_pekerjaan}</p>
+                <p class="mb-1"><strong>Satuan:</strong> ${externalHeader.satuan}</p>
+                <p class="mb-0"><strong>Total Harga:</strong> Rp ${parseFloat(externalHeader.total_harga).toLocaleString('id-ID')}</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // Details comparison
+      html += `
+        <div class="mb-3">
+          <h6 class="fw-bold mb-2">
+            <i data-feather="layers" class="me-1" style="width: 16px;"></i>
+            Komponen Penyusun
+          </h6>
+      `;
+
+      if (hasExisting && existingDetails.length > 0) {
+        html += `
+          <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="existing-tab" data-bs-toggle="tab" data-bs-target="#existing" type="button" role="tab">
+                Lokal (${existingDetails.length})
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="external-tab" data-bs-toggle="tab" data-bs-target="#external" type="button" role="tab">
+                Eksternal (${externalDetails.length})
+              </button>
+            </li>
+          </ul>
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="existing" role="tabpanel">
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                  <thead class="table-light">
+                    <tr>
+                      <th width="70">Tipe</th>
+                      <th>Kode</th>
+                      <th>Nama</th>
+                      <th width="80">Satuan</th>
+                      <th width="100">Koefisien</th>
+                      <th width="120">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+        `;
+
+        existingDetails.forEach(detail => {
+          html += `
+            <tr>
+              <td><span class="badge ${detail.tipe === 'material' ? 'bg-info' : 'bg-warning text-dark'}">${detail.tipe === 'material' ? 'Mat' : 'Upah'}</span></td>
+              <td><code class="small">${detail.source_kode}</code></td>
+              <td><small>${detail.source_nama}</small></td>
+              <td><small>${detail.satuan}</small></td>
+              <td class="text-end"><small>${parseFloat(detail.koefisien).toLocaleString('id-ID', {maximumFractionDigits: 4})}</small></td>
+              <td class="text-end"><small>Rp ${parseFloat(detail.subtotal).toLocaleString('id-ID')}</small></td>
+            </tr>
+          `;
+        });
+
+        html += `
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="tab-pane fade" id="external" role="tabpanel">
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                  <thead class="table-light">
+                    <tr>
+                      <th width="70">Tipe</th>
+                      <th>Kode</th>
+                      <th>Nama</th>
+                      <th width="80">Satuan</th>
+                      <th width="100">Koefisien</th>
+                      <th width="120">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+        `;
+
+        externalDetails.forEach(detail => {
+          html += `
+            <tr>
+              <td><span class="badge ${detail.tipe === 'material' ? 'bg-info' : 'bg-warning text-dark'}">${detail.tipe === 'material' ? 'Mat' : 'Upah'}</span></td>
+              <td><code class="small">${detail.source_kode}</code></td>
+              <td><small>${detail.source_nama}</small></td>
+              <td><small>${detail.satuan}</small></td>
+              <td class="text-end"><small>${parseFloat(detail.koefisien).toLocaleString('id-ID', {maximumFractionDigits: 4})}</small></td>
+              <td class="text-end"><small>Rp ${parseFloat(detail.subtotal).toLocaleString('id-ID')}</small></td>
+            </tr>
+          `;
+        });
+
+        html += `
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead class="table-light">
+                <tr>
+                  <th width="70">Tipe</th>
+                  <th>Kode</th>
+                  <th>Nama</th>
+                  <th width="80">Satuan</th>
+                  <th width="100">Koefisien</th>
+                  <th width="120">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        externalDetails.forEach(detail => {
+          html += `
+            <tr>
+              <td><span class="badge ${detail.tipe === 'material' ? 'bg-info' : 'bg-warning text-dark'}">${detail.tipe === 'material' ? 'Mat' : 'Upah'}</span></td>
+              <td><code class="small">${detail.source_kode}</code></td>
+              <td><small>${detail.source_nama}</small></td>
+              <td><small>${detail.satuan}</small></td>
+              <td class="text-end"><small>${parseFloat(detail.koefisien).toLocaleString('id-ID', {maximumFractionDigits: 4})}</small></td>
+              <td class="text-end"><small>Rp ${parseFloat(detail.subtotal).toLocaleString('id-ID')}</small></td>
+            </tr>
+          `;
+        });
+
+        html += `
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      html += `
+        </div>
+
+        <div class="alert alert-info mb-0">
+          <i data-feather="info" class="me-2" style="width: 16px; height: 16px;"></i>
+          <strong>Verifikasi:</strong> Pastikan semua data di atas sudah benar sebelum melanjutkan sync.
+        </div>
+      `;
+
+      contentDiv.innerHTML = html;
+      feather.replace();
+    } else {
+      contentDiv.innerHTML = `
+        <div class="alert alert-danger mb-0">
+          <i data-feather="alert-circle" class="me-2"></i>
+          ${data.message || 'Gagal memuat detail AHSP'}
+        </div>
+      `;
+    }
+  } catch (error) {
+    contentDiv.innerHTML = `
+      <div class="alert alert-danger mb-0">
+        <i data-feather="alert-circle" class="me-2"></i>
+        Error: ${error.message}
+      </div>
+    `;
+  }
+}
+
+async function confirmSync() {
+  if (!window.pendingSyncId || !window.pendingSyncType) {
+    alert('Data sync tidak valid');
+    return;
+  }
+
+  const modal = bootstrap.Modal.getInstance(document.getElementById('previewAhspModal'));
+  modal.hide();
+
+  await performSync(window.pendingSyncType, window.pendingSyncId);
+}
+
+async function performSync(type, id) {
   if (!confirm('Re-sync item ini?')) return;
 
   const routeMap = {
@@ -613,10 +915,14 @@ async function resyncItem(type, id) {
 
   const route = routeMap[type].replace('__ID__', id);
 
-  const btn = event.target.closest('.resync-btn');
-  const originalHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<i data-feather="loader" class="spinner me-1"></i> Syncing...';
+  // Cari button yang sesuai (jika dari modal, tidak ada button untuk diubah)
+  const btn = document.querySelector(`.resync-btn[data-type="${type}"][data-id="${id}"]`);
+  const originalHtml = btn ? btn.innerHTML : null;
+  
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-feather="loader" class="spinner me-1"></i> Syncing...';
+  }
 
   try {
     const res = await fetch(route, {
@@ -630,25 +936,35 @@ async function resyncItem(type, id) {
     const data = await res.json();
 
     if (data.success) {
-      btn.className = 'btn btn-sm btn-outline-success resync-btn';
-      btn.innerHTML = '<i data-feather="check" class="me-1"></i> Synced!';
-      setTimeout(() => {
-        btn.className = 'btn btn-sm btn-outline-primary resync-btn';
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        feather.replace();
-      }, 2000);
+      if (btn) {
+        btn.className = 'btn btn-sm btn-outline-success resync-btn';
+        btn.innerHTML = '<i data-feather="check" class="me-1"></i> Synced!';
+        setTimeout(() => {
+          btn.className = 'btn btn-sm btn-outline-primary resync-btn';
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+          feather.replace();
+        }, 2000);
+      }
+      alert(data.message);
+      // Reload comparison
+      const tabType = type === 'ahsp' ? 'ahsp' : (type === 'hsd-material' ? 'hsd-material' : 'hsd-upah');
+      loadComparison(tabType);
     } else {
       alert('Error: ' + data.message);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        feather.replace();
+      }
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+    if (btn) {
       btn.disabled = false;
       btn.innerHTML = originalHtml;
       feather.replace();
     }
-  } catch (error) {
-    alert('Error: ' + error.message);
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
-    feather.replace();
   }
 }
 </script>

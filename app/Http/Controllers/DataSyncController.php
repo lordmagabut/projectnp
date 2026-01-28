@@ -489,6 +489,134 @@ class DataSyncController extends Controller
     }
 
     /**
+     * Get AHSP details untuk preview sebelum sync
+     */
+    public function getAhspDetails(Request $request)
+    {
+        $id = $request->query('id');
+
+        if (!$id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'ID tidak ditemukan'
+            ], 400);
+        }
+
+        try {
+            $this->setupExternalConnection();
+
+            // Ambil header dari eksternal
+            $externalHeader = DB::connection('external')
+                ->table('ahsp_header')
+                ->where('id', $id)
+                ->first();
+
+            if (!$externalHeader) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'AHSP tidak ditemukan di database eksternal'
+                ], 404);
+            }
+
+            // Cek existing di lokal
+            $existingHeader = AhspHeader::where('kode_pekerjaan', $externalHeader->kode_pekerjaan)->first();
+
+            // Ambil details dari eksternal
+            $externalDetails = DB::connection('external')
+                ->table('ahsp_detail')
+                ->where('ahsp_id', $id)
+                ->get();
+
+            // Enrich external details dengan nama dari source (material/upah)
+            $enrichedExternalDetails = [];
+            foreach ($externalDetails as $detail) {
+                $sourceData = null;
+                $sourceNama = 'N/A';
+
+                if ($detail->tipe === 'material') {
+                    $sourceData = DB::connection('external')
+                        ->table('hsd_material')
+                        ->where('id', $detail->referensi_id)
+                        ->first();
+                    if ($sourceData) {
+                        $sourceNama = $sourceData->nama ?? 'N/A';
+                    }
+                } elseif ($detail->tipe === 'upah') {
+                    $sourceData = DB::connection('external')
+                        ->table('hsd_upah')
+                        ->where('id', $detail->referensi_id)
+                        ->first();
+                    if ($sourceData) {
+                        $sourceNama = $sourceData->jenis_pekerja ?? 'N/A';
+                    }
+                }
+
+                $enrichedExternalDetails[] = [
+                    'tipe' => $detail->tipe,
+                    'source_kode' => $sourceData ? ($sourceData->kode ?? 'N/A') : 'N/A',
+                    'source_nama' => $sourceNama,
+                    'satuan' => $sourceData ? ($sourceData->satuan ?? $detail->satuan) : $detail->satuan,
+                    'koefisien' => $detail->koefisien,
+                    'harga_satuan' => $detail->harga_satuan,
+                    'subtotal' => $detail->subtotal,
+                ];
+            }
+
+            // Ambil existing details dari lokal jika ada
+            $existingDetails = [];
+            if ($existingHeader) {
+                $localDetails = AhspDetail::where('ahsp_id', $existingHeader->id)->get();
+                foreach ($localDetails as $detail) {
+                    $sourceData = null;
+                    $sourceNama = 'N/A';
+
+                    if ($detail->tipe === 'material') {
+                        $sourceData = HsdMaterial::find($detail->referensi_id);
+                        if ($sourceData) {
+                            $sourceNama = $sourceData->nama ?? 'N/A';
+                        }
+                    } elseif ($detail->tipe === 'upah') {
+                        $sourceData = HsdUpah::find($detail->referensi_id);
+                        if ($sourceData) {
+                            $sourceNama = $sourceData->jenis_pekerja ?? 'N/A';
+                        }
+                    }
+
+                    $existingDetails[] = [
+                        'tipe' => $detail->tipe,
+                        'source_kode' => $sourceData ? ($sourceData->kode ?? 'N/A') : 'N/A',
+                        'source_nama' => $sourceNama,
+                        'satuan' => $sourceData ? ($sourceData->satuan ?? $detail->satuan) : $detail->satuan,
+                        'koefisien' => $detail->koefisien,
+                        'harga_satuan' => $detail->harga_satuan,
+                        'subtotal' => $detail->subtotal,
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'existing' => [
+                    'header' => $existingHeader,
+                    'details' => $existingDetails
+                ],
+                'external' => [
+                    'header' => $externalHeader,
+                    'details' => $enrichedExternalDetails
+                ],
+                'hasExisting' => $existingHeader ? true : false
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Get AHSP Details error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Re-sync satu item HSD Material (untuk data yang sudah sama)
      */
     public function resyncHsdMaterial($id)
