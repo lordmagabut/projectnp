@@ -149,6 +149,16 @@
 document.addEventListener('DOMContentLoaded', function() {
   feather.replace();
 
+  // Event delegation for re-sync buttons
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.resync-btn')) {
+      const btn = e.target.closest('.resync-btn');
+      const type = btn.dataset.type;
+      const id = btn.dataset.id;
+      resyncItem(type, id);
+    }
+  });
+
   // Load current config on page load
   loadCurrentConfig();
 
@@ -454,7 +464,38 @@ function renderOnlyLocal(type, items) {
 
 function renderSame(type, items) {
   if (items.length === 0) return '<p class="text-muted">Tidak ada data.</p>';
-  return `<p class="text-muted">${items.length} item sama persis.</p>`;
+
+  const fields = getFieldsForType(type);
+  let html = `
+    <div class="alert alert-info mb-3">
+      <i data-feather="info" class="me-2"></i>
+      ${items.length} item sama persis antara database lokal dan eksternal. Gunakan tombol "Re-Sync" jika ingin memperbarui ulang.
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead class="table-light">
+          <tr>
+            <th width="100">Aksi</th>
+            ${fields.map(f => `<th>${f.label}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  items.forEach(item => {
+    const itemId = item.id;
+    html += `<tr>
+      <td>
+        <button class="btn btn-sm btn-outline-primary resync-btn" data-type="${type}" data-id="${itemId}" title="Re-Sync item ini">
+          <i data-feather="refresh-cw" class="me-1"></i> Re-Sync
+        </button>
+      </td>
+      ${fields.map(f => `<td>${formatValue(item[f.key], f.type)}</td>`).join('')}
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  return html;
 }
 
 function renderItemDetails(item, fields, compareWith = null) {
@@ -558,6 +599,56 @@ async function copySelected(type, section) {
     }
   } catch (error) {
     alert('Error: ' + error.message);
+  }
+}
+
+async function resyncItem(type, id) {
+  if (!confirm('Re-sync item ini?')) return;
+
+  const routeMap = {
+    'hsd-material': '{{ route("datasync.resync-hsd-material", ["id" => "__ID__"]) }}',
+    'hsd-upah': '{{ route("datasync.resync-hsd-upah", ["id" => "__ID__"]) }}',
+    'ahsp': '{{ route("datasync.resync-ahsp", ["id" => "__ID__"]) }}'
+  };
+
+  const route = routeMap[type].replace('__ID__', id);
+
+  const btn = event.target.closest('.resync-btn');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i data-feather="loader" class="spinner me-1"></i> Syncing...';
+
+  try {
+    const res = await fetch(route, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+      }
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      btn.className = 'btn btn-sm btn-outline-success resync-btn';
+      btn.innerHTML = '<i data-feather="check" class="me-1"></i> Synced!';
+      setTimeout(() => {
+        btn.className = 'btn btn-sm btn-outline-primary resync-btn';
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        feather.replace();
+      }, 2000);
+    } else {
+      alert('Error: ' + data.message);
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+      feather.replace();
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    feather.replace();
   }
 }
 </script>

@@ -401,5 +401,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/copy-hsd-material',        [DataSyncController::class, 'copyHsdMaterial'])->name('copy-hsd-material');
         Route::post('/copy-hsd-upah',            [DataSyncController::class, 'copyHsdUpah'])->name('copy-hsd-upah');
         Route::post('/copy-ahsp',                [DataSyncController::class, 'copyAhsp'])->name('copy-ahsp');
+        Route::post('/resync-hsd-material/{id}', [DataSyncController::class, 'resyncHsdMaterial'])->name('resync-hsd-material');
+        Route::post('/resync-hsd-upah/{id}',     [DataSyncController::class, 'resyncHsdUpah'])->name('resync-hsd-upah');
+        Route::post('/resync-ahsp/{id}',         [DataSyncController::class, 'resyncAhsp'])->name('resync-ahsp');
     });
 });

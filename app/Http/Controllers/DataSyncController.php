@@ -489,6 +489,252 @@ class DataSyncController extends Controller
     }
 
     /**
+     * Re-sync satu item HSD Material (untuk data yang sudah sama)
+     */
+    public function resyncHsdMaterial($id)
+    {
+        try {
+            $this->setupExternalConnection();
+
+            $externalData = DB::connection('external')
+                ->table('hsd_material')
+                ->where('id', $id)
+                ->first();
+
+            if (!$externalData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Item tidak ditemukan di database eksternal'
+                ], 404);
+            }
+
+            DB::beginTransaction();
+
+            // Cek apakah kode sudah ada
+            $existing = HsdMaterial::where('kode', $externalData->kode)->first();
+
+            if ($existing) {
+                // Update
+                $existing->update([
+                    'nama' => $externalData->nama,
+                    'satuan' => $externalData->satuan,
+                    'harga_satuan' => $externalData->harga_satuan,
+                    'keterangan' => $externalData->keterangan,
+                ]);
+            } else {
+                // Insert baru
+                HsdMaterial::create([
+                    'kode' => $externalData->kode,
+                    'nama' => $externalData->nama,
+                    'satuan' => $externalData->satuan,
+                    'harga_satuan' => $externalData->harga_satuan,
+                    'keterangan' => $externalData->keterangan,
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Berhasil re-sync HSD Material'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Resync HSD Material error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Re-sync satu item HSD Upah (untuk data yang sudah sama)
+     */
+    public function resyncHsdUpah($id)
+    {
+        try {
+            $this->setupExternalConnection();
+
+            $externalData = DB::connection('external')
+                ->table('hsd_upah')
+                ->where('id', $id)
+                ->first();
+
+            if (!$externalData) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Item tidak ditemukan di database eksternal'
+                ], 404);
+            }
+
+            DB::beginTransaction();
+
+            // Cek apakah kode sudah ada
+            $existing = HsdUpah::where('kode', $externalData->kode)->first();
+
+            if ($existing) {
+                // Update
+                $existing->update([
+                    'jenis_pekerja' => $externalData->jenis_pekerja,
+                    'satuan' => $externalData->satuan,
+                    'harga_satuan' => $externalData->harga_satuan,
+                    'keterangan' => $externalData->keterangan,
+                ]);
+            } else {
+                // Insert baru
+                HsdUpah::create([
+                    'kode' => $externalData->kode,
+                    'jenis_pekerja' => $externalData->jenis_pekerja,
+                    'satuan' => $externalData->satuan,
+                    'harga_satuan' => $externalData->harga_satuan,
+                    'keterangan' => $externalData->keterangan,
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Berhasil re-sync HSD Upah'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Resync HSD Upah error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Re-sync satu item AHSP (untuk data yang sudah sama)
+     */
+    public function resyncAhsp($id)
+    {
+        try {
+            $this->setupExternalConnection();
+
+            $externalHeader = DB::connection('external')
+                ->table('ahsp_header')
+                ->where('id', $id)
+                ->first();
+
+            if (!$externalHeader) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'AHSP tidak ditemukan di database eksternal'
+                ], 404);
+            }
+
+            DB::beginTransaction();
+
+            // Cek existing
+            $existing = AhspHeader::where('kode_pekerjaan', $externalHeader->kode_pekerjaan)->first();
+
+            if ($existing) {
+                $existing->update([
+                    'nama_pekerjaan' => $externalHeader->nama_pekerjaan,
+                    'satuan' => $externalHeader->satuan,
+                    'kategori_id' => $externalHeader->kategori_id,
+                    'total_harga' => $externalHeader->total_harga,
+                    'total_harga_pembulatan' => $externalHeader->total_harga_pembulatan ?? null,
+                    'is_locked' => $externalHeader->is_locked ?? 0,
+                ]);
+                $headerId = $existing->id;
+
+                // Hapus detail lama
+                AhspDetail::where('ahsp_id', $headerId)->delete();
+            } else {
+                $newHeader = AhspHeader::create([
+                    'kode_pekerjaan' => $externalHeader->kode_pekerjaan,
+                    'nama_pekerjaan' => $externalHeader->nama_pekerjaan,
+                    'satuan' => $externalHeader->satuan,
+                    'kategori_id' => $externalHeader->kategori_id,
+                    'total_harga' => $externalHeader->total_harga,
+                    'total_harga_pembulatan' => $externalHeader->total_harga_pembulatan ?? null,
+                    'is_locked' => $externalHeader->is_locked ?? 0,
+                ]);
+                $headerId = $newHeader->id;
+            }
+
+            // Copy details - dengan remapping referensi_id berdasarkan kode (bukan ID eksternal)
+            $externalDetails = DB::connection('external')
+                ->table('ahsp_detail')
+                ->where('ahsp_id', $id)
+                ->get();
+
+            foreach ($externalDetails as $detail) {
+                $localReferensiId = $detail->referensi_id; // default: ID eksternal
+
+                // Jika tipe adalah material atau upah, lakukan remapping via kode
+                if ($detail->tipe === 'material') {
+                    // Ambil kode dari HSD Material eksternal berdasarkan referensi_id
+                    $externalSource = DB::connection('external')
+                        ->table('hsd_material')
+                        ->where('id', $detail->referensi_id)
+                        ->first(['kode']);
+
+                    if ($externalSource) {
+                        // Cari ID lokal yang punya kode yang sama
+                        $localSource = HsdMaterial::where('kode', $externalSource->kode)->first();
+                        if ($localSource) {
+                            $localReferensiId = $localSource->id;
+                        } else {
+                            // Jika tidak ditemukan, gunakan referensi_id asli (fallback)
+                            \Log::warning("HSD Material kode {$externalSource->kode} tidak ditemukan di lokal saat resync AHSP {$id}");
+                        }
+                    }
+                } elseif ($detail->tipe === 'upah') {
+                    // Ambil kode dari HSD Upah eksternal berdasarkan referensi_id
+                    $externalSource = DB::connection('external')
+                        ->table('hsd_upah')
+                        ->where('id', $detail->referensi_id)
+                        ->first(['kode']);
+
+                    if ($externalSource) {
+                        // Cari ID lokal yang punya kode yang sama
+                        $localSource = HsdUpah::where('kode', $externalSource->kode)->first();
+                        if ($localSource) {
+                            $localReferensiId = $localSource->id;
+                        } else {
+                            // Jika tidak ditemukan, gunakan referensi_id asli (fallback)
+                            \Log::warning("HSD Upah kode {$externalSource->kode} tidak ditemukan di lokal saat resync AHSP {$id}");
+                        }
+                    }
+                }
+
+                AhspDetail::create([
+                    'ahsp_id' => $headerId,
+                    'tipe' => $detail->tipe,
+                    'referensi_id' => $localReferensiId,  // ← SUDAH DI-REMAP
+                    'koefisien' => $detail->koefisien,
+                    'harga_satuan' => $detail->harga_satuan,
+                    'subtotal' => $detail->subtotal,
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Berhasil re-sync AHSP beserta detailnya'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Resync AHSP error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Helper untuk membandingkan data
      */
     private function buildComparison($local, $external, $keyField)
