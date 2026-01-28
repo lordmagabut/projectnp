@@ -263,41 +263,35 @@ class DataSyncController extends Controller
                             'similarity' => round($percent, 2)
                         ];
                     } else {
-                        // Nama cukup mirip, lanjut compare content seperti biasa
+                        // Nama cukup mirip, lanjut compare DETAIL items (bukan header value)
                         $isDifferent = false;
 
-                        // Compare header fields
-                        if ($localItem->nama_pekerjaan != $extItem->nama_pekerjaan ||
-                            $localItem->satuan != $extItem->satuan ||
-                            $localItem->total_harga != $extItem->total_harga) {
+                        // Get detail counts
+                        $localDetailCount = $localItem->details->count();
+                        $externalDetailCount = DB::connection('external')
+                            ->table('ahsp_detail')
+                            ->where('ahsp_id', $extItem->id)
+                            ->count();
+
+                        // Compare detail count - jika berbeda pasti content berbeda
+                        if ($localDetailCount != $externalDetailCount) {
                             $isDifferent = true;
-                        }
-
-                        // Compare detail count
-                        if (!$isDifferent) {
-                            $localDetailCount = $localItem->details->count();
-                            $externalDetailCount = DB::connection('external')
-                                ->table('ahsp_detail')
-                                ->where('ahsp_id', $extItem->id)
-                                ->count();
-
-                            if ($localDetailCount != $externalDetailCount) {
-                                $isDifferent = true;
-                            }
-                        }
-
-                        // If same count, compare detail content
-                        if (!$isDifferent && $localItem->details->count() > 0) {
+                        } else if ($localDetailCount > 0) {
+                            // Same count - compare detail content line by line
+                            // Build external details indexed by content, not ID
+                            // (karena referensi_id bisa berbeda di database berbeda)
                             $externalDetails = DB::connection('external')
                                 ->table('ahsp_detail')
                                 ->where('ahsp_id', $extItem->id)
                                 ->get()
                                 ->keyBy(function($item) {
-                                    return $item->tipe . '-' . $item->referensi_id;
+                                    // Key by: tipe + koefisien + harga_satuan (content, bukan ID)
+                                    return $item->tipe . '-' . $item->koefisien . '-' . $item->harga_satuan;
                                 });
 
                             foreach ($localItem->details as $localDetail) {
-                                $key = $localDetail->tipe . '-' . $localDetail->referensi_id;
+                                // Match by content, not ID
+                                $key = $localDetail->tipe . '-' . $localDetail->koefisien . '-' . $localDetail->harga_satuan;
                                 $extDetail = $externalDetails->get($key);
 
                                 if (!$extDetail) {
@@ -305,10 +299,9 @@ class DataSyncController extends Controller
                                     break;
                                 }
 
-                                // Compare detail fields
-                                if ($localDetail->koefisien != $extDetail->koefisien ||
-                                    $localDetail->harga_satuan != $extDetail->harga_satuan ||
-                                    ($localDetail->subtotal_final ?? $localDetail->subtotal) != ($extDetail->subtotal_final ?? $extDetail->subtotal)) {
+                                // Compare remaining important fields
+                                // (tipe, koefisien, harga_satuan already matched via key)
+                                if (($localDetail->subtotal_final ?? $localDetail->subtotal) != ($extDetail->subtotal_final ?? $extDetail->subtotal)) {
                                     $isDifferent = true;
                                     break;
                                 }
@@ -321,6 +314,7 @@ class DataSyncController extends Controller
                                 'external' => $extItem
                             ];
                         } else {
+                            // Jika detail items sama, maka data sama (ignore update timestamp)
                             $sameItem = (array)$extItem;
                             $sameItem['local_id'] = $localItem->id;
                             $comparison['same'][] = (object)$sameItem;
