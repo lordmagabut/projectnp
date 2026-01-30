@@ -25,9 +25,20 @@ class RABImport implements WithMultipleSheets
     public function sheets(): array
     {
         return [
-            'RAB_Header' => new RABHeaderSheetImport($this->ctx),
-            'RAB_Detail' => new RABDetailSheetImport($this->ctx),
-            0            => new LegacySingleSheetImport($this->ctx), // fallback template lama
+            // Process HSD dulu (Material & Upah)
+            'HSD_Material'  => new HsdMaterialSheetImport($this->ctx),
+            'HSD_Upah'      => new HsdUpahSheetImport($this->ctx),
+            
+            // Baru proses AHSP (Header dulu, baru Detail)
+            'AHSP_Header'   => new AhspHeaderSheetImport($this->ctx),
+            'AHSP_Detail'   => new AhspDetailSheetImport($this->ctx),
+            
+            // Terakhir proses RAB (Header dulu, baru Detail)
+            'RAB_Header'    => new RABHeaderSheetImport($this->ctx),
+            'RAB_Detail'    => new RABDetailSheetImport($this->ctx),
+            
+            // Fallback untuk template lama
+            0               => new LegacySingleSheetImport($this->ctx),
         ];
     }
 }
@@ -153,40 +164,35 @@ class RABDetailSheetImport implements ToCollection, WithHeadingRow
                 // Variable untuk menyimpan ahsp_id yang valid (setelah diverifikasi)
                 $ahsp_id_valid = null;
 
-                // fallback ke AHSP bila semua harga kosong (atau bila AHSP tersedia dan ingin mengisi harga)
-                if (($harga_material + $harga_upah + $harga_satuan) == 0 && ($ahsp_id_input || $ahsp_kode)) {
+                // Cari AHSP dari input atau kode (AHSP adalah global, tidak per-proyek)
+                if ($ahsp_id_input || $ahsp_kode) {
                     $q = AhspHeader::query();
-                    if ($ahsp_id_input)   $q->where('id', $ahsp_id_input);
-                    if ($ahsp_kode) $q->orWhere('kode_pekerjaan', $ahsp_kode);
-                    if ($ahsp = $q->first()) {
-                        $ahsp_id_valid = $ahsp->id; // Set ID yang valid
-                        $satuan = $satuan ?: $ahsp->satuan;
-                        // Isi harga material & upah dari AHSP jika tersedia
-                        $harga_material = (float)($ahsp->total_material ?? 0);
-                        $harga_upah     = (float)($ahsp->total_upah ?? 0);
-                        // Harga satuan berasal dari total AHSP jika ada, fallback ke penjumlahan material+upah
-                        $harga_satuan = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? ($harga_material + $harga_upah));
-                    } else {
-                        // AHSP tidak ditemukan, catat untuk warning
-                        $ahspRef = $ahsp_id_input ? "ID: $ahsp_id_input" : "Kode: $ahsp_kode";
-                        $this->ctx->invalidAhsp[] = [
-                            'item' => $deskripsi ?: $kode,
-                            'ahsp' => $ahspRef
-                        ];
+                    
+                    if ($ahsp_id_input) {
+                        $q->where('id', $ahsp_id_input);
+                    } elseif ($ahsp_kode) {
+                        $q->where('kode_pekerjaan', $ahsp_kode);
                     }
-                } elseif ($ahsp_id_input || $ahsp_kode) {
-                    // Jika ada harga tapi ahsp_id/kode tetap diisi, verifikasi dulu apakah AHSP ada
-                    $q = AhspHeader::query();
-                    if ($ahsp_id_input)   $q->where('id', $ahsp_id_input);
-                    if ($ahsp_kode) $q->orWhere('kode_pekerjaan', $ahsp_kode);
+                    
                     if ($ahsp = $q->first()) {
-                        $ahsp_id_valid = $ahsp->id; // Set ID yang valid
+                        $ahsp_id_valid = $ahsp->id;
+                        
+                        // Jika kolom harga kosong, ambil dari AHSP
+                        if ($harga_material == 0 && $harga_upah == 0 && $harga_satuan == 0) {
+                            $harga_material = (float)($ahsp->total_material ?? 0);
+                            $harga_upah     = (float)($ahsp->total_upah ?? 0);
+                            $harga_satuan   = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? 0);
+                        }
+                        
+                        // Jika satuan kosong, ambil dari AHSP
+                        $satuan = $satuan ?: $ahsp->satuan;
                     } else {
                         // AHSP tidak ditemukan, catat untuk warning
                         $ahspRef = $ahsp_id_input ? "ID: $ahsp_id_input" : "Kode: $ahsp_kode";
                         $this->ctx->invalidAhsp[] = [
-                            'item' => $deskripsi ?: $kode,
-                            'ahsp' => $ahspRef
+                            'item'  => $deskripsi ?: $kode,
+                            'ahsp'  => $ahspRef,
+                            'error' => 'AHSP tidak ditemukan'
                         ];
                     }
                 }

@@ -320,51 +320,78 @@
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header bg-light">
-        <h5 class="modal-title" id="rabReadmeModalLabel"><i class="fas fa-book me-2"></i> README Template Import RAB</h5>
-        <a href="{{ route('rab.template.readme') }}" class="btn btn-sm btn-outline-secondary me-2">
-          <i class="fas fa-file-download me-1"></i> Unduh README.txt
-        </a>
+        <h5 class="modal-title" id="rabReadmeModalLabel"><i class="fas fa-book me-2"></i> README Template Import RAB + AHSP Terintegrasi</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <h6 class="fw-bold">Struktur File</h6>
-        <ul>
-          <li><code>RAB_Header</code>: daftar induk & sub-induk.</li>
-          <li><code>RAB_Detail</code>: item pekerjaan terhubung ke header via <code>header_kode</code>.</li>
-        </ul>
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+          <i class="fas fa-lightbulb me-2"></i>
+          <strong>Fitur Baru:</strong> Template sekarang terintegrasi dengan 6 sheet untuk import RAB + AHSP + Harga Material/Upah dalam satu file!
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
 
-        <h6 class="fw-bold mt-3">Ketentuan Umum</h6>
+        <h6 class="fw-bold text-primary">📋 Struktur File (6 Sheet)</h6>
         <ol>
-          <li>Jangan ubah <em>nama sheet</em> dan <em>urutan kolom</em>.</li>
-          <li><code>proyek_id</code> tidak diisi di file — sistem mengambil dari proyek yang aktif saat impor.</li>
-          <li><code>parent_kode</code> pada <code>RAB_Header</code> mengacu ke <code>kode</code> header induk. Kosongkan untuk header root.</li>
-          <li><code>header_kode</code> pada <code>RAB_Detail</code> WAJIB mengacu ke <code>RAB_Header.kode</code>.</li>
-          <li><code>kode</code> pada <code>RAB_Detail</code> boleh dikosongkan — sistem akan mengisi otomatis sebagai <code>header_kode.N</code>.</li>
-          <li>Harga satuan gabungan = <code>harga_material</code> + <code>harga_upah</code> (tanpa pembulatan).</li>
-          <li>Jika <code>ahsp_id</code> / <code>ahsp_kode</code> diisi dan kolom harga kosong, sistem akan ambil harga & satuan dari AHSP.</li>
-          <li>Jika kolom <code>total_material</code> / <code>total_upah</code> / <code>total</code> kosong, sistem akan menghitung otomatis.</li>
+          <li><code>HSD_Material</code>: Daftar harga satuan material</li>
+          <li><code>HSD_Upah</code>: Daftar harga satuan upah/jasa</li>
+          <li><code>AHSP_Header</code>: Master AHSP (daftar pekerjaan analisa)</li>
+          <li><code>AHSP_Detail</code>: Komponen material/upah untuk setiap AHSP</li>
+          <li><code>RAB_Header</code>: Daftar header RAB (induk/sub-induk)</li>
+          <li><code>RAB_Detail</code>: Daftar item detail RAB dengan referensi ke AHSP</li>
         </ol>
 
-        <h6 class="fw-bold mt-3">Kolom</h6>
-        <p class="mb-1"><code>RAB_Header</code>:</p>
-        <pre class="bg-light p-2 rounded mb-3">kategori_id | parent_kode | kode | deskripsi</pre>
+        <h6 class="fw-bold text-primary mt-3">⚙️ Urutan Proses Import (Otomatis)</h6>
+        <ol>
+          <li>HSD_Material & HSD_Upah diimpor dulu (master harga)</li>
+          <li>AHSP_Header & AHSP_Detail diimpor (menciptakan pekerjaan analisa)</li>
+          <li>RAB_Header & RAB_Detail diimpor (menciptakan RAB dengan link ke AHSP)</li>
+        </ol>
 
-        <p class="mb-1"><code>RAB_Detail</code>:</p>
-        <pre class="bg-light p-2 rounded">header_kode | kode | deskripsi | area | spesifikasi | satuan | volume |
-harga_material | harga_upah | harga_satuan |
-total_material | total_upah | total | ahsp_id | ahsp_kode</pre>
+        <h6 class="fw-bold text-primary mt-3">✅ Ketentuan Penting</h6>
+        <ul>
+          <li>Jangan ubah <strong>nama sheet</strong> dan <strong>urutan kolom</strong> di setiap sheet</li>
+          <li>Jangan hapus <strong>baris header</strong> (baris pertama setiap sheet)</li>
+          <li>Isi data mulai dari <strong>baris ke-2</strong></li>
+          <li><strong>Kolom harga & total bisa kosong</strong> → sistem akan hitung otomatis dari AHSP atau rumus</li>
+          <li><strong>ahsp_kode di RAB_Detail</strong> harus match dengan <code>AHSP_Header.kode_pekerjaan</code> untuk auto-linking</li>
+        </ul>
 
-        <h6 class="fw-bold mt-3">Contoh Singkat</h6>
-        <pre class="bg-light p-2 rounded mb-0">RAB_Header:
-1 |   | 1   | PEKERJAAN PERSIAPAN
-1 | 1 | 1.1 | PEKERJAAN PEMBERSIHAN
+        <h6 class="fw-bold text-primary mt-3">📌 Detail Setiap Sheet</h6>
 
-RAB_Detail:
-header_kode=1.1 | kode=1.1.1 | deskripsi=Land Clearing | satuan=m2 | volume=53.56 | harga_material=0 | harga_upah=19000</pre>
+        <p class="mb-2"><strong>HSD_Material:</strong> <code>kode_item | nama_item | satuan | harga_satuan</code></p>
+        <p class="text-muted small mb-3">Contoh: MAT.001 | Pasir Malang | m3 | 150000</p>
+
+        <p class="mb-2"><strong>HSD_Upah:</strong> <code>kode_item | nama_item | satuan | harga_satuan</code></p>
+        <p class="text-muted small mb-3">Contoh: UPH.001 | Tukang Gali | HOK | 200000</p>
+
+        <p class="mb-2"><strong>AHSP_Header:</strong> <code>kode_pekerjaan | nama_pekerjaan | satuan | catatan</code></p>
+        <p class="text-muted small mb-3">Contoh: A.1 | Excavation 1m | m3 | Tanah biasa</p>
+
+        <p class="mb-2"><strong>AHSP_Detail:</strong> <code>ahsp_kode | tipe | kode_item | koefisien</code></p>
+        <p class="text-muted small mb-3">Contoh: A.1 | material | MAT.001 | 1.2</p>
+
+        <p class="mb-2"><strong>RAB_Header:</strong> <code>kategori_id | parent_kode | kode | deskripsi</code></p>
+        <p class="text-muted small mb-3">Contoh: 1 | 1 | 1.1 | PEKERJAAN PEMBERSIHAN</p>
+
+        <p class="mb-2"><strong>RAB_Detail:</strong> <code>header_kode | kode | deskripsi | area | spesifikasi | satuan | volume | ... | ahsp_kode</code></p>
+        <p class="text-muted small mb-3">Contoh: 1.1 | 1.1.1 | Excavation | Lapangan | Tanah biasa | m3 | 50 | ... | A.1</p>
+
+        <h6 class="fw-bold text-primary mt-3">💡 Tips Penggunaan</h6>
+        <ul>
+          <li>Siapkan <strong>HSD_Material & HSD_Upah dulu</strong> sebelum membuat AHSP_Detail</li>
+          <li>Siapkan <strong>AHSP_Header & AHSP_Detail dulu</strong> sebelum membuat RAB_Detail</li>
+          <li>Di RAB_Detail, isi <strong>header_kode</strong> (wajib) dan <strong>ahsp_kode</strong> (untuk auto-linking)</li>
+          <li>Kolom harga di RAB_Detail bisa kosong - sistem otomatis ambil dari AHSP</li>
+          <li>Jika ada peringatan "AHSP tidak ditemukan" → periksa spelling kode AHSP</li>
+        </ul>
+
+        <div class="alert alert-warning mt-3 mb-0">
+          <strong><i class="fas fa-download me-2"></i>Download Template Lengkap:</strong> Klik tombol di bawah untuk download file template dengan semua 6 sheet
+        </div>
       </div>
       <div class="modal-footer">
-        <a href="{{ route('rab.template') }}" class="btn btn-success">
-          <i class="fas fa-download me-1"></i> Download Template (.xlsx)
+        <a href="{{ route('rab.template') }}" class="btn btn-success" download>
+          <i class="fas fa-download me-1"></i> Download Template 6 Sheet (.xlsx)
         </a>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
       </div>
