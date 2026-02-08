@@ -19,6 +19,7 @@ class AhspDetailSheetImport implements ToCollection, WithHeadingRow
     {
         DB::transaction(function () use ($rows) {
             $ahspTotals = [];  // Track totals per AHSP
+            $clearedAhsp = [];
 
             foreach ($rows as $row) {
                 // Skip empty rows
@@ -40,6 +41,12 @@ class AhspDetailSheetImport implements ToCollection, WithHeadingRow
 
                 if (!$ahsp) {
                     continue;
+                }
+
+                // Clear existing details once per AHSP (overwrite)
+                if (!isset($clearedAhsp[$ahsp->id])) {
+                    AhspDetail::where('ahsp_id', $ahsp->id)->delete();
+                    $clearedAhsp[$ahsp->id] = true;
                 }
 
                 // Find HSD Material or Upah
@@ -64,25 +71,6 @@ class AhspDetailSheetImport implements ToCollection, WithHeadingRow
                 }
 
                 $subtotal = $koefisien * $harga_satuan;
-
-                // Delete existing detail with same ahsp_id + tipe + referensi_id
-                if ($tipe === 'material' && !empty($kode_item)) {
-                    $referensi = HsdMaterial::where('kode', $kode_item)->first();
-                    if ($referensi) {
-                        AhspDetail::where('ahsp_id', $ahsp->id)
-                                  ->where('tipe', $tipe)
-                                  ->where('referensi_id', $referensi->id)
-                                  ->delete();
-                    }
-                } elseif ($tipe === 'upah' && !empty($kode_item)) {
-                    $referensi = HsdUpah::where('kode', $kode_item)->first();
-                    if ($referensi) {
-                        AhspDetail::where('ahsp_id', $ahsp->id)
-                                  ->where('tipe', $tipe)
-                                  ->where('referensi_id', $referensi->id)
-                                  ->delete();
-                    }
-                }
 
                 // Create new detail
                 $referensi_id = null;

@@ -181,7 +181,7 @@ class RABDetailSheetImport implements ToCollection, WithHeadingRow
                         if ($harga_material == 0 && $harga_upah == 0 && $harga_satuan == 0) {
                             $harga_material = (float)($ahsp->total_material ?? 0);
                             $harga_upah     = (float)($ahsp->total_upah ?? 0);
-                            $harga_satuan   = (float)($ahsp->total_harga_pembulatan ?? $ahsp->total_harga ?? 0);
+                            $harga_satuan   = (float)($ahsp->total_harga ?? 0);
                         }
                         
                         // Jika satuan kosong, ambil dari AHSP

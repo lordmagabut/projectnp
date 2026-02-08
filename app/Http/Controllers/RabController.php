@@ -9,7 +9,10 @@ use App\Models\RabHeader;
 use App\Models\RabDetail;
 use App\Models\RabKategori;
 use App\Models\Proyek;
+use App\Models\ProyekTaxProfile;
 use Maatwebsite\Excel\Facades\Excel;
+use Barryvdh\DomPDF\Facade\Pdf;
+use iio\libmergepdf\Merger;
 
 class RabController extends Controller
 {
@@ -84,6 +87,34 @@ class RabController extends Controller
         \App\Models\RabHeader::where('proyek_id', $proyek_id)->delete();
 
         return redirect()->back()->with('success', 'Data RAB berhasil direset.');
+    }
+
+    public function generatePdfMixed($proyek_id)
+    {
+        $proyek = Proyek::with(['pemberiKerja'])->findOrFail($proyek_id);
+        $headers = RabHeader::where('proyek_id', $proyek_id)
+            ->with(['rabDetails.ahsp.details'])
+            ->orderBy('kode_sort')
+            ->get();
+
+        $tax = ProyekTaxProfile::where('proyek_id', $proyek_id)->where('aktif', 1)->first();
+
+        $pdfSummary = Pdf::loadView('rab.pdf_summary', compact('proyek', 'headers', 'tax'))
+            ->setPaper('A4', 'portrait');
+
+        $pdfDetail = Pdf::loadView('rab.pdf_detail', compact('proyek', 'headers', 'tax'))
+            ->setPaper('A4', 'landscape');
+
+        $merger = new Merger;
+        $merger->addRaw($pdfSummary->output());
+        $merger->addRaw($pdfDetail->output());
+        $final = $merger->merge();
+
+        $filename = 'RAB_' . str_replace(' ', '_', $proyek->nama_proyek) . '_' . date('Ymd_His') . '.pdf';
+
+        return response($final)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="'.$filename.'"');
     }
 
     /** ====================== DOWNLOAD TEMPLATE & README ====================== */

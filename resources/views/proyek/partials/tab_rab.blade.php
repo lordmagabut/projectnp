@@ -57,6 +57,11 @@
           </a>
         </li>
         <li>
+          <a class="dropdown-item d-flex align-items-center" target="_blank" href="{{ route('rab.pdf-mixed', $proyek->id) }}">
+            <i class="fas fa-file-pdf me-2 text-danger"></i> PDF (Material + Jasa)
+          </a>
+        </li>
+        <li>
           <a class="dropdown-item d-flex align-items-center" href="{{ route('rab.template') }}">
             <i class="fas fa-download me-2 text-success"></i> Download Template Import
           </a>
