@@ -51,6 +51,15 @@
                    value="{{ old('tanggal_penawaran', $penawaran->tanggal_penawaran ? \Carbon\Carbon::parse($penawaran->tanggal_penawaran)->format('Y-m-d') : date('Y-m-d')) }}" required>
             @error('tanggal_penawaran') <div class="invalid-feedback">{{ $message }}</div> @enderror
           </div>
+          <div class="col-md-6">
+            @php $srcMode = old('source_price_mode', $penawaran->source_price_mode ?? 'base'); @endphp
+            <label for="source_price_mode" class="form-label">Sumber Nilai RAB</label>
+            <select name="source_price_mode" id="source_price_mode" class="form-select">
+              <option value="base" {{ $srcMode === 'base' ? 'selected' : '' }}>Nilai dasar (tanpa kontigensi)</option>
+              <option value="contingency" {{ $srcMode === 'contingency' ? 'selected' : '' }}>Nilai + kontigensi proyek</option>
+            </select>
+            <small class="text-muted">Jika pilih kontigensi, harga penawaran dihitung memakai faktor kontigensi proyek.</small>
+          </div>
 
           {{-- Tambahan agar tidak ke-null saat update (controller memang mengupdate ini) --}}
           <div class="col-md-6">
@@ -151,25 +160,33 @@
 
 {{-- Siapkan data sections+items yang sudah ada untuk prefill --}}
 @php
-  $sectionsForJs = $penawaran->sections->map(function($s){
+  $priceMode = $proyek->penawaran_price_mode ?? 'pisah';
+  $sectionsForJs = $penawaran->sections->map(function($s) use ($priceMode){
       return [
           'rab_header_id'       => $s->rab_header_id,
           'deskripsi'           => optional($s->rabHeader)->kode . ' - ' . optional($s->rabHeader)->deskripsi,
           'profit_percentage'   => (float) $s->profit_percentage,
           'overhead_percentage' => (float) $s->overhead_percentage,
-          'items' => $s->items->map(function($i){
+          'items' => $s->items->map(function($i) use ($priceMode){
+        $rabDetail = $i->rabDetail;
+        $rounded = optional(optional($rabDetail)->ahsp)->total_harga_pembulatan;
+        $basePrice = $rabDetail
+          ? ($priceMode === 'gabung'
+            ? ($rounded ?? ($rabDetail->harga_satuan ?? (($rabDetail->harga_material ?? 0) + ($rabDetail->harga_upah ?? 0))))
+            : ($rabDetail->harga_satuan ?? (($rabDetail->harga_material ?? 0) + ($rabDetail->harga_upah ?? 0))))
+          : null;
               return [
                   'rab_detail_id'        => $i->rab_detail_id,
                   'kode'                 => $i->kode,
                   'deskripsi'            => $i->deskripsi,
                   'volume'               => (float) $i->volume,
                   'satuan'               => $i->satuan,
-                  'harga_satuan_dasar'   => (float) ($i->harga_satuan_dasar ?? 0),
+          'harga_satuan_dasar'   => (float) ($basePrice ?? ($i->harga_satuan_dasar ?? 0)),
                   // Jika tabel item belum punya kolom ini, biarkan null
                   'area'                 => $i->area ?? null,
                   'spesifikasi'          => $i->spesifikasi ?? null,
               ];
-          })->values(),
+      })->values(),
       ];
   })->values();
 @endphp
@@ -178,6 +195,7 @@
   feather.replace();
 
   let sectionCounter = 0;
+  const kontFactor = 1 + ({{ (float)($proyek->kontingensi_persen ?? 0) }} / 100);
 
   function formatRupiah(value) { return 'Rp ' + Number(value || 0).toLocaleString('id-ID'); }
 
@@ -243,7 +261,7 @@
 
 // Fungsi untuk menghitung ulang harga penawaran dan total item
 function updateItemRowCalculations(row) {
-    const hargaDasar = parseFloat(row.data('harga-satuan-dasar') || 0);
+  let hargaDasar = parseFloat(row.data('harga-satuan-dasar') || 0);
     const volume = parseFloat(row.find('input[name$="[volume]"]').val() || 0);
     
     const sectionCard = row.closest('.section-card');
@@ -255,9 +273,14 @@ function updateItemRowCalculations(row) {
     // PERUBAHAN LOGIKA PERHITUNGAN DIMULAI DI SINI
     // ===============================================
     
-    // Samakan dengan backend: harga_penawaran = harga_dasar * (1 + profit + overhead)
-    const koef = 1 + (profitPercentage/100) + (overheadPercentage/100);
-    const hargaPenawaran = hargaDasar * koef;
+    const sourceMode = $('#source_price_mode').val() || 'base';
+    if (sourceMode === 'contingency') {
+      hargaDasar = hargaDasar * kontFactor;
+    }
+
+    // Samakan dengan backend: harga_penawaran = harga_dasar / (1 - profit - overhead)
+    const denom = 1 - (profitPercentage/100) - (overheadPercentage/100);
+    const hargaPenawaran = denom > 0 ? (hargaDasar / denom) : 0;
     
     // ===============================================
     // PERHITUNGAN LANJUTAN
@@ -287,6 +310,12 @@ function updateItemRowCalculations(row) {
     $('#discount-amount').text(formatRupiah(discAmt));
     $('#final-total').text(formatRupiah(finalTotal));
   }
+
+  $('#source_price_mode').on('change', function(){
+    $('.section-card .item-table tbody tr').each(function(){
+      updateItemRowCalculations($(this));
+    });
+  });
 
   function addItemRow(sectionCard, itemData = null) {
     const itemsBody = sectionCard.find('.items-body');

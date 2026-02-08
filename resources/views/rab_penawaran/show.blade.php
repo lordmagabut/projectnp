@@ -128,6 +128,10 @@
           <tr><th>Diskon (%)</th>                     <td>: {{ number_format($discPct, 2, ',', '.') }}%</td></tr>
           <tr><th>Subtotal setelah Diskon</th>        <td class="fw-bold text-info">: {{ $rf($subtotal) }}</td></tr>
           <tr>
+            <th>Sumber Nilai RAB</th>
+            <td>: {{ ($penawaran->source_price_mode ?? 'base') === 'contingency' ? 'Nilai + Kontigensi' : 'Nilai dasar (tanpa kontigensi)' }}</td>
+          </tr>
+          <tr>
             <th>Status</th>
             <td>:
               @if($penawaran->status == 'draft')

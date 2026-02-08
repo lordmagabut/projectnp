@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Concerns\FromView;
+use Illuminate\Validation\ValidationException;
 
 use App\Models\Proyek;
 use App\Models\RabHeader;
@@ -63,6 +64,8 @@ class RabPenawaranController extends Controller
     public function create(Request $request, Proyek $proyek)
     {
         $priceMode = $proyek->penawaran_price_mode ?? 'pisah';
+        $sourcePriceMode = $request->input('source_price_mode', 'base');
+        $kontFactor = 1 + ((float)($proyek->kontingensi_persen ?? 0) / 100);
 
         $rabHeaders = RabHeader::where('proyek_id', $proyek->id)
                                ->whereNull('parent_id')
@@ -126,11 +129,13 @@ class RabPenawaranController extends Controller
             // karena tidak ada satu RabDetail tunggal yang mewakili seluruh proyek.
         }
     
-        return view('rab_penawaran.create', compact('proyek', 'rabHeaders', 'flatRabHeaders', 'preloadedRabData', 'preloadedArea', 'preloadedSpesifikasi', 'nomorPenawaran', 'priceMode'));
+        return view('rab_penawaran.create', compact('proyek', 'rabHeaders', 'flatRabHeaders', 'preloadedRabData', 'preloadedArea', 'preloadedSpesifikasi', 'nomorPenawaran', 'priceMode', 'sourcePriceMode', 'kontFactor'));
     }    
     public function store(Request $request, Proyek $proyek)
     {
         $priceMode = $proyek->penawaran_price_mode ?? 'pisah';
+        $sourcePriceMode = $request->input('source_price_mode', 'base');
+        $kontFactor = 1 + ((float)($proyek->kontingensi_persen ?? 0) / 100);
 
         DB::beginTransaction();
         try {
@@ -138,6 +143,7 @@ class RabPenawaranController extends Controller
                 'nama_penawaran'                      => 'required|string|max:255',
                 'tanggal_penawaran'                   => 'required|date',
                 'discount_percentage'                 => 'nullable|numeric|min:0|max:100',
+                'source_price_mode'                   => 'nullable|in:base,contingency',
 
                 'sections'                            => 'required|array|min:1',
                 'sections.*.rab_header_id'            => 'required|exists:rab_header,id',
@@ -168,12 +174,20 @@ class RabPenawaranController extends Controller
                 'discount_amount'        => 0,
                 'final_total_penawaran'  => 0,
                 'status'                 => 'draft',
+                'source_price_mode'       => $sourcePriceMode,
             ]);
 
-            foreach ($request->sections as $sectionData) {
+            foreach ($request->sections as $sectionIndex => $sectionData) {
                 $profitPercentage   = (float)$sectionData['profit_percentage'];
-                $overheadPercentage = (float)$sectionData['overhead_percentage'];
+                    $overheadPercentage = (float)($sectionData['overhead_percentage'] ?? 0);
                 $totalSection       = 0.0;
+
+                    if (($profitPercentage + $overheadPercentage) >= 100) {
+                        throw ValidationException::withMessages([
+                            "sections.$sectionIndex.profit_percentage" => 'Total profit + overhead harus kurang dari 100%.',
+                            "sections.$sectionIndex.overhead_percentage" => 'Total profit + overhead harus kurang dari 100%.',
+                        ]);
+                    }
 
                 $newSection = RabPenawaranSection::create([
                     'rab_penawaran_header_id' => $penawaranHeader->id,
@@ -205,22 +219,34 @@ class RabPenawaranController extends Controller
                             ? ($roundedBase ?? $rabDetail->harga_satuan ?? ($matDasar + $upahDasar))
                             : ($rabDetail->harga_satuan ?? ($matDasar + $upahDasar)));
 
+                        if ($sourcePriceMode === 'contingency') {
+                            if ($priceMode === 'gabung') {
+                                $hargaSatuanDasar = $hargaSatuanDasar * $kontFactor;
+                                $matDasar = $hargaSatuanDasar;
+                                $upahDasar = 0.0;
+                            } else {
+                                $matDasar = $matDasar * $kontFactor;
+                                $upahDasar = $upahDasar * $kontFactor;
+                                $hargaSatuanDasar = $matDasar + $upahDasar;
+                            }
+                        }
+
                         // Mode gabung: treat all as satu kolom harga
-                        if ($priceMode === 'gabung') {
+                        if ($priceMode === 'gabung' && $sourcePriceMode !== 'contingency') {
                             $matDasar = $hargaSatuanDasar;
                             $upahDasar = 0.0;
                         }
 
-                        // Mark-up koef
-                        $koef = 1 + ($profitPercentage / 100) + ($overheadPercentage / 100);
+                        // Margin-based koef: harga_penawaran = harga_dasar / (1 - profit - overhead)
+                        $denom = 1 - ($profitPercentage / 100) - ($overheadPercentage / 100);
 
                         // Hitung turunan
-                        $hargaSatuanCalculated = $hargaSatuanDasar * $koef;
+                        $hargaSatuanCalculated = $denom > 0 ? ($hargaSatuanDasar / $denom) : 0.0;
                         $hargaSatuanPenawaran  = $hargaSatuanCalculated;
                         $totalItem             = $hargaSatuanPenawaran * $volume;
 
-                        $matCalc  = $priceMode === 'gabung' ? $hargaSatuanPenawaran : $matDasar  * $koef;
-                        $upahCalc = $priceMode === 'gabung' ? 0.0                   : $upahDasar * $koef;
+                        $matCalc  = $priceMode === 'gabung' ? $hargaSatuanPenawaran : ($denom > 0 ? ($matDasar / $denom) : 0.0);
+                        $upahCalc = $priceMode === 'gabung' ? 0.0                   : ($denom > 0 ? ($upahDasar / $denom) : 0.0);
 
                         RabPenawaranItem::create([
                             'rab_penawaran_section_id'       => $newSection->id,
@@ -298,7 +324,7 @@ class RabPenawaranController extends Controller
 
         $penawaran->load([
             'sections' => function($q) {
-                $q->whereNull('parent_id')->with(['children.rabHeader', 'items']);
+                $q->whereNull('parent_id')->with(['children.rabHeader', 'items.rabDetail.ahsp']);
             },
             'sections.rabHeader',
         ]);
@@ -310,6 +336,8 @@ class RabPenawaranController extends Controller
     public function update(Request $request, Proyek $proyek, RabPenawaranHeader $penawaran)
     {
         $priceMode = $proyek->penawaran_price_mode ?? 'pisah';
+        $sourcePriceMode = $request->input('source_price_mode', $penawaran->source_price_mode ?? 'base');
+        $kontFactor = 1 + ((float)($proyek->kontingensi_persen ?? 0) / 100);
 
         DB::beginTransaction();
         try {
@@ -318,6 +346,7 @@ class RabPenawaranController extends Controller
                 'nama_penawaran'                      => 'required|string|max:255',
                 'tanggal_penawaran'                   => 'required|date',
                 'discount_percentage'                 => 'nullable|numeric|min:0|max:100',
+                'source_price_mode'                   => 'nullable|in:base,contingency',
 
                 'sections'                            => 'nullable|array|min:1',
                 'sections.*.rab_header_id'            => 'required_with:sections|exists:rab_header,id',
@@ -338,6 +367,7 @@ class RabPenawaranController extends Controller
                 'nama_penawaran'       => $request->nama_penawaran,
                 'tanggal_penawaran'    => $request->tanggal_penawaran,
                 'discount_percentage'  => (float)($request->discount_percentage ?? 0),
+                'source_price_mode'     => $sourcePriceMode,
             ]);
 
             $totalPenawaranBruto = 0.0;
@@ -351,10 +381,17 @@ class RabPenawaranController extends Controller
                 $penawaran->sections()->delete();
 
                 // Bangun ulang
-                foreach ($request->sections as $sectionData) {
+                foreach ($request->sections as $sectionIndex => $sectionData) {
                     $profitPercentage   = (float)($sectionData['profit_percentage']   ?? 0);
                     $overheadPercentage = (float)($sectionData['overhead_percentage'] ?? 0);
                     $totalSection       = 0.0;
+
+                    if (($profitPercentage + $overheadPercentage) >= 100) {
+                        throw ValidationException::withMessages([
+                            "sections.$sectionIndex.profit_percentage" => 'Total profit + overhead harus kurang dari 100%.',
+                            "sections.$sectionIndex.overhead_percentage" => 'Total profit + overhead harus kurang dari 100%.',
+                        ]);
+                    }
 
                     $newSection = RabPenawaranSection::create([
                         'rab_penawaran_header_id' => $penawaran->id,
@@ -381,19 +418,32 @@ class RabPenawaranController extends Controller
                             $hargaSatuanDasar = (float)($priceMode === 'gabung'
                                 ? ($roundedBase ?? $rabDetail->harga_satuan ?? ($matDasar + $upahDasar))
                                 : ($rabDetail->harga_satuan ?? ($matDasar + $upahDasar)));
-                            if ($priceMode === 'gabung') {
+
+                            if ($sourcePriceMode === 'contingency') {
+                                if ($priceMode === 'gabung') {
+                                    $hargaSatuanDasar = $hargaSatuanDasar * $kontFactor;
+                                    $matDasar = $hargaSatuanDasar;
+                                    $upahDasar = 0.0;
+                                } else {
+                                    $matDasar = $matDasar * $kontFactor;
+                                    $upahDasar = $upahDasar * $kontFactor;
+                                    $hargaSatuanDasar = $matDasar + $upahDasar;
+                                }
+                            }
+
+                            if ($priceMode === 'gabung' && $sourcePriceMode !== 'contingency') {
                                 $matDasar = $hargaSatuanDasar;
                                 $upahDasar = 0.0;
                             }
 
-                            $koef              = 1 + ($profitPercentage / 100) + ($overheadPercentage / 100);
+                            $denom = 1 - ($profitPercentage / 100) - ($overheadPercentage / 100);
 
-                            $hargaSatuanCalculated = $hargaSatuanDasar * $koef;
+                            $hargaSatuanCalculated = $denom > 0 ? ($hargaSatuanDasar / $denom) : 0.0;
                             $hargaSatuanPenawaran  = $hargaSatuanCalculated;
                             $totalItem             = $hargaSatuanPenawaran * $volume;
 
-                            $matCalc  = $priceMode === 'gabung' ? $hargaSatuanPenawaran : $matDasar  * $koef;
-                            $upahCalc = $priceMode === 'gabung' ? 0.0                   : $upahDasar * $koef;
+                            $matCalc  = $priceMode === 'gabung' ? $hargaSatuanPenawaran : ($denom > 0 ? ($matDasar / $denom) : 0.0);
+                            $upahCalc = $priceMode === 'gabung' ? 0.0                   : ($denom > 0 ? ($upahDasar / $denom) : 0.0);
 
                             RabPenawaranItem::create([
                                 'rab_penawaran_section_id'       => $newSection->id,

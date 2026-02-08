@@ -176,7 +176,7 @@
           <div class="input-group">
             <span class="input-group-text">Rp</span>
             <input type="text" class="form-control text-end"
-                   value="{{ number_format((float)($newItem['harga_material'] ?? 0), 0, ',', '.') }}" readonly>
+                   value="{{ number_format((float)($newItem['harga_material'] ?? 0) * ($kontFactor ?? 1), 0, ',', '.') }}" readonly>
           </div>
         </div>
 
@@ -185,7 +185,7 @@
           <div class="input-group">
             <span class="input-group-text">Rp</span>
             <input type="text" class="form-control text-end"
-                   value="{{ number_format((float)($newItem['harga_upah'] ?? 0), 0, ',', '.') }}" readonly>
+                   value="{{ number_format((float)($newItem['harga_upah'] ?? 0) * ($kontFactor ?? 1), 0, ',', '.') }}" readonly>
           </div>
         </div>
 
@@ -194,7 +194,7 @@
           <div class="input-group">
             <span class="input-group-text">Rp</span>
             <input type="text" class="form-control text-end"
-                   value="{{ number_format((float)($newItem['harga_satuan'] ?? 0), 0, ',', '.') }}" readonly>
+                   value="{{ number_format((float)($newItem['harga_satuan'] ?? 0) * ($kontFactor ?? 1), 0, ',', '.') }}" readonly>
           </div>
           <small class="text-muted">Diambil dari AHSP (tanpa pembulatan tambahan).</small>
         </div>
@@ -267,14 +267,14 @@
         </div>
       @else
         @foreach($headers as $header)
-          @include('livewire.partials.rab-header-card', ['header' => $header, 'level' => 0])
+          @include('livewire.partials.rab-header-card', ['header' => $header, 'level' => 0, 'kontFactor' => $kontFactor, 'kontigensiPersen' => $kontigensiPersen])
         @endforeach
       @endif
 
       <div class="card mt-3 animate__animated animate__fadeInUp animate__faster">
         <div class="card-body d-flex justify-content-between align-items-center bg-light">
           <h5 class="mb-0 text-dark"><i class="fas fa-money-bill-wave me-2"></i> Grand Total Proyek</h5>
-          <span class="fw-bold fs-4 text-primary">Rp {{ number_format($projectGrandTotal, 0, ',', '.') }}</span>
+          <span class="fw-bold fs-4 text-primary">Rp {{ number_format(((float)$projectGrandTotal * ($kontFactor ?? 1)), 0, ',', '.') }}</span>
         </div>
       </div>
     </div>

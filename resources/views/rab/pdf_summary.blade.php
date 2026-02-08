@@ -29,12 +29,18 @@
 </head>
 <body>
 
-  @php $company = \App\Models\Perusahaan::first(); @endphp
+  @php
+    $company = \App\Models\Perusahaan::first();
+    $kontigensi = (float) data_get($proyek, 'kontingensi_persen', data_get($proyek, 'persen_kontingensi', 0));
+    $kontFactor = 1 + ($kontigensi / 100);
+    $GLOBALS['kontFactor'] = $kontFactor;
+  @endphp
   <div class="pdf-header">
     <table>
       <tr><th>PROYEK</th><td>: {{ $proyek->nama_proyek }} - {{ $proyek->pemberiKerja->nama_pemberi_kerja ?? '—' }}</td></tr>
       <tr><th>KONTRAKTOR</th><td>: {{ $company->nama_perusahaan ?? ($proyek->kontraktor ?? '—') }}</td></tr>
       <tr><th>PEKERJAAN</th><td>: {{ $proyek->jenis_pekerjaan ?? '—' }}</td></tr>
+      <tr><th>KONTIGENSI</th><td>: {{ number_format($kontigensi, 2, ',', '.') }}%</td></tr>
       <tr><th>TANGGAL CETAK</th><td>: {{ \Carbon\Carbon::now()->translatedFormat('d F Y') }}</td></tr>
     </table>
   </div>
@@ -63,6 +69,7 @@
     }
     if (!function_exists('rab_summary_mat_jasa_totals')) {
       function rab_summary_mat_jasa_totals($d){
+        $kontFactor = $GLOBALS['kontFactor'] ?? 1;
         $vol = (float)($d->volume ?? 0);
         $unitMat = (float)($d->harga_material ?? 0);
         $unitJasa = (float)($d->harga_upah ?? 0);
@@ -70,16 +77,19 @@
         $totJasa = (float)($d->total_upah ?? 0);
         if ($totMat == 0.0 && $unitMat > 0) $totMat = $unitMat * $vol;
         if ($totJasa == 0.0 && $unitJasa > 0) $totJasa = $unitJasa * $vol;
+        if ($totMat > 0) $totMat = $totMat * $kontFactor;
+        if ($totJasa > 0) $totJasa = $totJasa * $kontFactor;
         return [$totMat, $totJasa];
       }
     }
     if (!function_exists('rab_summary_total_combined')) {
       function rab_summary_total_combined($d){
+        $kontFactor = $GLOBALS['kontFactor'] ?? 1;
         $vol = (float)($d->volume ?? 0);
         $totalGab = (float)($d->total ?? 0);
-        if ($totalGab > 0) return $totalGab;
+        if ($totalGab > 0) return $totalGab * $kontFactor;
         $unitGab = (float)($d->harga_satuan ?? 0);
-        if ($unitGab > 0) return $unitGab * $vol;
+        if ($unitGab > 0) return $unitGab * $vol * $kontFactor;
         [$totMat, $totJasa] = rab_summary_mat_jasa_totals($d);
         return $totMat + $totJasa;
       }

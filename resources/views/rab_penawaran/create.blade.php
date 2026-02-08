@@ -43,6 +43,15 @@
                         <input type="date" name="tanggal_penawaran" id="tanggal_penawaran" class="form-control @error('tanggal_penawaran') is-invalid @enderror" value="{{ old('tanggal_penawaran', date('Y-m-d')) }}" required>
                         @error('tanggal_penawaran') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
+                    <div class="col-md-6">
+                        @php $srcMode = old('source_price_mode', 'base'); @endphp
+                        <label for="source_price_mode" class="form-label">Sumber Nilai RAB</label>
+                        <select name="source_price_mode" id="source_price_mode" class="form-select">
+                            <option value="base" {{ $srcMode === 'base' ? 'selected' : '' }}>Nilai dasar (tanpa kontigensi)</option>
+                            <option value="contingency" {{ $srcMode === 'contingency' ? 'selected' : '' }}>Nilai + kontigensi proyek</option>
+                        </select>
+                        <small class="text-muted">Jika pilih kontigensi, harga penawaran dihitung memakai faktor kontigensi proyek.</small>
+                    </div>
                 </div>
             </div>
 
@@ -125,6 +134,8 @@
 
 <script>
     feather.replace();
+
+    const kontFactor = 1 + ({{ (float)($proyek->kontingensi_persen ?? 0) }} / 100);
 
     let sectionCounter = 0; // Untuk melacak indeks section secara global
     
@@ -282,7 +293,7 @@
     // Fungsi untuk menghitung ulang harga penawaran dan total item
 // Fungsi untuk menghitung ulang harga penawaran dan total item
 function updateItemRowCalculations(row) {
-    const hargaDasar = parseFloat(row.data('harga-satuan-dasar') || 0);
+    let hargaDasar = parseFloat(row.data('harga-satuan-dasar') || 0);
     const volume = parseFloat(row.find('input[name$="[volume]"]').val() || 0);
     
     const sectionCard = row.closest('.section-card');
@@ -294,9 +305,14 @@ function updateItemRowCalculations(row) {
     // PERUBAHAN LOGIKA PERHITUNGAN DIMULAI DI SINI
     // ===============================================
     
-    // Sesuaikan dengan perhitungan backend: harga_penawaran = harga_dasar * (1 + profit + overhead)
-    const koef = 1 + (profitPercentage/100) + (overheadPercentage/100);
-    const hargaPenawaran = hargaDasar * koef;
+    const sourceMode = $('#source_price_mode').val() || 'base';
+    if (sourceMode === 'contingency') {
+        hargaDasar = hargaDasar * kontFactor;
+    }
+
+    // Sesuaikan dengan perhitungan backend: harga_penawaran = harga_dasar / (1 - profit - overhead)
+    const denom = 1 - (profitPercentage/100) - (overheadPercentage/100);
+    const hargaPenawaran = denom > 0 ? (hargaDasar / denom) : 0;
     
     // ===============================================
     // PERHITUNGAN LANJUTAN
@@ -561,6 +577,13 @@ function updateItemRowCalculations(row) {
 
     // Event listener untuk perubahan diskon
     $('#discount_percentage').on('input', updateTotals);
+
+    // Recalculate when source price mode changes
+    $('#source_price_mode').on('change', function() {
+        $('.section-card .item-table tbody tr').each(function() {
+            updateItemRowCalculations($(this));
+        });
+    });
 
     // Inisialisasi Select2 untuk "Muat RAB Dasar"
     $(document).ready(function() {

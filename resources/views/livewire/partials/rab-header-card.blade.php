@@ -3,6 +3,8 @@
   if ($level === 0)      { $headerBgClass = 'bg-primary text-white'; }
   elseif ($level === 1)  { $headerBgClass = 'bg-info text-white'; }
   else                   { $headerBgClass = 'bg-secondary text-white'; }
+  $kontFactor = $kontFactor ?? 1;
+  $kontigensiPersen = isset($kontigensiPersen) ? (float)$kontigensiPersen : (($kontFactor - 1) * 100);
 @endphp
 
 <div class="card mb-2 rab-header-card animate__animated animate__fadeInUp animate__faster" style="margin-left: {{ $indentPx }}px;">
@@ -22,9 +24,9 @@
       @endif
     </div>
     <div class="text-end">
-      <span class="badge bg-light text-dark me-2">Material: <span class="fw-bold">Rp {{ number_format($header->nilai_material ?? 0, 0, ',', '.') }}</span></span>
-      <span class="badge bg-light text-dark me-2">Upah: <span class="fw-bold">Rp {{ number_format($header->nilai_upah ?? 0, 0, ',', '.') }}</span></span>
-      <span class="me-2">Total: <span class="fw-bold">Rp {{ number_format($header->nilai ?? 0, 0, ',', '.') }}</span></span>
+      <span class="badge bg-light text-dark me-2">Material: <span class="fw-bold">Rp {{ number_format(((float)($header->nilai_material ?? 0) * $kontFactor), 0, ',', '.') }}</span></span>
+      <span class="badge bg-light text-dark me-2">Upah: <span class="fw-bold">Rp {{ number_format(((float)($header->nilai_upah ?? 0) * $kontFactor), 0, ',', '.') }}</span></span>
+      <span class="me-2">Total: <span class="fw-bold">Rp {{ number_format(((float)($header->nilai ?? 0) * $kontFactor), 0, ',', '.') }}</span></span>
       <button type="button"
               class="btn btn-sm btn-danger rounded"
               onclick="if(!confirm('Anda yakin ingin menghapus header ini? Pastikan tidak ada sub-header/detail.')) return;"
@@ -71,7 +73,7 @@
                   <td>{{ $d->kode }}</td>
                   <td>
                     @if($d->ahsp_id)
-                      <a href="{{ route('ahsp.show', $d->ahsp_id) }}" target="_blank" title="Lihat detail AHSP">
+                      <a href="{{ route('ahsp.show', ['ahsp' => $d->ahsp_id, 'kontigensi' => $kontigensiPersen]) }}" target="_blank" title="Lihat detail AHSP">
                         <span class="badge bg-success cursor-pointer">{{ $d->ahsp_id }}</span>
                       </a>
                     @else
@@ -142,14 +144,14 @@
                   </td>
 
                   {{-- Harga satuan per komponen + gabungan --}}
-                  <td class="text-end">Rp {{ number_format($d->harga_material ?? 0, 0, ',', '.') }}</td>
-                  <td class="text-end">Rp {{ number_format($d->harga_upah ?? 0, 0, ',', '.') }}</td>
-                  <td class="text-end">Rp {{ number_format($d->harga_satuan ?? 0, 0, ',', '.') }}</td>
+                  <td class="text-end">Rp {{ number_format(((float)($d->harga_material ?? 0) * $kontFactor), 0, ',', '.') }}</td>
+                  <td class="text-end">Rp {{ number_format(((float)($d->harga_upah ?? 0) * $kontFactor), 0, ',', '.') }}</td>
+                  <td class="text-end">Rp {{ number_format(((float)($d->harga_satuan ?? 0) * $kontFactor), 0, ',', '.') }}</td>
 
                   {{-- Total per komponen + gabungan --}}
-                  <td class="text-end">Rp {{ number_format($d->total_material ?? 0, 0, ',', '.') }}</td>
-                  <td class="text-end">Rp {{ number_format($d->total_upah ?? 0, 0, ',', '.') }}</td>
-                  <td class="text-end">Rp {{ number_format($d->total ?? 0, 0, ',', '.') }}</td>
+                  <td class="text-end">Rp {{ number_format(((float)($d->total_material ?? 0) * $kontFactor), 0, ',', '.') }}</td>
+                  <td class="text-end">Rp {{ number_format(((float)($d->total_upah ?? 0) * $kontFactor), 0, ',', '.') }}</td>
+                  <td class="text-end">Rp {{ number_format(((float)($d->total ?? 0) * $kontFactor), 0, ',', '.') }}</td>
 
                   {{-- Aksi: Hapus (fixed) --}}
                   <td class="text-center">
@@ -173,7 +175,7 @@
     @if ($header->children->isNotEmpty())
       <div class="mt-3 pt-3 border-top">
         @foreach($header->children as $childHeader)
-          @include('livewire.partials.rab-header-card', ['header' => $childHeader, 'level' => $level + 1])
+          @include('livewire.partials.rab-header-card', ['header' => $childHeader, 'level' => $level + 1, 'kontFactor' => $kontFactor, 'kontigensiPersen' => $kontigensiPersen])
         @endforeach
       </div>
     @endif

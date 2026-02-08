@@ -18,6 +18,7 @@ class Proyek extends Model
         'nilai_spk',
         'nilai_penawaran',
         'diskon_rab',
+        'kontingensi_persen',
         'nilai_kontrak',
         'tanggal_mulai',
         'tanggal_selesai',
@@ -36,6 +37,10 @@ class Proyek extends Model
         'pph_dipungut',
         'site_manager_name',
         'project_manager_name'
+    ];
+
+    protected $casts = [
+        'kontingensi_persen' => 'decimal:2',
     ];
 
     public function pemberiKerja()

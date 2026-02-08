@@ -2,6 +2,7 @@
 <div class="card animate__animated animate__fadeInUp animate__faster">
     <div class="card-header bg-info text-white">
         <h5 class="card-title mb-0"><i class="fas fa-chart-pie me-2"></i> Ringkasan Per Kategori</h5>
+        <small class="d-block">Dengan kontigensi ({{ number_format($kontigensiPersen, 2, ',', '.') }}%)</small>
     </div>
     <div class="card-body p-0">
         @if (empty($categorySummaries))
@@ -13,7 +14,9 @@
                 @foreach($categorySummaries as $categoryName => $summary)
                     <li class="list-group-item d-flex justify-content-between align-items-center py-3 px-4">
                         <span class="fw-bold text-dark">{{ $summary['name'] }}</span>
-                        <span class="fw-bold text-primary">Rp {{ number_format($summary['total'], 0, ',', '.') }}</span>
+                        <span class="fw-bold text-primary" title="Kontigensi {{ number_format($kontigensiPersen, 2, ',', '.') }}%">
+                            Rp {{ number_format($summary['total'], 0, ',', '.') }}
+                        </span>
                     </li>
                 @endforeach
             </ul>

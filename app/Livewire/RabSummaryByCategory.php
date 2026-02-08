@@ -4,12 +4,14 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use App\Models\RabHeader;
+use App\Models\Proyek;
 use Livewire\Attributes\On; // Pastikan ini ada
 
 class RabSummaryByCategory extends Component
 {
     public $proyek_id;
     public $categorySummaries = []; // Properti untuk menyimpan ringkasan per kategori
+    public $kontigensiPersen = 0;
 
     public function mount($proyek_id)
     {
@@ -21,6 +23,10 @@ class RabSummaryByCategory extends Component
     #[On('rabDetailUpdated')] // Dengar event dari RabInput
     public function loadCategorySummaries()
     {
+        $proyek = Proyek::find($this->proyek_id);
+        $this->kontigensiPersen = (float) data_get($proyek, 'kontingensi_persen', data_get($proyek, 'persen_kontingensi', 0));
+        $factor = 1 + ($this->kontigensiPersen / 100);
+
         // Muat semua RabHeader level teratas (induk utama) untuk proyek ini
         // Eager load relasi 'kategori' untuk mendapatkan nama kategori
         $topLevelHeaders = RabHeader::with('kategori')
@@ -32,7 +38,8 @@ class RabSummaryByCategory extends Component
         $summaries = [];
         foreach ($topLevelHeaders as $header) {
             // Nilai total header sudah dihitung dan disimpan di kolom 'nilai' oleh RabInput
-            $total = $header->nilai ?? 0;
+            $totalBase = $header->nilai ?? 0;
+            $total = (float)$totalBase * $factor;
 
             // Kelompokkan berdasarkan kategori
             $categoryName = $header->kategori->nama_kategori ?? 'Tanpa Kategori'; // Asumsi ada relasi kategori
@@ -50,6 +57,7 @@ class RabSummaryByCategory extends Component
                 'kode' => $header->kode,
                 'deskripsi' => $header->deskripsi,
                 'total' => $total,
+                'total_base' => $totalBase,
             ];
         }
 

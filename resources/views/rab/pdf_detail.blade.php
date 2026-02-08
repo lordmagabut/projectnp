@@ -48,12 +48,21 @@
   </style>
 </head>
 <body class="landscape">
+  @php
+    $kontigensi = (float) data_get($proyek, 'kontingensi_persen', data_get($proyek, 'persen_kontingensi', 0));
+    $kontFactor = 1 + ($kontigensi / 100);
+    $GLOBALS['kontFactor'] = $kontFactor;
+  @endphp
   <table style="margin-bottom:8px;">
     <tr>
       <th style="width:18%; text-align:left;">Proyek</th>
       <td>{{ $proyek->nama_proyek ?? '—' }}</td>
       <th style="width:14%; text-align:left;">Tanggal</th>
       <td>{{ \Carbon\Carbon::now()->translatedFormat('d F Y') }}</td>
+    </tr>
+    <tr>
+      <th style="text-align:left;">Kontigensi</th>
+      <td colspan="3">{{ number_format($kontigensi, 2, ',', '.') }}%</td>
     </tr>
   </table>
   <h3>Detail RAP Proyek</h3>
@@ -71,12 +80,18 @@
     }
     if (!function_exists('rab_detail_mat_jasa_totals')) {
       function rab_detail_mat_jasa_totals($d){
+        $kontFactor = $GLOBALS['kontFactor'] ?? 1;
         $vol = (float)($d->volume ?? 0);
         [$unitMat, $unitJasa] = rab_detail_mat_jasa_units($d);
         $totMat = (float)($d->total_material ?? 0);
         $totJasa = (float)($d->total_upah ?? 0);
         if ($totMat == 0.0 && $unitMat > 0) $totMat = $unitMat * $vol;
         if ($totJasa == 0.0 && $unitJasa > 0) $totJasa = $unitJasa * $vol;
+
+        if ($unitMat > 0) $unitMat = $unitMat * $kontFactor;
+        if ($unitJasa > 0) $unitJasa = $unitJasa * $kontFactor;
+        if ($totMat > 0) $totMat = $totMat * $kontFactor;
+        if ($totJasa > 0) $totJasa = $totJasa * $kontFactor;
 
         return [$totMat, $totJasa, $unitMat, $unitJasa];
       }
@@ -225,10 +240,10 @@
       ->unique('id')
       ->values();
 
-    $ahspRows = $ahspList->mapWithKeys(function($ahsp){
+    $ahspRows = $ahspList->mapWithKeys(function($ahsp) use ($kontFactor){
       $kode = $ahsp->kode_pekerjaan ?? (string)$ahsp->id;
-      $mat = (float)($ahsp->total_material ?? 0);
-      $jasa = (float)($ahsp->total_upah ?? 0);
+      $mat = (float)($ahsp->total_material ?? 0) * $kontFactor;
+      $jasa = (float)($ahsp->total_upah ?? 0) * $kontFactor;
       return [$kode => [
         'nama' => (string)($ahsp->nama_pekerjaan ?? ''),
         'material' => $mat,
@@ -321,7 +336,7 @@
                   ? (string)($ref->nama ?? $ref->nama_item ?? '')
                   : (string)($ref->jenis_pekerja ?? $ref->nama_item ?? '');
                 $satuanItem = (string)($ref->satuan ?? '');
-                $subtotal = (float)($det->subtotal_final ?? $det->subtotal ?? 0);
+                $subtotal = (float)($det->subtotal_final ?? $det->subtotal ?? 0) * $kontFactor;
                 if ($isMat) $subMat += $subtotal; else $subJasa += $subtotal;
               @endphp
               <tr>
@@ -329,7 +344,7 @@
                 <td>{{ $namaItem }}</td>
                 <td class="text-end">{{ number_format((float)($det->koefisien ?? 0), 4, ',', '.') }}</td>
                 <td>{{ $satuanItem }}</td>
-                <td class="text-end currency">{!! rupiah_or_blank((float)($det->harga_satuan ?? 0)) !!}</td>
+                <td class="text-end currency">{!! rupiah_or_blank((float)($det->harga_satuan ?? 0) * $kontFactor) !!}</td>
                 <td class="text-end currency">{!! $isMat ? rupiah_or_blank($subtotal) : '' !!}</td>
                 <td class="text-end currency">{!! !$isMat ? rupiah_or_blank($subtotal) : '' !!}</td>
                 <td class="text-end currency">{!! rupiah_or_blank($subtotal) !!}</td>

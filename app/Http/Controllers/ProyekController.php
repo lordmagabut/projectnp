@@ -122,6 +122,9 @@ public function update(Request $request, $id)
             : ($request->status ?? $proyek->status);
         $proyek->save();
 
+        // Recalculate nilai penawaran (termasuk kontigensi) setelah update proyek
+        \App\Helpers\ProyekHelper::updateNilaiPenawaran($proyek->id);
+
         // 3. Handle Upload File SPK (Logika lama tetap dipertahankan)
         if ($request->hasFile('file_spk')) {
             // Hapus file lama jika ada

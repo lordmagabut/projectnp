@@ -22,6 +22,7 @@ class ProyekService
             'jenis_proyek' => 'required|in:kontraktor,cost and fee,office',
             'penawaran_price_mode' => 'required|in:pisah,gabung',
             'uang_muka_mode' => 'required|in:proporsional,utuh',
+            'kontingensi_persen' => 'nullable|numeric|min:0|max:100',
             'file_spk' => 'nullable|file|mimes:pdf|max:102400',
         ]);
     }
@@ -41,6 +42,7 @@ class ProyekService
             'project_manager_name' => 'nullable|string|max:255',
             'jenis_proyek' => 'required|in:kontraktor,cost and fee,office',
             'diskon_rab' => 'nullable|numeric|min:0',
+            'kontingensi_persen' => 'nullable|numeric|min:0|max:100',
             'file_spk' => 'nullable|file|mimes:pdf|max:102400',
             'file_gambar_kerja' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:102400', // Max 100MB
             'penawaran_price_mode' => 'required|in:pisah,gabung',

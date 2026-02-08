@@ -7,6 +7,10 @@
         <p class="card-text fs-1 fw-bold text-primary mb-0">
             Rp {{ number_format($grandTotal, 0, ',', '.') }}
         </p>
+        <div class="mt-2">
+            <div class="small text-muted">Total dasar: Rp {{ number_format($grandTotalBase, 0, ',', '.') }}</div>
+            <div class="small text-muted">Dengan kontigensi ({{ number_format($kontigensiPersen, 2, ',', '.') }}%)</div>
+        </div>
         <small class="text-muted mt-2 d-block">Diperbarui secara real-time.</small>
     </div>
 </div>

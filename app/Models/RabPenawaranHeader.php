@@ -20,6 +20,7 @@ class RabPenawaranHeader extends Model
         'discount_amount',
         'final_total_penawaran',
         'status',
+        'source_price_mode',
         'area',
         'spesifikasi',
         'keterangan', // <- tambahkan ini
@@ -34,6 +35,7 @@ class RabPenawaranHeader extends Model
         'discount_percentage'     => 'decimal:2',
         'discount_amount'         => 'decimal:2',
         'final_total_penawaran'   => 'decimal:2',
+        'source_price_mode'       => 'string',
         'keterangan'              => 'string',
         'approval_doc_paths' => 'array',
         'approved_at'        => 'datetime',

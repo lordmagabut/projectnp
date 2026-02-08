@@ -147,6 +147,10 @@
                   </td>
                 </tr>
                 <tr>
+                  <th><i data-feather="percent" class="me-2 text-muted"></i> Kontigensi</th>
+                  <td>{{ number_format((float)($proyek->kontingensi_persen ?? 0), 2, ',', '.') }}%</td>
+                </tr>
+                <tr>
                   <th><i data-feather="credit-card" class="me-2 text-muted"></i> Kebijakan Uang Muka</th>
                   <td>
                     @php $umMode = $proyek->uang_muka_mode ?? 'proporsional'; @endphp

@@ -6,6 +6,7 @@ use Livewire\Component;
 use App\Models\RabHeader;
 use App\Models\RabDetail;
 use App\Models\AhspHeader;
+use App\Models\Proyek;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
 
@@ -16,6 +17,8 @@ class RabInput extends Component
     public $headers;              // koleksi header (root + children eager)
     public $ahspList;             // daftar AHSP (untuk dropdown/search)
     public $projectGrandTotal = 0;
+    public $kontigensiPersen = 0;
+    public $kontFactor = 1;
 
     public $newHeader = [
         'parent_id' => null,
@@ -58,6 +61,10 @@ class RabInput extends Component
     {
         $this->proyek_id  = (int)$proyek_id;
         $this->kategori_id = (int)$kategori_id;
+
+        $proyek = Proyek::find($this->proyek_id);
+        $this->kontigensiPersen = (float) data_get($proyek, 'kontingensi_persen', data_get($proyek, 'persen_kontingensi', 0));
+        $this->kontFactor = 1 + ($this->kontigensiPersen / 100);
 
         $this->selectedHeaderCategoryId = $this->kategori_id;
 

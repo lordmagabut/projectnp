@@ -113,7 +113,12 @@
     {{-- Tampilan RAB jika ada data --}}
     @if($headers->count())
       <div class="table-responsive mt-4 animate__animated animate__fadeIn">
-        <h5 class="mb-3 d-flex align-items-center"><i class="fas fa-list-alt me-2"></i> Detail RAB</h5>
+        @php
+          $kontigensi = (float) data_get($proyek, 'kontingensi_persen', data_get($proyek, 'persen_kontingensi', 0));
+          $kontFactor = 1 + ($kontigensi / 100);
+        @endphp
+        <h5 class="mb-1 d-flex align-items-center"><i class="fas fa-list-alt me-2"></i> Detail RAB</h5>
+        <div class="small text-muted mb-3">Dengan kontigensi ({{ number_format($kontigensi, 2, ',', '.') }}%)</div>
         <table class="table table-hover table-sm align-middle rab-table">
           <thead class="table-secondary">
             <tr>
@@ -152,7 +157,7 @@
                 <td></td>
                 <td></td>
                 <td class="text-end fw-bold text-success">
-                  Rp {{ number_format($h->nilai, 0, ',', '.') }}
+                  Rp {{ number_format(((float)($h->nilai ?? 0) * $kontFactor), 0, ',', '.') }}
                 </td>
               </tr>
 
@@ -188,14 +193,26 @@
                                   $relativeDepth = max(0, $detailDepth - $headerDepth);
                                   $detailPad = $relativeDepth * 14; // smaller indent for details
                                 @endphp
+                                @php
+                                  $hargaSatuanBase = (float)($d->harga_satuan ?? 0);
+                                  if ($hargaSatuanBase == 0.0) {
+                                    $hargaSatuanBase = (float)($d->harga_material ?? 0) + (float)($d->harga_upah ?? 0);
+                                  }
+                                  $totalBase = (float)($d->total ?? 0);
+                                  if ($totalBase == 0.0) {
+                                    $totalBase = $hargaSatuanBase * (float)($d->volume ?? 0);
+                                  }
+                                  $hargaSatuanAdj = $hargaSatuanBase * $kontFactor;
+                                  $totalAdj = $totalBase * $kontFactor;
+                                @endphp
                                 <tr>
                                   <td style="padding-left: {{ $detailPad }}px">{{ $d->kode }}</td>
                                   <td>{{ $d->deskripsi }}</td>
                                   <td>{{ $d->spesifikasi ?: '-' }}</td>
                                   <td>{{ $d->satuan }}</td>
                                   <td class="text-end">{{ number_format($d->volume, 2, ',', '.') }}</td>
-                                  <td class="text-end">Rp {{ number_format($d->harga_satuan, 0, ',', '.') }}</td>
-                                  <td class="text-end fw-bold">Rp {{ number_format($d->total, 0, ',', '.') }}</td>
+                                  <td class="text-end">Rp {{ number_format($hargaSatuanAdj, 0, ',', '.') }}</td>
+                                  <td class="text-end fw-bold">Rp {{ number_format($totalAdj, 0, ',', '.') }}</td>
                                 </tr>
                               @endforeach
                           @endforeach
@@ -210,7 +227,7 @@
           <tfoot>
             <tr class="table-secondary fw-bold fs-5">
               <td colspan="4" class="text-end py-3">GRAND TOTAL RAB</td>
-              <td class="text-end py-3 text-primary">Rp {{ number_format($grandTotal, 0, ',', '.') }}</td>
+              <td class="text-end py-3 text-primary">Rp {{ number_format(((float)$grandTotal * $kontFactor), 0, ',', '.') }}</td>
             </tr>
           </tfoot>
         </table>

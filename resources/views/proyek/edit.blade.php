@@ -110,6 +110,14 @@
             </div>
           </div>
 
+          <div class="row g-3 mt-1">
+            <div class="col-md-4">
+              <label class="form-label">Kontigensi (%)</label>
+              <input type="number" step="0.01" min="0" max="100" name="kontingensi_persen" class="form-control" value="{{ old('kontingensi_persen', $proyek->kontingensi_persen ?? 0) }}">
+              <small class="text-muted">Akan menambah harga material & jasa pada RAB.</small>
+            </div>
+          </div>
+
           {{-- Jenis / Tanggal / Status / Lokasi (Tetap sama) --}}
           <div class="row g-3 mt-1">
             <div class="col-md-4">

@@ -177,6 +177,10 @@
         </div>
         @endif
 
+        @php
+            $kontigensi = (float) request()->query('kontigensi', 0);
+            $kontFactor = 1 + ($kontigensi / 100);
+        @endphp
         <div class="table-responsive">
             <table class="table table-bordered">
                 <thead class="table-light">
@@ -214,21 +218,21 @@
                         </td>
                         <td class="text-center">{{ $itemSatuan }}</td>
                         <td class="text-end">{{ number_format($d->koefisien, 4, ',', '.') }}</td>
-                        <td class="text-end">Rp {{ number_format($d->harga_satuan, 0, ',', '.') }}</td>
-                        <td class="text-end">Rp {{ number_format($d->subtotal, 0, ',', '.') }}</td>
+                        <td class="text-end">Rp {{ number_format((float)$d->harga_satuan * $kontFactor, 0, ',', '.') }}</td>
+                        <td class="text-end">Rp {{ number_format((float)$d->subtotal * $kontFactor, 0, ',', '.') }}</td>
                         <td class="text-center">{{ number_format($d->diskon_persen ?? 0, 2, ',', '.') }}%</td>
                         <td class="text-center">{{ number_format($d->ppn_persen ?? 0, 2, ',', '.') }}%</td>
-                        <td class="text-end"><strong>Rp {{ number_format($d->subtotal_final ?? $d->subtotal, 0, ',', '.') }}</strong></td>
+                        <td class="text-end"><strong>Rp {{ number_format((float)($d->subtotal_final ?? $d->subtotal) * $kontFactor, 0, ',', '.') }}</strong></td>
                     </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     @php
-                        $totalMaterial = $ahsp->details->where('tipe', 'material')->sum(function($d) {
-                            return $d->subtotal_final ?? $d->subtotal;
+                        $totalMaterial = $ahsp->details->where('tipe', 'material')->sum(function($d) use ($kontFactor) {
+                            return (float)($d->subtotal_final ?? $d->subtotal) * $kontFactor;
                         });
-                        $totalUpah = $ahsp->details->where('tipe', 'upah')->sum(function($d) {
-                            return $d->subtotal_final ?? $d->subtotal;
+                        $totalUpah = $ahsp->details->where('tipe', 'upah')->sum(function($d) use ($kontFactor) {
+                            return (float)($d->subtotal_final ?? $d->subtotal) * $kontFactor;
                         });
                     @endphp
                     <tr class="table-light">
@@ -241,11 +245,11 @@
                     </tr>
                     <tr>
                         <th colspan="8" class="text-end">Total Harga Sebenarnya</th>
-                        <th class="text-end fw-bold">Rp {{ number_format($ahsp->total_harga, 0, ',', '.') }}</th>
+                        <th class="text-end fw-bold">Rp {{ number_format((float)$ahsp->total_harga * $kontFactor, 0, ',', '.') }}</th>
                     </tr>
                     <tr>
                         <th colspan="8" class="text-end">Total Harga Pembulatan</th>
-                        <th class="text-end fw-bold text-primary">Rp {{ number_format($ahsp->total_harga_pembulatan ?? 0, 0, ',', '.') }}</th>
+                        <th class="text-end fw-bold text-primary">Rp {{ number_format((float)($ahsp->total_harga_pembulatan ?? 0) * $kontFactor, 0, ',', '.') }}</th>
                     </tr>
                 </tfoot>
             </table>
