@@ -92,7 +92,9 @@
         *  Agar tidak ketimpa re-definisi $currentPenawaranId di Tab Progress,
         *  kita “bekukan” nilai buat dipakai di JS Schedule.
         */
-        $schedulePenawaranId = $currentPenawaranId;
+        $schedulePenawaranId =
+            (isset($selectedScheduleId) && $selectedScheduleId) ? $selectedScheduleId :
+            (request('penawaran_id') ?: optional($schedulePenawarans->last())->id);
       @endphp
 
       {{-- Tab Content --}}
@@ -376,12 +378,12 @@
               <i data-feather="calendar" class="me-2"></i> Kurva-S (Rencana) per Penawaran
             </h5>
 
-            @if($finalPenawarans->isNotEmpty())
+            @if($schedulePenawarans->isNotEmpty())
               <form method="GET" action="{{ route('proyek.show', $proyek->id) }}" class="d-flex align-items-center gap-2">
                 <input type="hidden" name="tab" value="sch">
                 <select name="penawaran_id" class="form-select form-select-sm" onchange="this.form.submit()">
-                  @foreach($finalPenawarans as $p)
-                    <option value="{{ $p->id }}" {{ (int)$p->id === (int)$currentPenawaranId ? 'selected' : '' }}>
+                  @foreach($schedulePenawarans as $p)
+                    <option value="{{ $p->id }}" {{ (int)$p->id === (int)$schedulePenawaranId ? 'selected' : '' }}>
                       {{ $p->nama_penawaran }} ({{ \Carbon\Carbon::parse($p->tanggal_penawaran)->format('d/m/y') }})
                     </option>
                   @endforeach
@@ -391,7 +393,7 @@
             @endif
           </div>
 
-          @if(!$currentPenawaranId || !$hasScheduleSelected || empty($minggu))
+          @if(!$schedulePenawaranId || !$hasScheduleSelected || empty($minggu))
             <div class="alert alert-warning">
               Belum ada schedule detail untuk penawaran terpilih.
             </div>
@@ -449,12 +451,12 @@
               </div>
             </div>
             <div class="card-footer bg-light d-flex justify-content-end">
-              @if($currentPenawaranId)
-                <a href="{{ route('rabSchedule.edit', ['proyek' => $proyek->id, 'penawaran' => $currentPenawaranId]) }}"
+              @if($schedulePenawaranId)
+                <a href="{{ route('rabSchedule.edit', ['proyek' => $proyek->id, 'penawaran' => $schedulePenawaranId]) }}"
                    class="btn btn-sm btn-primary">
                   <i data-feather="edit-2" class="me-1"></i>
                   Edit Jadwal (Penawaran:
-                  {{ optional($finalPenawarans->firstWhere('id',$currentPenawaranId))->nama_penawaran ?? '#'.$currentPenawaranId }})
+                  {{ optional($schedulePenawarans->firstWhere('id',$schedulePenawaranId))->nama_penawaran ?? '#'.$schedulePenawaranId }})
                 </a>
               @else
                 <button class="btn btn-sm btn-secondary" disabled>

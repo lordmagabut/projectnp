@@ -207,11 +207,20 @@ public function update(Request $request, $id)
             ->orderBy('tanggal_penawaran')
             ->get();
 
+        $schedulePenawarans = RabPenawaranHeader::where('proyek_id', $id)
+            ->orderBy('tanggal_penawaran')
+            ->get();
+
+        $selectedScheduleId = (int) request('penawaran_id', optional($schedulePenawarans->last())->id);
+
         $selectedId = (int) request('penawaran_id', optional($finalPenawarans->last())->id);
+        if ($selectedId && $finalPenawarans->firstWhere('id', $selectedId) === null) {
+            $selectedId = (int) optional($finalPenawarans->last())->id;
+        }
 
         // Kurva-S: Planned (dari schedule detail)
         $scheduleDetailQ = RabScheduleDetail::where('proyek_id', $id)
-            ->when($selectedId, fn ($q) => $q->where('penawaran_id', $selectedId));
+            ->when($selectedScheduleId, fn ($q) => $q->where('penawaran_id', $selectedScheduleId));
 
         $hasScheduleSelected = false;
         $minggu     = [];
@@ -382,8 +391,8 @@ public function update(Request $request, $id)
         // ============================
         // META jadwal penawaran terpilih
         // ============================
-        $selectedMeta = $selectedId
-            ? RabScheduleMeta::where('proyek_id', $id)->where('penawaran_id', $selectedId)->first()
+        $selectedMeta = $selectedScheduleId
+            ? RabScheduleMeta::where('proyek_id', $id)->where('penawaran_id', $selectedScheduleId)->first()
             : null;
 
         // ============================
@@ -392,12 +401,12 @@ public function update(Request $request, $id)
         $calendarEvents = [];
         $calendarRows   = [];
 
-        if ($selectedId && $hasScheduleSelected && $selectedMeta) {
+        if ($selectedScheduleId && $hasScheduleSelected && $selectedMeta) {
             $metaStart = \Carbon\Carbon::parse($selectedMeta->start_date)->startOfDay();
             $metaEnd = \Carbon\Carbon::parse($selectedMeta->end_date)->startOfDay();
 
             $schedRows = RabSchedule::where('proyek_id', $id)
-                ->where('penawaran_id', $selectedId)
+                ->where('penawaran_id', $selectedScheduleId)
                 ->with(['penawaranItem.rabDetail'])
                 ->get();
 
@@ -463,7 +472,9 @@ public function update(Request $request, $id)
             'grandTotal',
             'progressSummary',
             'finalPenawarans',
+            'schedulePenawarans',
             'selectedId',
+            'selectedScheduleId',
             'selectedMeta',
             'hasScheduleSelected',
             'minggu',

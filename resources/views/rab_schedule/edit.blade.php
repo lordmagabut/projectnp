@@ -13,6 +13,13 @@
   .small-muted { font-size: .8rem; color:#6c757d; }
 
   .table-area { background:#fff7e6 !important; } /* header area */
+  .schedule-preview { position: relative; overflow-x: auto; }
+  .schedule-preview table { width: 100%; border-collapse: collapse; font-size: 9px; }
+  .schedule-preview th, .schedule-preview td { border: 1px solid #333; padding: 2px 4px; }
+  .schedule-preview th { background: #f0f0f0; font-weight: 700; text-align: center; }
+  .schedule-preview .row-header { background:#f7f7f7; font-weight:700; }
+  .schedule-preview .row-subheader { background:#fdf7e8; font-weight:600; }
+  .schedule-preview .curve-overlay { position: absolute; pointer-events: none; opacity: .9; }
 </style>
 @endpush
 
@@ -23,9 +30,14 @@
       <i data-feather="calendar" class="me-2"></i>
       Atur Schedule — {{ $penawaran->nama_penawaran }}
     </h4>
-    <a href="{{ route('proyek.show', $proyek->id) }}#schedule" class="btn btn-light btn-sm">
-      <i data-feather="arrow-left" class="me-1"></i> Kembali
-    </a>
+    <div class="d-flex gap-2">
+      <a href="{{ route('rabSchedule.pdf', [$proyek->id, $penawaran->id]) }}" class="btn btn-light btn-sm">
+        <i data-feather="printer" class="me-1"></i> Cetak PDF
+      </a>
+      <a href="{{ route('proyek.show', $proyek->id) }}#schedule" class="btn btn-light btn-sm">
+        <i data-feather="arrow-left" class="me-1"></i> Kembali
+      </a>
+    </div>
   </div>
 
   <div class="card-body p-3 p-md-4">
@@ -61,6 +73,18 @@
     @if($items->isEmpty())
       <div class="alert alert-info mb-0">Tidak ada item pekerjaan pada penawaran ini.</div>
     @else
+
+    <div class="card mb-3">
+      <div class="card-header bg-light">
+        <h6 class="mb-0 d-flex align-items-center">
+          <i data-feather="trending-up" class="me-2 text-primary"></i>
+          Preview Schedule & Kurva-S
+        </h6>
+      </div>
+      <div class="card-body">
+        <div id="schedulePreview" class="schedule-preview"></div>
+      </div>
+    </div>
 
     {{-- FORM SETUP --}}
     <form method="POST" action="{{ route('rabSchedule.save', [$proyek->id, $penawaran->id]) }}" class="mb-3">
@@ -193,7 +217,11 @@
                     $sch    = $existingSched[$itemId] ?? null;
                     $pct    = (float) data_get($it,'pct',0);
                   @endphp
-                  <tr>
+                  <tr data-item-id="{{ $itemId }}"
+                      data-pct="{{ number_format($pct, 4, '.', '') }}"
+                      data-leaf-id="{{ data_get($it,'leaf_id') }}"
+                      data-parent-id="{{ data_get($it,'parent_id') }}"
+                      data-root-id="{{ data_get($it,'root_id') }}">
                     <td class="nowrap">{{ data_get($it,'kode') }}</td>
                     <td>{{ data_get($it,'deskripsi') }}</td>
                     <td class="text-end">{{ number_format($pct, 2, ',', '.') }}</td>
@@ -249,5 +277,248 @@
   document.addEventListener('DOMContentLoaded', function () {
     if (window.feather) feather.replace();
   });
+</script>
+
+@php
+  $itemsPreview = $items->map(function($i){
+    return [
+      'item_id' => (int) $i->item_id,
+      'pct' => (float) $i->pct,
+      'leaf_id' => $i->leaf_id,
+      'leaf_kode' => $i->leaf_kode,
+      'leaf_desc' => $i->leaf_desc,
+      'leaf_sort' => $i->leaf_sort,
+      'parent_id' => $i->parent_id,
+      'parent_kode' => $i->parent_kode,
+      'parent_desc' => $i->parent_desc,
+      'parent_sort' => $i->parent_sort,
+      'root_id' => $i->root_id,
+      'root_kode' => $i->root_kode,
+      'root_desc' => $i->root_desc,
+      'root_sort' => $i->root_sort,
+    ];
+  })->values();
+@endphp
+
+<script>
+  (function(){
+    const totalWeeks = {{ (int)($meta->total_weeks ?? 0) }};
+    const itemsData = @json($itemsPreview);
+
+    const itemMeta = {};
+    const headerMeta = {};
+
+    itemsData.forEach(it => {
+      const rootId = it.root_id ?? it.parent_id ?? it.leaf_id;
+      const rootKode = it.root_kode ?? it.parent_kode ?? it.leaf_kode;
+      const rootDesc = it.root_desc ?? it.parent_desc ?? it.leaf_desc;
+      const rootSort = parseInt(it.root_sort ?? it.parent_sort ?? it.leaf_sort ?? 0);
+
+      const leafId = it.leaf_id ?? it.parent_id ?? it.root_id;
+      const leafKode = it.leaf_kode ?? it.parent_kode ?? it.root_kode;
+      const leafDesc = it.leaf_desc ?? it.parent_desc ?? it.root_desc;
+      const leafSort = parseInt(it.leaf_sort ?? it.parent_sort ?? it.root_sort ?? 0);
+
+      itemMeta[it.item_id] = { leafId, rootId, pct: parseFloat(it.pct || 0) };
+
+      if (!headerMeta[rootId]) {
+        headerMeta[rootId] = {
+          id: rootId,
+          kode: rootKode || '-',
+          desc: rootDesc || '-',
+          sort: rootSort,
+          children: {}
+        };
+      }
+      if (leafId && leafId !== rootId) {
+        if (!headerMeta[rootId].children[leafId]) {
+          headerMeta[rootId].children[leafId] = {
+            id: leafId,
+            kode: leafKode || '-',
+            desc: leafDesc || '-',
+            sort: leafSort
+          };
+        }
+      }
+    });
+
+    function formatNum(n) {
+      const v = parseFloat(n || 0);
+      if (!v) return '';
+      return v.toFixed(2).replace('.', ',');
+    }
+
+    function buildPreviewTable(rows, weeklyTotals, weeklyCumulative) {
+      let html = '<table id="previewTable">';
+      html += '<thead><tr>';
+      html += '<th style="width:4%">NO</th>';
+      html += '<th style="width:22%">WORK DESCRIPTION</th>';
+      html += '<th style="width:7%">WEIGHT (%)</th>';
+      for (let w = 1; w <= totalWeeks; w++) {
+        html += `<th class="week-col">W${w}</th>`;
+      }
+      html += '<th style="width:6%">REMARKS</th>';
+      html += '</tr></thead><tbody>';
+
+      rows.forEach((r, idx) => {
+        if (r.depth === 0 && idx > 0) {
+          html += `<tr class="work-row"><td colspan="${3 + totalWeeks + 1}">&nbsp;</td></tr>`;
+        }
+        html += `<tr class="${r.depth === 0 ? 'row-header' : 'row-subheader'} work-row">`;
+        html += `<td class="text-center">${r.kode}</td>`;
+        html += `<td>${'&nbsp;'.repeat(r.depth * 4)}${r.desc}</td>`;
+        html += `<td class="text-end">${formatNum(r.weight)}</td>`;
+        for (let w = 1; w <= totalWeeks; w++) {
+          const v = r.weeks[w] || 0;
+          html += `<td class="text-end">${formatNum(v)}</td>`;
+        }
+        html += '<td></td>';
+        html += '</tr>';
+      });
+
+      const totalWeight = weeklyTotals.reduce((a,b) => a + b, 0);
+      html += '<tr class="row-header total-row">';
+      html += '<td colspan="2" class="text-center">TOTAL</td>';
+      html += `<td class="text-end">${formatNum(totalWeight)}</td>`;
+      for (let w = 1; w <= totalWeeks; w++) {
+        html += `<td class="text-end">${formatNum(weeklyTotals[w-1] || 0)}</td>`;
+      }
+      html += '<td></td></tr>';
+
+      html += '<tr class="row-header cumulative-row">';
+      html += '<td colspan="2" class="text-center">CUMULATIVE</td>';
+      html += `<td class="text-end">${formatNum(totalWeight)}</td>`;
+      for (let w = 1; w <= totalWeeks; w++) {
+        html += `<td class="text-end">${formatNum(weeklyCumulative[w] || 0)}</td>`;
+      }
+      html += '<td></td></tr>';
+
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function renderCurve(weeklyCumulative) {
+      const wrap = document.getElementById('schedulePreview');
+      const table = document.getElementById('previewTable');
+      if (!wrap || !table) return;
+
+      const weekHeaders = table.querySelectorAll('th.week-col');
+      if (!weekHeaders.length) return;
+
+      const first = weekHeaders[0].getBoundingClientRect();
+      const last = weekHeaders[weekHeaders.length - 1].getBoundingClientRect();
+      const tableRect = table.getBoundingClientRect();
+
+      const left = first.left - tableRect.left + table.offsetLeft;
+      const width = last.right - first.left;
+
+      const workRows = table.querySelectorAll('tbody tr.work-row');
+      if (!workRows.length) return;
+      const firstRowRect = workRows[0].getBoundingClientRect();
+      const lastRowRect = workRows[workRows.length - 1].getBoundingClientRect();
+      const top = firstRowRect.top - tableRect.top + table.offsetTop;
+      const height = lastRowRect.bottom - firstRowRect.top;
+
+      const maxX = Math.max(1, totalWeeks - 1);
+      const stepX = width / maxX;
+      const points = [];
+      for (let w = 1; w <= totalWeeks; w++) {
+        const x = (w - 1) * stepX;
+        const yVal = weeklyCumulative[w] || 0;
+        const y = height - ((yVal / 100) * height);
+        points.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+
+      let svg = `<svg class="curve-overlay" width="${width}" height="${height}" style="left:${left}px; top:${top}px" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`;
+      svg += `<polyline points="${points.join(' ')}" fill="none" stroke="#1f6feb" stroke-width="2" />`;
+      svg += '</svg>';
+
+      const old = wrap.querySelector('.curve-overlay');
+      if (old) old.remove();
+      wrap.insertAdjacentHTML('beforeend', svg);
+    }
+
+    function recalcPreview() {
+      const weeklyTotals = Array(totalWeeks).fill(0);
+      const weeklyByHeader = {};
+
+      document.querySelectorAll('tr[data-item-id]').forEach(row => {
+        const itemId = parseInt(row.getAttribute('data-item-id'));
+        const meta = itemMeta[itemId];
+        if (!meta) return;
+
+        const start = parseInt(row.querySelector('input[name$="[minggu_ke]"]')?.value || 0);
+        const dur = parseInt(row.querySelector('input[name$="[durasi]"]')?.value || 0);
+        if (!start || !dur) return;
+
+        const pct = meta.pct || 0;
+        const per = pct / dur;
+
+        for (let i = 0; i < dur; i++) {
+          const w = start + i;
+          if (w < 1 || w > totalWeeks) continue;
+          weeklyByHeader[meta.leafId] = weeklyByHeader[meta.leafId] || {};
+          weeklyByHeader[meta.leafId][w] = (weeklyByHeader[meta.leafId][w] || 0) + per;
+          weeklyTotals[w-1] = (weeklyTotals[w-1] || 0) + per;
+        }
+      });
+
+      Object.values(headerMeta).forEach(root => {
+        const rootId = root.id;
+        if (!rootId) return;
+        Object.values(root.children || {}).forEach(ch => {
+          const leafWeeks = weeklyByHeader[ch.id];
+          if (!leafWeeks) return;
+          weeklyByHeader[rootId] = weeklyByHeader[rootId] || {};
+          Object.keys(leafWeeks).forEach(w => {
+            const wk = parseInt(w);
+            weeklyByHeader[rootId][wk] = (weeklyByHeader[rootId][wk] || 0) + leafWeeks[wk];
+          });
+        });
+      });
+
+      const rows = [];
+      const roots = Object.values(headerMeta).sort((a,b) => (a.sort||0) - (b.sort||0));
+      roots.forEach(root => {
+        const weeks = weeklyByHeader[root.id] || {};
+        const weight = Object.values(weeks).reduce((a,b)=>a+b,0);
+        if (weight > 0) {
+          rows.push({ kode: root.kode, desc: root.desc, depth: 0, weight, weeks });
+        }
+        const children = Object.values(root.children).sort((a,b)=>(a.sort||0)-(b.sort||0));
+        children.forEach(ch => {
+          const wks = weeklyByHeader[ch.id] || {};
+          const wt = Object.values(wks).reduce((a,b)=>a+b,0);
+          if (wt > 0) {
+            rows.push({ kode: ch.kode, desc: ch.desc, depth: 1, weight: wt, weeks: wks });
+          }
+        });
+      });
+
+      const weeklyCumulative = {};
+      let acc = 0;
+      for (let w = 1; w <= totalWeeks; w++) {
+        acc += (weeklyTotals[w-1] || 0);
+        weeklyCumulative[w] = acc;
+      }
+
+      const wrap = document.getElementById('schedulePreview');
+      wrap.innerHTML = buildPreviewTable(rows, weeklyTotals, weeklyCumulative);
+      renderCurve(weeklyCumulative);
+    }
+
+    document.addEventListener('input', function(e){
+      const name = (e.target && e.target.name) ? e.target.name : '';
+      if (name.includes('[minggu_ke]') || name.includes('[durasi]')) {
+        recalcPreview();
+      }
+    });
+
+    window.addEventListener('resize', function(){
+      recalcPreview();
+    });
+
+    recalcPreview();
+  })();
 </script>
 @endpush

@@ -12,14 +12,124 @@ use App\Models\RabScheduleMeta;   // <-- tambahkan
 use Illuminate\Support\Carbon;    // <-- tambahkan
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class RabScheduleController extends Controller
 {
+    public function pdf(Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        $start = $proyek->tanggal_mulai ? Carbon::parse($proyek->tanggal_mulai)->startOfDay() : now()->startOfDay();
+        $end = $proyek->tanggal_selesai ? Carbon::parse($proyek->tanggal_selesai)->endOfDay() : now()->addWeeks(4)->endOfDay();
+        $days = $start->diffInDays($end) + 1;
+        $weeks = (int) ceil($days / 7);
+
+        $meta = RabScheduleMeta::updateOrCreate(
+            ['proyek_id' => $proyek->id, 'penawaran_id' => $penawaran->id],
+            [
+                'start_date'  => $start->toDateString(),
+                'end_date'    => $end->toDateString(),
+                'total_weeks' => max(1, $weeks),
+            ]
+        );
+
+        $sdTable = (new RabScheduleDetail)->getTable();
+        $bobotCol = \Schema::hasColumn($sdTable, 'bobot_mingguan')
+            ? 'bobot_mingguan'
+            : (\Schema::hasColumn($sdTable, 'bobot') ? 'bobot' : null);
+
+        $weeklyByHeader = [];
+        $weeklyTotals = array_fill(1, $meta->total_weeks, 0.0);
+
+        if ($bobotCol) {
+            $rows = RabScheduleDetail::where('proyek_id', $proyek->id)
+                ->where('penawaran_id', $penawaran->id)
+                ->select('rab_header_id', 'minggu_ke', DB::raw("SUM($bobotCol) as bobot"))
+                ->groupBy('rab_header_id', 'minggu_ke')
+                ->get();
+
+            foreach ($rows as $r) {
+                $hid = (int) $r->rab_header_id;
+                $wk = (int) $r->minggu_ke;
+                $val = (float) $r->bobot;
+                if ($wk < 1 || $wk > $meta->total_weeks) continue;
+
+                $weeklyByHeader[$hid][$wk] = ($weeklyByHeader[$hid][$wk] ?? 0) + $val;
+                $weeklyTotals[$wk] = ($weeklyTotals[$wk] ?? 0) + $val;
+            }
+        }
+
+        $headers = RabHeader::where('proyek_id', $proyek->id)
+            ->orderBy('kode_sort')
+            ->get();
+
+        $byId = $headers->keyBy('id');
+        $depths = [];
+
+        $calcDepth = function ($id) use (&$calcDepth, &$depths, $byId) {
+            if (isset($depths[$id])) return $depths[$id];
+            $h = $byId[$id] ?? null;
+            if (!$h || !$h->parent_id) return $depths[$id] = 0;
+            return $depths[$id] = 1 + $calcDepth($h->parent_id);
+        };
+
+        foreach ($headers as $h) {
+            $calcDepth($h->id);
+        }
+
+        $headersByDepth = $headers->sortByDesc(fn($h) => $depths[$h->id] ?? 0);
+
+        foreach ($headersByDepth as $h) {
+            $pid = $h->parent_id;
+            if (!$pid) continue;
+            if (!isset($weeklyByHeader[$h->id])) continue;
+            foreach ($weeklyByHeader[$h->id] as $wk => $val) {
+                $weeklyByHeader[$pid][$wk] = ($weeklyByHeader[$pid][$wk] ?? 0) + $val;
+            }
+        }
+
+        $headerTotals = [];
+        foreach ($weeklyByHeader as $hid => $weeksArr) {
+            $headerTotals[$hid] = array_sum($weeksArr);
+        }
+
+        $rows = [];
+        foreach ($headers as $h) {
+            $total = (float) ($headerTotals[$h->id] ?? 0);
+            if ($total <= 0) continue;
+            $rows[] = [
+                'kode' => $h->kode,
+                'deskripsi' => $h->deskripsi,
+                'depth' => $depths[$h->id] ?? 0,
+                'weight' => $total,
+                'weeks' => $weeklyByHeader[$h->id] ?? [],
+            ];
+        }
+
+        $weeklyCumulative = [];
+        $acc = 0.0;
+        for ($w = 1; $w <= $meta->total_weeks; $w++) {
+            $acc += (float) ($weeklyTotals[$w] ?? 0);
+            $weeklyCumulative[$w] = $acc;
+        }
+
+        $pdf = Pdf::loadView('rab_schedule.pdf_schedule', [
+            'proyek' => $proyek,
+            'penawaran' => $penawaran,
+            'meta' => $meta,
+            'rows' => $rows,
+            'totalWeeks' => $meta->total_weeks,
+            'weeklyTotals' => $weeklyTotals,
+            'weeklyCumulative' => $weeklyCumulative,
+        ])->setPaper('A4', 'landscape');
+
+        $filename = 'Schedule_' . str_replace(' ', '_', $penawaran->nama_penawaran) . '.pdf';
+        return $pdf->download($filename);
+    }
+
     // LIST penawaran final untuk proyek (tab RAB Schedule)
     public function index(Proyek $proyek)
     {
         $penawarans = RabPenawaranHeader::where('proyek_id', $proyek->id)
-            ->where('status', 'final')
             ->orderByDesc('tanggal_penawaran')
             ->get();
     
@@ -111,7 +221,7 @@ $items = DB::table('rab_penawaran_weight as w')
     $weeks = (int) ceil($days / 7);
 
     // Meta tanggal (disimpan untuk konsistensi, tapi source: proyek)
-    $meta = \App\Models\RabScheduleMeta::firstOrCreate(
+    $meta = \App\Models\RabScheduleMeta::updateOrCreate(
         ['proyek_id' => $proyek->id, 'penawaran_id' => $penawaran->id],
         [
             'start_date'  => $start->toDateString(),
@@ -285,16 +395,15 @@ $items = DB::table('rab_penawaran_weight as w')
 
     protected function snapshotWeightsFromOffer(RabPenawaranHeader $penawaran): void
     {
-        $penawaran->loadMissing('sections.rabHeader','sections.items');
+        $penawaran->loadMissing('sections.rabHeader','sections.items.rabDetail.ahsp.details');
 
         // total bruto (tanpa diskon)
         $total = 0.0;
         foreach ($penawaran->sections as $sec) {
             foreach ($sec->items as $it) {
                 $v = (float)$it->volume;
-                $m = (float)($it->harga_material_penawaran_item ?? 0);
-                $j = (float)($it->harga_upah_penawaran_item ?? 0);
-                $total += ($m + $j) * $v;
+                $baseUnit = $this->getBaseUnitPriceFromItem($it);
+                $total += $baseUnit * $v;
             }
         }
 
@@ -310,9 +419,8 @@ $items = DB::table('rab_penawaran_weight as w')
 
                 foreach ($sec->items as $it) {
                     $v = (float)$it->volume;
-                    $m = (float)($it->harga_material_penawaran_item ?? 0);
-                    $j = (float)($it->harga_upah_penawaran_item ?? 0);
-                    $gross = ($m + $j) * $v;
+                    $baseUnit = $this->getBaseUnitPriceFromItem($it);
+                    $gross = $baseUnit * $v;
 
                     DB::table('rab_penawaran_weight')->insert([
                         'proyek_id'                => $penawaran->proyek_id,
@@ -361,6 +469,39 @@ $items = DB::table('rab_penawaran_weight as w')
                 }
             }
         });
+    }
+
+    private function getBaseUnitPriceFromItem($item): float
+    {
+        $rabDetail = $item->rabDetail ?? null;
+
+        if ($rabDetail) {
+            if ($rabDetail->relationLoaded('ahsp') ? $rabDetail->ahsp : $rabDetail->ahsp()->with('details')->first()) {
+                $ahsp = $rabDetail->ahsp;
+                if ($ahsp && $ahsp->relationLoaded('details') && $ahsp->details->isNotEmpty()) {
+                    $material = $ahsp->details
+                        ->where('tipe', 'material')
+                        ->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan);
+
+                    $upah = $ahsp->details
+                        ->where('tipe', 'upah')
+                        ->sum(fn($d) => (float)$d->koefisien * (float)$d->harga_satuan);
+
+                    return (float)$material + (float)$upah;
+                }
+            }
+
+            $material = (float)($rabDetail->harga_material ?? 0);
+            $upah     = (float)($rabDetail->harga_upah ?? 0);
+
+            if ($material == 0.0 && $upah == 0.0) {
+                return (float)($rabDetail->harga_satuan ?? 0);
+            }
+
+            return $material + $upah;
+        }
+
+        return (float)($item->harga_satuan_dasar ?? 0);
     }
 
 

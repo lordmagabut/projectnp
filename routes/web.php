@@ -263,6 +263,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{penawaran}',    [RabScheduleController::class, 'edit'])->name('rabSchedule.edit');
         Route::post('/{penawaran}/save',     [RabScheduleController::class, 'saveSetup'])->name('rabSchedule.save');
         Route::post('/{penawaran}/generate', [RabScheduleController::class, 'generate'])->name('rabSchedule.generate');
+        Route::get('/{penawaran}/pdf', [RabScheduleController::class, 'pdf'])->name('rabSchedule.pdf');
     });
 
     // ========== Input Schedule Manual (opsional lama) ==========
