@@ -95,7 +95,31 @@
       }
     }
 
-    $groups = collect($headers)->groupBy(function($h){
+    $headersAll = $headersAll ?? $headers;
+    $levelLimit = isset($level) && $level !== '' ? (int)$level : null;
+    $totalsByKode = [];
+
+    foreach ($headersAll as $h) {
+      $kode = (string)($h->kode ?? '');
+      if ($kode === '') continue;
+      foreach (($h->rabDetails ?? []) as $d) {
+        [$tm, $tj] = rab_summary_mat_jasa_totals($d);
+        $rowAll = rab_summary_total_combined($d);
+
+        $prefix = $kode;
+        while ($prefix !== '') {
+          if (!isset($totalsByKode[$prefix])) $totalsByKode[$prefix] = ['mat' => 0, 'jasa' => 0, 'all' => 0];
+          $totalsByKode[$prefix]['mat'] += $tm;
+          $totalsByKode[$prefix]['jasa'] += $tj;
+          $totalsByKode[$prefix]['all'] += $rowAll;
+
+          if (strpos($prefix, '.') === false) break;
+          $prefix = substr($prefix, 0, strrpos($prefix, '.'));
+        }
+      }
+    }
+
+    $groups = collect($headersAll)->groupBy(function($h){
       $k=(string)optional($h)->kode; return explode('.',$k)[0] ?? $k;
     });
     $grandMat=0; $grandJasa=0; $grandAll=0;
@@ -120,17 +144,11 @@
         $parentKode = optional($parent)->kode ?? $top;
         $parentDesc = optional($parent)->deskripsi ?? ('Bagian '.$top);
 
-        $groupMat=0; $groupJasa=0; $groupAll=0;
-        foreach ($items as $hdr) {
-          foreach (($hdr->rabDetails ?? []) as $d) {
-            [$tm,$tj] = rab_summary_mat_jasa_totals($d);
-            $groupMat += $tm; $groupJasa += $tj;
-            $rowAll = rab_summary_total_combined($d);
-            $groupAll += $rowAll;
-            $grandAll += $rowAll;
-          }
-        }
-        $grandMat += $groupMat; $grandJasa += $groupJasa;
+        $groupTotals = $totalsByKode[$parentKode] ?? ['mat' => 0, 'jasa' => 0, 'all' => 0];
+        $groupMat = $groupTotals['mat'];
+        $groupJasa = $groupTotals['jasa'];
+        $groupAll = $groupTotals['all'];
+        $grandMat += $groupMat; $grandJasa += $groupJasa; $grandAll += $groupAll;
       @endphp
 
       <tr style="background:#f9fbff;">
@@ -143,14 +161,13 @@
           $kode = (string)optional($hdr)->kode;
           $desc = (string)optional($hdr)->deskripsi;
           if ($kode==='' || strpos($kode,'.')===false) continue;
-
-          $secMat=0; $secJasa=0; $secAll=0;
-          foreach (($hdr->rabDetails ?? []) as $d) {
-            [$tm,$tj] = rab_summary_mat_jasa_totals($d);
-            $secMat += $tm; $secJasa += $tj;
-            $secAll += rab_summary_total_combined($d);
-          }
           $depth = is_string($kode) ? substr_count($kode, '.') : 0;
+          if (!is_null($levelLimit) && $depth > $levelLimit) continue;
+
+          $secTotals = $totalsByKode[$kode] ?? ['mat' => 0, 'jasa' => 0, 'all' => 0];
+          $secMat = $secTotals['mat'];
+          $secJasa = $secTotals['jasa'];
+          $secAll = $secTotals['all'];
           $pad = $depth * 8;
         @endphp
         <tr>

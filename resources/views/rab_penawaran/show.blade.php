@@ -320,23 +320,76 @@
     {{-- ================================
          Detail per Section & Item
        ================================= --}}
-    <h5 class="mb-3 text-primary"><i class="fas fa-list-alt me-2"></i> Detail Bagian Penawaran</h5>
+    @php
+      $maxSectionDepth = 0;
+      $totalsByKode = [];
+
+      foreach($penawaran->sections as $s) {
+        $kode = (string)optional($s->rabHeader)->kode;
+        if ($kode === '') continue;
+
+        $depth = substr_count($kode, '.');
+        if($depth > $maxSectionDepth) $maxSectionDepth = $depth;
+
+        $sumMat = 0;
+        $sumJasa = 0;
+        foreach(($s->items ?? []) as $it) {
+          $sumMat += (float)($it->harga_material_penawaran_item ?? 0) * (float)($it->volume ?? 0);
+          $sumJasa += (float)($it->harga_upah_penawaran_item ?? 0) * (float)($it->volume ?? 0);
+        }
+        $sumTotal = $sumMat + $sumJasa;
+
+        if (!isset($totalsByKode[$kode])) $totalsByKode[$kode] = ['mat' => 0, 'jasa' => 0, 'total' => 0];
+        $totalsByKode[$kode]['mat'] += $sumMat;
+        $totalsByKode[$kode]['jasa'] += $sumJasa;
+        $totalsByKode[$kode]['total'] += $sumTotal;
+
+        $parentKode = $kode;
+        while (strpos($parentKode, '.') !== false) {
+          $parentKode = substr($parentKode, 0, strrpos($parentKode, '.'));
+          if (!isset($totalsByKode[$parentKode])) $totalsByKode[$parentKode] = ['mat' => 0, 'jasa' => 0, 'total' => 0];
+          $totalsByKode[$parentKode]['mat'] += $sumMat;
+          $totalsByKode[$parentKode]['jasa'] += $sumJasa;
+          $totalsByKode[$parentKode]['total'] += $sumTotal;
+        }
+      }
+    @endphp
+    
+    <div class="row align-items-center mb-3">
+      <div class="col-md-6">
+        <h5 class="mb-0 text-primary"><i class="fas fa-list-alt me-2"></i> Detail Bagian Penawaran</h5>
+      </div>
+      <div class="col-md-6 text-end">
+        <label class="me-2"><i class="fas fa-layer-group me-1"></i> Tampilkan Level:</label>
+        <select id="penawaranLevelFilter" class="form-select form-select-sm d-inline-block" style="width: auto; min-width: 150px;">
+          <option value="999">Semua Level</option>
+          @if($maxSectionDepth >= 0)
+            @for($i = 0; $i <= $maxSectionDepth; $i++)
+              <option value="{{ $i }}">Level {{ $i + 1 }} ({{ $i == 0 ? 'Utama' : str_repeat('1.', $i) . '1' }})</option>
+            @endfor
+          @endif
+        </select>
+        <small class="text-muted ms-2">(Max: Level {{ $maxSectionDepth + 1 }})</small>
+      </div>
+    </div>
 
     @foreach($penawaran->sections as $section)
       @php
         $hasItems = $section->items && $section->items->isNotEmpty();
 
-        $sectionMat  = $hasItems ? $section->items->sum(fn($it)=>(float)($it->harga_material_penawaran_item ?? 0) * (float)($it->volume ?? 0)) : 0;
-        $sectionJasa = $hasItems ? $section->items->sum(fn($it)=>(float)($it->harga_upah_penawaran_item ?? 0)     * (float)($it->volume ?? 0)) : 0;
-        $sectionTotal = $sectionMat + $sectionJasa;
-
         // indentation: hitung kedalaman kode header (jumlah titik)
         $sectionHeaderKode = optional($section->rabHeader)->kode ?? '';
         $sectionHeaderDepth = is_string($sectionHeaderKode) ? substr_count($sectionHeaderKode, '.') : 0;
         $sectionHeaderPad = $sectionHeaderDepth * 12; // px per level for header display
+
+        $sectionTotals = $totalsByKode[$sectionHeaderKode] ?? ['mat' => 0, 'jasa' => 0, 'total' => 0];
+        $sectionMat = $sectionTotals['mat'];
+        $sectionJasa = $sectionTotals['jasa'];
+        $sectionTotal = $sectionTotals['total'];
+        $displayTotals = $sectionTotal > 0;
       @endphp
 
-      <div class="card mb-3 animate__animated animate__fadeInUp animate__faster">
+      <div class="card mb-3 animate__animated animate__fadeInUp animate__faster penawaran-section-card" data-depth="{{ $sectionHeaderDepth }}">
         <div class="card-header section-header-row d-flex justify-content-between align-items-center"
              @if($hasItems)
                data-bs-toggle="collapse"
@@ -352,7 +405,7 @@
               <span class="ms-2 badge bg-dark">Overhead: {{ number_format($section->overhead_percentage, 2, ',', '.') }}%</span>
             @endif
           </div>
-          @if($hasItems)
+          @if($displayTotals)
             <div class="text-end">
               <div class="small mb-1">
                 <span class="me-2">Material: <span class="fw-bold">Rp {{ number_format($sectionMat, 0, ',', '.') }}</span></span>
@@ -553,11 +606,15 @@
       <a href="{{ route('proyek.penawaran.edit', ['proyek' => $proyek->id, 'penawaran' => $penawaran->id]) }}" class="btn btn-warning" data-bs-toggle="tooltip" title="Edit Penawaran">
         <i class="fas fa-edit me-1"></i> Edit
       </a>
-      <a target="_blank" class="btn btn-outline-primary btn-sm" href="{{ route('proyek.penawaran.PdfSinglePrice', [$proyek->id, $penawaran->id]) }}">
+      <a target="_blank" class="btn btn-outline-primary btn-sm penawaran-pdf-link"
+         data-base-href="{{ route('proyek.penawaran.PdfSinglePrice', [$proyek->id, $penawaran->id]) }}"
+         href="{{ route('proyek.penawaran.PdfSinglePrice', [$proyek->id, $penawaran->id]) }}">
         PDF (Gabungan)
       </a>
 
-      <a target="_blank" class="btn btn-outline-primary btn-sm" href="{{ route('proyek.penawaran.pdf-mixed', [$proyek->id, $penawaran->id]) }}">
+      <a target="_blank" class="btn btn-outline-primary btn-sm penawaran-pdf-link"
+         data-base-href="{{ route('proyek.penawaran.pdf-mixed', [$proyek->id, $penawaran->id]) }}"
+         href="{{ route('proyek.penawaran.pdf-mixed', [$proyek->id, $penawaran->id]) }}">
         PDF (Material + Jasa)
       </a>
 
@@ -878,6 +935,62 @@ Termin 3: 30% saat serah terima">{{ old('keterangan', $penawaran->keterangan ?? 
 @endsection
 
 @push('custom-scripts')
+
+<script>
+// Filter Level untuk RAB Penawaran
+(function() {
+  const filterSelect = document.getElementById('penawaranLevelFilter');
+  if (!filterSelect) return;
+
+  const pdfLinks = document.querySelectorAll('.penawaran-pdf-link');
+  const baseHrefs = new Map();
+  pdfLinks.forEach(link => {
+    const baseHref = link.getAttribute('data-base-href') || link.getAttribute('href') || '';
+    baseHrefs.set(link, baseHref);
+  });
+
+  function updatePdfLinks() {
+    const level = filterSelect.value;
+    pdfLinks.forEach(link => {
+      const baseHref = baseHrefs.get(link);
+      if (!baseHref) return;
+      const url = new URL(baseHref, window.location.origin);
+      if (level && level !== '999') {
+        url.searchParams.set('level', level);
+      } else {
+        url.searchParams.delete('level');
+      }
+      link.setAttribute('href', url.toString());
+    });
+  }
+
+  function applyLevelFilter() {
+    const maxLevel = parseInt(filterSelect.value);
+    const sectionCards = document.querySelectorAll('.penawaran-section-card');
+    
+    sectionCards.forEach(card => {
+      const depth = parseInt(card.getAttribute('data-depth') || '0');
+      if (maxLevel >= 999 || depth <= maxLevel) {
+        card.style.display = '';
+      } else {
+        card.style.display = 'none';
+        // Tutup collapse jika ada
+        const collapseEl = card.querySelector('.collapse.show');
+        if (collapseEl) {
+          const bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
+          if (bsCollapse) bsCollapse.hide();
+        }
+      }
+    });
+  }
+
+  updatePdfLinks();
+  filterSelect.addEventListener('change', () => {
+    applyLevelFilter();
+    updatePdfLinks();
+  });
+})();
+</script>
 
 <script>
 (function(){

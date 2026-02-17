@@ -70,6 +70,35 @@
       </tr>
     </thead>
     <tbody>
+    @php
+      $penawaranAll = $penawaranAll ?? $penawaran;
+      $levelLimit = isset($level) && $level !== '' ? (int)$level : null;
+      $totalsByKode = [];
+
+      foreach (($penawaranAll->sections ?? []) as $sec) {
+        $kode = (string)optional($sec->rabHeader)->kode;
+        if ($kode === '') continue;
+
+        $sumTotal = 0;
+        foreach (($sec->items ?? []) as $it) {
+          $v = (float)($it->volume ?? 0);
+          $sumTotal += ((float)($it->harga_material_penawaran_item ?? 0) + (float)($it->harga_upah_penawaran_item ?? 0)) * $v;
+        }
+
+        $prefix = $kode;
+        while ($prefix !== '') {
+          if (!isset($totalsByKode[$prefix])) $totalsByKode[$prefix] = ['total' => 0];
+          $totalsByKode[$prefix]['total'] += $sumTotal;
+
+          if (strpos($prefix, '.') === false) break;
+          $prefix = substr($prefix, 0, strrpos($prefix, '.'));
+        }
+      }
+
+      $groups = collect($penawaranAll->sections)->groupBy(function($s){
+        $k=(string)optional($s->rabHeader)->kode; return explode('.',$k)[0] ?? $k;
+      });
+    @endphp
     @foreach($groups as $top => $sections)
       @php
         $parent = $sections->first(function($s){
@@ -78,13 +107,7 @@
         $parentKode = optional(optional($parent)->rabHeader)->kode ?? $top;
         $parentDesc = optional(optional($parent)->rabHeader)->deskripsi ?? ('Bagian '.$top);
 
-        $groupTotal = 0;
-        foreach ($sections as $sec) {
-          foreach ($sec->items as $it) {
-            $v=(float)($it->volume ?? 0);
-            $groupTotal += ((float)($it->harga_material_penawaran_item ?? 0) + (float)($it->harga_upah_penawaran_item ?? 0)) * $v;
-          }
-        }
+        $groupTotal = ($totalsByKode[$parentKode]['total'] ?? 0);
         $grandAllDPP += $groupTotal;
       @endphp
 
@@ -98,14 +121,11 @@
           $kode = optional($sec->rabHeader)->kode ?? '';
           $desc = optional($sec->rabHeader)->deskripsi ?? '';
           if ($kode==='' || strpos($kode,'.')===false) continue;
-
-          $secTotal = 0;
           $depth = is_string($kode) ? substr_count($kode, '.') : 0;
+          if (!is_null($levelLimit) && $depth > $levelLimit) continue;
+
+          $secTotal = ($totalsByKode[$kode]['total'] ?? 0);
           $pad = $depth * 8;
-          foreach ($sec->items as $it) {
-            $v = (float)($it->volume ?? 0);
-            $secTotal += ((float)($it->harga_material_penawaran_item ?? 0) + (float)($it->harga_upah_penawaran_item ?? 0)) * $v;
-          }
         @endphp
         <tr>
           <td style="padding-left: {{ $pad }}px">{{ $kode }}</td>

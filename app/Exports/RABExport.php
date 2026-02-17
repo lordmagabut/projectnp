@@ -17,7 +17,12 @@ class RABExport implements WithMultipleSheets
 
     public function sheets(): array
     {
+        // Urutan sheet sama seperti template import: HSD → AHSP → RAB
         return [
+            new HsdMaterialSheet($this->proyekId),
+            new HsdUpahSheet($this->proyekId),
+            new AhspHeaderSheet($this->proyekId),
+            new AhspDetailSheet($this->proyekId),
             new RABHeaderSheet($this->proyekId),
             new RABDetailSheet($this->proyekId),
         ];

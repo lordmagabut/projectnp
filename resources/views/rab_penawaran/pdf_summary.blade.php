@@ -66,7 +66,33 @@
     }
 
     // Grouping & subtotal material/jasa per bagian
-    $groups = collect($penawaran->sections)->groupBy(function($s){
+    $penawaranAll = $penawaranAll ?? $penawaran;
+    $levelLimit = isset($level) && $level !== '' ? (int)$level : null;
+    $totalsByKode = [];
+
+    foreach (($penawaranAll->sections ?? []) as $sec) {
+      $kode = (string)optional($sec->rabHeader)->kode;
+      if ($kode === '') continue;
+
+      $sumMat = 0; $sumJasa = 0;
+      foreach (($sec->items ?? []) as $it) {
+        $v = (float)($it->volume ?? 0);
+        $sumMat  += (float)($it->harga_material_penawaran_item ?? 0) * $v;
+        $sumJasa += (float)($it->harga_upah_penawaran_item     ?? 0) * $v;
+      }
+
+      $prefix = $kode;
+      while ($prefix !== '') {
+        if (!isset($totalsByKode[$prefix])) $totalsByKode[$prefix] = ['mat' => 0, 'jasa' => 0];
+        $totalsByKode[$prefix]['mat'] += $sumMat;
+        $totalsByKode[$prefix]['jasa'] += $sumJasa;
+
+        if (strpos($prefix, '.') === false) break;
+        $prefix = substr($prefix, 0, strrpos($prefix, '.'));
+      }
+    }
+
+    $groups = collect($penawaranAll->sections)->groupBy(function($s){
       $k=(string)optional($s->rabHeader)->kode; return explode('.',$k)[0] ?? $k;
     });
     $grandMat=0; $grandJasa=0;
@@ -90,14 +116,9 @@
         $parentKode = optional(optional($parent)->rabHeader)->kode ?? $top;
         $parentDesc = optional(optional($parent)->rabHeader)->deskripsi ?? ('Bagian '.$top);
 
-        $groupMat=0; $groupJasa=0;
-        foreach ($sections as $sec) {
-          foreach ($sec->items as $it) {
-            $v=(float)($it->volume ?? 0);
-            $groupMat  += (float)($it->harga_material_penawaran_item ?? 0) * $v;
-            $groupJasa += (float)($it->harga_upah_penawaran_item     ?? 0) * $v;
-          }
-        }
+        $groupTotals = $totalsByKode[$parentKode] ?? ['mat' => 0, 'jasa' => 0];
+        $groupMat = $groupTotals['mat'];
+        $groupJasa = $groupTotals['jasa'];
         $grandMat += $groupMat; $grandJasa += $groupJasa;
       @endphp
 
@@ -113,14 +134,12 @@
           $kode = optional($sec->rabHeader)->kode ?? '';
           $desc = optional($sec->rabHeader)->deskripsi ?? '';
           if ($kode==='' || strpos($kode,'.')===false) continue;
-
-          $secMat=0; $secJasa=0;
-          foreach ($sec->items as $it) {
-            $v=(float)($it->volume ?? 0);
-            $secMat  += (float)($it->harga_material_penawaran_item ?? 0) * $v;
-            $secJasa += (float)($it->harga_upah_penawaran_item     ?? 0) * $v;
-          }
           $depth = is_string($kode) ? substr_count($kode, '.') : 0;
+          if (!is_null($levelLimit) && $depth > $levelLimit) continue;
+
+          $secTotals = $totalsByKode[$kode] ?? ['mat' => 0, 'jasa' => 0];
+          $secMat = $secTotals['mat'];
+          $secJasa = $secTotals['jasa'];
           $pad = $depth * 8;
         @endphp
         <tr>

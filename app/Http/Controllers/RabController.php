@@ -97,12 +97,29 @@ class RabController extends Controller
             ->orderBy('kode_sort')
             ->get();
 
+        $headersSummary = $headers;
+        $levelParam = request()->query('level');
+        if ($levelParam !== null && $levelParam !== '') {
+            $maxDepth = max(0, (int)$levelParam);
+            $headersSummary = $headersSummary->filter(function ($h) use ($maxDepth) {
+                $kode = (string)($h->kode ?? '');
+                if ($kode === '') return false;
+                return substr_count($kode, '.') <= $maxDepth;
+            })->values();
+        }
+
         $tax = ProyekTaxProfile::where('proyek_id', $proyek_id)->where('aktif', 1)->first();
 
-        $pdfSummary = Pdf::loadView('rab.pdf_summary', compact('proyek', 'headers', 'tax'))
+        $pdfSummary = Pdf::loadView('rab.pdf_summary', [
+                'proyek' => $proyek,
+                'headers' => $headersSummary,
+                'headersAll' => $headers,
+                'tax' => $tax,
+                'level' => $levelParam,
+            ])
             ->setPaper('A4', 'portrait');
 
-        $pdfDetail = Pdf::loadView('rab.pdf_detail', compact('proyek', 'headers', 'tax'))
+        $pdfDetail = Pdf::loadView('rab.pdf_detail', ['proyek' => $proyek, 'headers' => $headers, 'tax' => $tax])
             ->setPaper('A4', 'landscape');
 
         $merger = new Merger;

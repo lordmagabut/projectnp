@@ -57,7 +57,9 @@
           </a>
         </li>
         <li>
-          <a class="dropdown-item d-flex align-items-center" target="_blank" href="{{ route('rab.pdf-mixed', $proyek->id) }}">
+          <a id="rabPdfMixedLink" class="dropdown-item d-flex align-items-center" target="_blank"
+             data-base-href="{{ route('rab.pdf-mixed', $proyek->id) }}"
+             href="{{ route('rab.pdf-mixed', $proyek->id) }}">
             <i class="fas fa-file-pdf me-2 text-danger"></i> PDF (Material + Jasa)
           </a>
         </li>
@@ -116,9 +118,27 @@
         @php
           $kontigensi = (float) data_get($proyek, 'kontingensi_persen', data_get($proyek, 'persen_kontingensi', 0));
           $kontFactor = 1 + ($kontigensi / 100);
+          $maxDepth = 0;
+          foreach($headers as $h) {
+            $depth = substr_count((string)$h->kode, '.');
+            if($depth > $maxDepth) $maxDepth = $depth;
+          }
         @endphp
-        <h5 class="mb-1 d-flex align-items-center"><i class="fas fa-list-alt me-2"></i> Detail RAB</h5>
-        <div class="small text-muted mb-3">Dengan kontigensi ({{ number_format($kontigensi, 2, ',', '.') }}%)</div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h5 class="mb-1 d-flex align-items-center"><i class="fas fa-list-alt me-2"></i> Detail RAB</h5>
+            <div class="small text-muted">Dengan kontigensi ({{ number_format($kontigensi, 2, ',', '.') }}%)</div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <label class="mb-0 text-nowrap"><i class="fas fa-layer-group me-1"></i> Tampilkan Level:</label>
+            <select id="rabLevelFilter" class="form-select form-select-sm" style="width: auto; min-width: 150px;">
+              <option value="999">Semua Level</option>
+              @for($i = 0; $i <= $maxDepth; $i++)
+                <option value="{{ $i }}">Level {{ $i + 1 }} ({{ $i == 0 ? 'Utama' : str_repeat('1.', $i) . '1' }})</option>
+              @endfor
+            </select>
+          </div>
+        </div>
         <table class="table table-hover table-sm align-middle rab-table">
           <thead class="table-secondary">
             <tr>
@@ -138,9 +158,12 @@
                 $rowClass = $isHeaderUtama ? 'bg-light fw-bold text-primary' : '';
                 $headerDepth = max(0, substr_count((string)$h->kode, '.'));
                 $headerPad = $headerDepth * 18; // pixels per level
+                $accordionClass = $hasDetails ? 'accordion-toggle cursor-pointer' : '';
+                $allClasses = trim($rowClass . ' ' . $accordionClass . ' rab-header-row');
               @endphp
 
-              <tr class="{{ $rowClass }} {{ $hasDetails ? 'accordion-toggle cursor-pointer' : '' }}"
+              <tr class="{{ $allClasses }}"
+                  data-depth="{{ $headerDepth }}"
                   @if($hasDetails)
                     data-bs-toggle="collapse"
                     data-bs-target="#{{ $collapseId }}"
@@ -162,7 +185,7 @@
               </tr>
 
               @if($hasDetails)
-                <tr class="collapse" id="{{ $collapseId }}">
+                <tr class="collapse rab-detail-row" id="{{ $collapseId }}" data-depth="{{ $headerDepth }}">
                   <td colspan="5" class="p-0 border-0">
                     <div class="table-responsive bg-white p-2 border-start border-end border-bottom rounded-bottom">
                       <table class="table table-striped table-sm mb-0 child-table">
@@ -524,6 +547,67 @@
     qEl?.addEventListener('input',  filterAndRender);
     modeEl?.addEventListener('change', filterAndRender);
     discEl?.addEventListener('change', filterAndRender);
+  })();
+
+  // Filter Level Header RAB
+  (function() {
+    const filterSelect = document.getElementById('rabLevelFilter');
+    if (!filterSelect) return;
+
+    const pdfLink = document.getElementById('rabPdfMixedLink');
+    const baseHref = pdfLink?.getAttribute('data-base-href') || pdfLink?.getAttribute('href') || '';
+
+    function updatePdfLink() {
+      if (!pdfLink || !baseHref) return;
+      const level = filterSelect.value;
+      const url = new URL(baseHref, window.location.origin);
+      if (level && level !== '999') {
+        url.searchParams.set('level', level);
+      } else {
+        url.searchParams.delete('level');
+      }
+      pdfLink.setAttribute('href', url.toString());
+    }
+
+    function applyLevelFilter() {
+      const maxLevel = parseInt(filterSelect.value);
+      const headerRows = document.querySelectorAll('.rab-header-row');
+      const detailRows = document.querySelectorAll('.rab-detail-row');
+      
+      headerRows.forEach(row => {
+        const depth = parseInt(row.getAttribute('data-depth') || '0');
+        if (maxLevel >= 999 || depth <= maxLevel) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+          // Tutup collapse jika ada
+          const collapseTarget = row.getAttribute('data-bs-target');
+          if (collapseTarget) {
+            const collapseEl = document.querySelector(collapseTarget);
+            if (collapseEl && collapseEl.classList.contains('show')) {
+              const bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
+              if (bsCollapse) bsCollapse.hide();
+            }
+          }
+        }
+      });
+
+      // Hide detail rows yang parent-nya di-hide
+      detailRows.forEach(row => {
+        const depth = parseInt(row.getAttribute('data-depth') || '0');
+        if (maxLevel >= 999 || depth <= maxLevel) {
+          // Detail row visible jika parent visible
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      updatePdfLink();
+    }
+
+    updatePdfLink();
+    filterSelect.addEventListener('change', applyLevelFilter);
   })();
 </script>
 @endpush

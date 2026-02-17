@@ -821,6 +821,16 @@ class RabPenawaranController extends Controller
             return $section->rabHeader->kode_sort ?? '';
         })->values(); // Re-index the collection after sorting
 
+        $levelParam = request()->query('level');
+        if ($levelParam !== null && $levelParam !== '') {
+            $maxDepth = max(0, (int)$levelParam);
+            $penawaran->sections = $penawaran->sections->filter(function ($s) use ($maxDepth) {
+                $kode = (string)optional($s->rabHeader)->kode;
+                if ($kode === '') return false;
+                return substr_count($kode, '.') <= $maxDepth;
+            })->values();
+        }
+
         // Ambil profil pajak aktif proyek (jika ada) supaya view bisa menampilkan/menghilangkan PPN
         $tax = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
 
@@ -876,6 +886,16 @@ class RabPenawaranController extends Controller
         $penawaran->sections = $penawaran->sections->sortBy(function($section) {
             return $section->rabHeader->kode_sort ?? '';
         })->values();
+
+        $levelParam = request()->query('level');
+        if ($levelParam !== null && $levelParam !== '') {
+            $maxDepth = max(0, (int)$levelParam);
+            $penawaran->sections = $penawaran->sections->filter(function ($s) use ($maxDepth) {
+                $kode = (string)optional($s->rabHeader)->kode;
+                if ($kode === '') return false;
+                return substr_count($kode, '.') <= $maxDepth;
+            })->values();
+        }
 
         // Pakai template split
         $tax = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
@@ -1303,18 +1323,37 @@ class RabPenawaranController extends Controller
                 $q->with(['rabHeader', 'items.rabDetail'])->orderBy('id');
             }
         ]);
+
+        $penawaranSummary = clone $penawaran;
+        $penawaranSummary->setRelation('sections', $penawaran->sections);
+        $levelParam = request()->query('level');
+        if ($levelParam !== null && $levelParam !== '') {
+            $maxDepth = max(0, (int)$levelParam);
+            $filtered = $penawaran->sections->filter(function ($s) use ($maxDepth) {
+                $kode = (string)optional($s->rabHeader)->kode;
+                if ($kode === '') return false;
+                return substr_count($kode, '.') <= $maxDepth;
+            })->values();
+            $penawaranSummary->setRelation('sections', $filtered);
+        }
     
         // 1) Render ringkasan (portrait)
         $tax = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
         $pdfSummary = Pdf::loadView(
             'rab_penawaran.pdf_summary',
-            compact('proyek','penawaran','tax')
+            [
+                'proyek' => $proyek,
+                'penawaran' => $penawaranSummary,
+                'penawaranAll' => $penawaran,
+                'tax' => $tax,
+                'level' => $levelParam,
+            ]
         )->setPaper('A4', 'portrait');
     
         // 2) Render detail (landscape)
         $pdfDetail = Pdf::loadView(
             'rab_penawaran.pdf_detail',
-            compact('proyek','penawaran','tax')
+            ['proyek' => $proyek, 'penawaran' => $penawaran, 'tax' => $tax]
         )->setPaper('A4', 'landscape');
     
         // 3) Merge kedua PDF (tanpa menulis file sementara)
@@ -1339,17 +1378,36 @@ class RabPenawaranController extends Controller
             }
         ]);
 
+        $penawaranSummary = clone $penawaran;
+        $penawaranSummary->setRelation('sections', $penawaran->sections);
+        $levelParam = request()->query('level');
+        if ($levelParam !== null && $levelParam !== '') {
+            $maxDepth = max(0, (int)$levelParam);
+            $filtered = $penawaran->sections->filter(function ($s) use ($maxDepth) {
+                $kode = (string)optional($s->rabHeader)->kode;
+                if ($kode === '') return false;
+                return substr_count($kode, '.') <= $maxDepth;
+            })->values();
+            $penawaranSummary->setRelation('sections', $filtered);
+        }
+
         // 1) Render Ringkasan (Portrait)
         $tax = ProyekTaxProfile::where('proyek_id', $proyek->id)->where('aktif', 1)->first();
         $pdfSummary = \Barryvdh\DomPDF\Facade\Pdf::loadView(
             'rab_penawaran.pdf_summary_single',
-            compact('proyek','penawaran','tax')
+            [
+                'proyek' => $proyek,
+                'penawaran' => $penawaranSummary,
+                'penawaranAll' => $penawaran,
+                'tax' => $tax,
+                'level' => $levelParam,
+            ]
         )->setPaper('A4', 'portrait');
 
         // 2) Render Detail (Landscape)
         $pdfDetail = \Barryvdh\DomPDF\Facade\Pdf::loadView(
             'rab_penawaran.pdf_detail_single',
-            compact('proyek','penawaran','tax')
+            ['proyek' => $proyek, 'penawaran' => $penawaran, 'tax' => $tax]
         )->setPaper('A4', 'landscape');
 
         // 3) Merge PDF menggunakan iio/libmergepdf (sesuai kode awal Anda)
