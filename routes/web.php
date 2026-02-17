@@ -264,6 +264,11 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{penawaran}/save',     [RabScheduleController::class, 'saveSetup'])->name('rabSchedule.save');
         Route::post('/{penawaran}/generate', [RabScheduleController::class, 'generate'])->name('rabSchedule.generate');
         Route::get('/{penawaran}/pdf', [RabScheduleController::class, 'pdf'])->name('rabSchedule.pdf');
+        
+        // Export/Import Schedule
+        Route::get('/{penawaran}/export', [RabScheduleController::class, 'export'])->name('rabSchedule.export');
+        Route::post('/{penawaran}/import', [RabScheduleController::class, 'import'])->name('rabSchedule.import');
+        Route::get('/{penawaran}/template', [RabScheduleController::class, 'downloadTemplate'])->name('rabSchedule.template');
     });
 
     // ========== Input Schedule Manual (opsional lama) ==========

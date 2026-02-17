@@ -13,6 +13,9 @@ use Illuminate\Support\Carbon;    // <-- tambahkan
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ScheduleExport;
+use App\Imports\ScheduleImport;
 
 class RabScheduleController extends Controller
 {
@@ -547,5 +550,175 @@ $items = DB::table('rab_penawaran_weight as w')
                 }
             }
         });
+    }
+
+    /**
+     * Export schedule to Excel
+     */
+    public function export(Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        $fileName = 'Schedule_' . str_replace(' ', '_', $penawaran->nama_penawaran) . '_' . date('Ymd_His') . '.xlsx';
+        return Excel::download(new ScheduleExport($proyek->id, $penawaran->id), $fileName);
+    }
+
+    /**
+     * Import schedule from Excel
+     */
+    public function import(Request $request, Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,xls',
+        ]);
+
+        try {
+            Excel::import(new ScheduleImport($proyek->id, $penawaran->id), $request->file('file'));
+            
+            return redirect()->route('rabSchedule.edit', [$proyek->id, $penawaran->id])
+                ->with('success', 'Schedule berhasil diimport!');
+        } catch (\Exception $e) {
+            return redirect()->route('rabSchedule.edit', [$proyek->id, $penawaran->id])
+                ->with('error', 'Gagal import schedule: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Download template Excel untuk import schedule
+     */
+    public function downloadTemplate(Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        $path = storage_path('app/templates/schedule_import_template.xlsx');
+
+        // Generate template jika belum ada
+        if (!file_exists($path)) {
+            $this->generateTemplateXlsx($path, $proyek, $penawaran);
+        }
+
+        return response()->download($path, 'schedule_import_template.xlsx');
+    }
+
+    /**
+     * Generate template XLSX untuk import schedule
+     */
+    private function generateTemplateXlsx(string $path, Proyek $proyek, RabPenawaranHeader $penawaran)
+    {
+        @mkdir(dirname($path), 0775, true);
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        
+        // Sheet 1: Schedule_Meta
+        $metaSheet = $spreadsheet->getActiveSheet();
+        $metaSheet->setTitle('Schedule_Meta');
+        $metaSheet->fromArray(['proyek_id', 'penawaran_id', 'start_date', 'end_date', 'total_weeks'], null, 'A1');
+        $metaSheet->fromArray([
+            $proyek->id,
+            $penawaran->id,
+            $proyek->tanggal_mulai ?? date('Y-m-d'),
+            $proyek->tanggal_selesai ?? date('Y-m-d', strtotime('+3 months')),
+            13 // default 13 minggu (3 bulan)
+        ], null, 'A2');
+        
+        foreach (['A'=>12, 'B'=>14, 'C'=>14, 'D'=>14, 'E'=>14] as $col => $w) {
+            $metaSheet->getColumnDimension($col)->setWidth($w);
+        }
+        $metaSheet->freezePane('A2');
+        $metaSheet->getStyle('A1:E1')->getFont()->setBold(true);
+
+        // Sheet 2: Schedule_Setup (DURASI - PALING PENTING!)
+        $setupSheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet($spreadsheet, 'Schedule_Setup');
+        $spreadsheet->addSheet($setupSheet, 1);
+        $setupSheet->fromArray([
+            'penawaran_item_id', 'kode_item', 'deskripsi_item', 'minggu_ke', 'durasi'
+        ], null, 'A1');
+        
+        // Get items with existing schedule data
+        $scheduledItems = \App\Models\RabSchedule::where('proyek_id', $proyek->id)
+            ->where('penawaran_id', $penawaran->id)
+            ->with(['item.rabDetail'])
+            ->get();
+        
+        if ($scheduledItems->isNotEmpty()) {
+            $row = 2;
+            foreach ($scheduledItems as $schedule) {
+                $item = $schedule->item;
+                $setupSheet->fromArray([
+                    $schedule->rab_penawaran_item_id,
+                    $item && $item->rabDetail ? $item->rabDetail->kode : '',
+                    $item && $item->rabDetail ? $item->rabDetail->deskripsi : '',
+                    $schedule->minggu_ke ?? 1,
+                    $schedule->durasi ?? 1
+                ], null, 'A' . $row);
+                $row++;
+            }
+        } else {
+            // Jika belum ada schedule, ambil sample items
+            $items = RabPenawaranItem::where('penawaran_id', $penawaran->id)
+                ->with('rabDetail')
+                ->limit(5)
+                ->get();
+            
+            $row = 2;
+            foreach ($items as $item) {
+                $setupSheet->fromArray([
+                    $item->id,
+                    $item->rabDetail->kode ?? '',
+                    $item->rabDetail->deskripsi ?? '',
+                    1, // minggu_ke default
+                    1  // durasi default (user harus isi)
+                ], null, 'A' . $row);
+                $row++;
+            }
+        }
+        
+        foreach (['A'=>18, 'B'=>14, 'C'=>44, 'D'=>12, 'E'=>12] as $col => $w) {
+            $setupSheet->getColumnDimension($col)->setWidth($w);
+        }
+        $setupSheet->freezePane('A2');
+        $setupSheet->getStyle('A1:E1')->getFont()->setBold(true);
+        $setupSheet->getStyle('A1:E1')->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('FFFFCC00'); // Highlight kuning untuk sheet penting
+
+        // Sheet 3: Schedule_Detail (hasil generate dari durasi)
+        $detailSheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet($spreadsheet, 'Schedule_Detail');
+        $spreadsheet->addSheet($detailSheet, 2);
+        $detailSheet->fromArray([
+            'penawaran_item_id', 'kode_item', 'deskripsi_item', 'minggu_ke', 'bobot_mingguan'
+        ], null, 'A1');
+        
+        // Get sample detail data (hasil generate)
+        $detailData = \App\Models\RabScheduleDetail::where('proyek_id', $proyek->id)
+            ->where('penawaran_id', $penawaran->id)
+            ->with(['item.rabDetail'])
+            ->limit(10)
+            ->get();
+        
+        if ($detailData->isNotEmpty()) {
+            $row = 2;
+            foreach ($detailData as $detail) {
+                $item = $detail->item;
+                $detailSheet->fromArray([
+                    $detail->rab_penawaran_item_id,
+                    $item && $item->rabDetail ? $item->rabDetail->kode : '',
+                    $item && $item->rabDetail ? $item->rabDetail->deskripsi : '',
+                    $detail->minggu_ke,
+                    $detail->bobot_mingguan
+                ], null, 'A' . $row);
+                $row++;
+            }
+        } else {
+            // Jika belum ada detail, kosongkan saja (akan di-generate dari Setup)
+            $detailSheet->fromArray([
+                '', '', '(Data akan terisi setelah Generate Schedule dari Setup)', '', ''
+            ], null, 'A2');
+        }
+        
+        foreach (['A'=>18, 'B'=>14, 'C'=>44, 'D'=>12, 'E'=>16] as $col => $w) {
+            $detailSheet->getColumnDimension($col)->setWidth($w);
+        }
+        $detailSheet->freezePane('A2');
+        $detailSheet->getStyle('A1:E1')->getFont()->setBold(true);
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($path);
     }
 }

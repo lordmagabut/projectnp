@@ -31,6 +31,16 @@
       Atur Schedule — {{ $penawaran->nama_penawaran }}
     </h4>
     <div class="d-flex gap-2">
+      {{-- Export Schedule --}}
+      <a href="{{ route('rabSchedule.export', [$proyek->id, $penawaran->id]) }}" class="btn btn-success btn-sm">
+        <i data-feather="download" class="me-1"></i> Export Excel
+      </a>
+      
+      {{-- Import Schedule - Modal Trigger --}}
+      <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#importScheduleModal">
+        <i data-feather="upload" class="me-1"></i> Import Excel
+      </button>
+      
       <a href="{{ route('rabSchedule.pdf', [$proyek->id, $penawaran->id]) }}" class="btn btn-light btn-sm">
         <i data-feather="printer" class="me-1"></i> Cetak PDF
       </a>
@@ -270,12 +280,77 @@
     @endif
   </div>
 </div>
+
+{{-- Modal Import Schedule --}}
+<div class="modal fade" id="importScheduleModal" tabindex="-1" aria-labelledby="importScheduleModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="importScheduleModalLabel">
+          <i data-feather="upload" class="me-2"></i> Import Schedule dari Excel
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form action="{{ route('rabSchedule.import', [$proyek->id, $penawaran->id]) }}" method="POST" enctype="multipart/form-data">
+        @csrf
+        <div class="modal-body">
+          <div class="alert alert-info">
+            <strong><i class="fas fa-info-circle me-1"></i> Info:</strong>
+            <ul class="mb-0 mt-2">
+              <li>File harus berformat Excel (.xlsx atau .xls)</li>
+              <li>Download template terlebih dahulu untuk format yang benar</li>
+              <li><strong>Sheet "Schedule_Setup"</strong> berisi <u>durasi per item</u> (PALING PENTING!)</li>
+              <li><strong>Sheet "Schedule_Detail"</strong> berisi distribusi bobot mingguan (hasil generate)</li>
+              <li>Import akan menimpa schedule yang sudah ada</li>
+            </ul>
+          </div>
+
+          <div class="mb-3">
+            <label for="scheduleFile" class="form-label fw-bold">Pilih File Excel</label>
+            <input type="file" name="file" id="scheduleFile" class="form-control" accept=".xlsx,.xls" required>
+          </div>
+
+          <div class="alert alert-warning">
+            <strong><i class="fas fa-exclamation-triangle me-1"></i> Cara Penggunaan:</strong>
+            <ol class="mb-0 mt-2">
+              <li>Download template Excel</li>
+              <li>Isi <strong>Sheet "Schedule_Setup"</strong> dengan minggu_ke dan durasi</li>
+              <li>Sheet "Schedule_Detail" akan terisi otomatis setelah Generate</li>
+              <li>Upload file untuk import</li>
+            </ol>
+          </div>
+
+          <div class="d-grid gap-2">
+            <a href="{{ route('rabSchedule.template', [$proyek->id, $penawaran->id]) }}" class="btn btn-outline-primary">
+              <i data-feather="file-text" class="me-1"></i> Download Template Excel
+            </a>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-primary">
+            <i data-feather="upload" class="me-1"></i> Import Schedule
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 @endsection
 
 @push('custom-scripts')
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     if (window.feather) feather.replace();
+    
+    // Re-initialize feather icons when modal is shown
+    const importModal = document.getElementById('importScheduleModal');
+    if (importModal) {
+      importModal.addEventListener('shown.bs.modal', function () {
+        if (window.feather) feather.replace();
+      });
+    }
   });
 </script>
 
