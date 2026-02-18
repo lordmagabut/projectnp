@@ -22,17 +22,18 @@ class HsdUpahSheet implements FromCollection, WithHeadings, WithTitle, WithColum
     public function collection()
     {
         // Ambil semua HSD Upah yang digunakan di AHSP yang terhubung dengan RAB Detail proyek ini
-        $upahs = HsdUpah::whereIn('id', function($query) {
-            $query->select('ahsp_detail.referensi_id')
-                ->from('ahsp_detail')
-                ->join('ahsp_header', 'ahsp_detail.ahsp_id', '=', 'ahsp_header.id')
-                ->join('rab_detail', 'rab_detail.ahsp_id', '=', 'ahsp_header.id')
-                ->where('rab_detail.proyek_id', $this->proyekId)
-                ->where('ahsp_detail.tipe', 'upah')
-                ->distinct();
-        })
-        ->orderBy('kode')
-        ->get();
+        // Optimized: Direct join instead of whereIn subquery for better performance
+        $upahs = HsdUpah::join('ahsp_detail', function($join) {
+                $join->on('hsd_upah.id', '=', 'ahsp_detail.referensi_id')
+                     ->where('ahsp_detail.tipe', '=', 'upah');
+            })
+            ->join('ahsp_header', 'ahsp_detail.ahsp_id', '=', 'ahsp_header.id')
+            ->join('rab_detail', 'rab_detail.ahsp_id', '=', 'ahsp_header.id')
+            ->where('rab_detail.proyek_id', $this->proyekId)
+            ->select('hsd_upah.*')
+            ->distinct()
+            ->orderBy('hsd_upah.kode')
+            ->get();
 
         return $upahs->map(function($upah) {
             return [

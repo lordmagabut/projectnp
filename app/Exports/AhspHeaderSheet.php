@@ -22,14 +22,14 @@ class AhspHeaderSheet implements FromCollection, WithHeadings, WithTitle, WithCo
     public function collection()
     {
         // Ambil semua AHSP yang digunakan di RAB Detail proyek ini
-        $ahspHeaders = AhspHeader::whereIn('id', function($query) {
-            $query->select('ahsp_id')
-                ->from('rab_detail')
-                ->where('proyek_id', $this->proyekId)
-                ->whereNotNull('ahsp_id');
-        })
-        ->orderBy('kode_pekerjaan')
-        ->get();
+        // Optimized: Direct join instead of whereIn subquery for better performance
+        $ahspHeaders = AhspHeader::join('rab_detail', 'ahsp_header.id', '=', 'rab_detail.ahsp_id')
+            ->where('rab_detail.proyek_id', $this->proyekId)
+            ->whereNotNull('rab_detail.ahsp_id')
+            ->select('ahsp_header.*')
+            ->distinct()
+            ->orderBy('ahsp_header.kode_pekerjaan')
+            ->get();
 
         return $ahspHeaders->map(function($ahsp) {
             return [

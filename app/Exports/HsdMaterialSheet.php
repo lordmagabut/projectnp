@@ -22,17 +22,18 @@ class HsdMaterialSheet implements FromCollection, WithHeadings, WithTitle, WithC
     public function collection()
     {
         // Ambil semua HSD Material yang digunakan di AHSP yang terhubung dengan RAB Detail proyek ini
-        $materials = HsdMaterial::whereIn('id', function($query) {
-            $query->select('ahsp_detail.referensi_id')
-                ->from('ahsp_detail')
-                ->join('ahsp_header', 'ahsp_detail.ahsp_id', '=', 'ahsp_header.id')
-                ->join('rab_detail', 'rab_detail.ahsp_id', '=', 'ahsp_header.id')
-                ->where('rab_detail.proyek_id', $this->proyekId)
-                ->where('ahsp_detail.tipe', 'material')
-                ->distinct();
-        })
-        ->orderBy('kode')
-        ->get();
+        // Optimized: Direct join instead of whereIn subquery for better performance
+        $materials = HsdMaterial::join('ahsp_detail', function($join) {
+                $join->on('hsd_material.id', '=', 'ahsp_detail.referensi_id')
+                     ->where('ahsp_detail.tipe', '=', 'material');
+            })
+            ->join('ahsp_header', 'ahsp_detail.ahsp_id', '=', 'ahsp_header.id')
+            ->join('rab_detail', 'rab_detail.ahsp_id', '=', 'ahsp_header.id')
+            ->where('rab_detail.proyek_id', $this->proyekId)
+            ->select('hsd_material.*')
+            ->distinct()
+            ->orderBy('hsd_material.kode')
+            ->get();
 
         return $materials->map(function($material) {
             return [

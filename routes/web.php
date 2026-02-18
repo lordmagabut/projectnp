@@ -209,6 +209,9 @@ Route::middleware(['auth'])->group(function () {
 
     // ========== RAB & AHSP ==========
     Route::get('/ahsp/search',                 [AhspController::class, 'search'])->name('ahsp.search');
+    Route::get('/ahsp/data-material',          [AhspController::class, 'getMaterialData'])->name('ahsp.data.material');
+    Route::get('/ahsp/data-upah',              [AhspController::class, 'getUpahData'])->name('ahsp.data.upah');
+    Route::get('/ahsp/data-ahsp',              [AhspController::class, 'getAhspData'])->name('ahsp.data.ahsp');
     Route::post('/ahsp/{ahsp}/duplicate',      [AhspController::class, 'duplicate'])->name('ahsp.duplicate');
     Route::resource('ahsp', AhspController::class);
     Route::resource('hsd-material', HsdMaterialController::class);

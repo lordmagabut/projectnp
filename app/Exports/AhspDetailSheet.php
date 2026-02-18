@@ -23,13 +23,12 @@ class AhspDetailSheet implements FromCollection, WithHeadings, WithTitle, WithCo
     public function collection()
     {
         // Ambil semua AHSP Detail yang terkait dengan AHSP yang digunakan di RAB Detail proyek ini
-        $ahspDetails = AhspDetail::whereIn('ahsp_detail.ahsp_id', function($query) {
-            $query->select('ahsp_id')
-                ->from('rab_detail')
-                ->where('proyek_id', $this->proyekId)
-                ->whereNotNull('ahsp_id');
+        // Optimized: Direct join instead of whereIn subquery for better performance
+        $ahspDetails = AhspDetail::join('ahsp_header', 'ahsp_detail.ahsp_id', '=', 'ahsp_header.id')
+        ->join('rab_detail', function($join) {
+            $join->on('rab_detail.ahsp_id', '=', 'ahsp_header.id')
+                 ->where('rab_detail.proyek_id', '=', $this->proyekId);
         })
-        ->join('ahsp_header', 'ahsp_detail.ahsp_id', '=', 'ahsp_header.id')
         ->leftJoin('hsd_material', function($join) {
             $join->on('ahsp_detail.referensi_id', '=', 'hsd_material.id')
                 ->whereRaw('ahsp_detail.tipe = ?', ['material']);
@@ -38,11 +37,13 @@ class AhspDetailSheet implements FromCollection, WithHeadings, WithTitle, WithCo
             $join->on('ahsp_detail.referensi_id', '=', 'hsd_upah.id')
                 ->whereRaw('ahsp_detail.tipe = ?', ['upah']);
         })
+        ->whereNotNull('rab_detail.ahsp_id')
         ->select(
             'ahsp_detail.*', 
             'ahsp_header.kode_pekerjaan as ahsp_kode',
             DB::raw('COALESCE(hsd_material.kode, hsd_upah.kode) as kode_item')
         )
+        ->distinct()
         ->orderBy('ahsp_header.kode_pekerjaan')
         ->orderBy('ahsp_detail.id')
         ->get();

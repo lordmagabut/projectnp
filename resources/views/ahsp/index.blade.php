@@ -139,39 +139,7 @@
               </tr>
             </thead>
             <tbody>
-              @foreach($materials as $material)
-              <tr>
-                <td>{{ $material->kode }}</td>
-                <td>{{ $material->nama }}</td>
-                <td>{{ $material->satuan }}</td>
-                <td class="text-end">Rp {{ number_format($material->harga_satuan, 0, ',', '.') }}</td>
-                <td>{{ $material->keterangan }}</td>
-                <td class="text-center">
-                  <a href="{{ route('hsd-material.edit', $material->id) }}" class="btn btn-sm btn-outline-primary rounded">
-                      <i class="fas fa-edit"></i> Edit
-                  </a>
-
-                  {{-- Tombol History Material --}}
-                  <button type="button"
-                          class="btn btn-sm btn-outline-info rounded btn-history-material"
-                          data-bs-toggle="modal"
-                          data-bs-target="#historyMaterialModal"
-                          data-id="{{ $material->id }}"
-                          data-name="{{ $material->nama }}">
-                      <i class="fas fa-clock-rotate-left"></i> Riwayat
-                  </button>
-
-                  {{-- Tombol Hapus --}}
-                  <button type="button" class="btn btn-sm btn-outline-danger rounded"
-                          data-bs-toggle="modal"
-                          data-bs-target="#deleteMaterialModal"
-                          data-id="{{ $material->id }}"
-                          data-name="{{ $material->nama }}">
-                      <i class="fas fa-trash-alt"></i> Hapus
-                  </button>
-                </td>
-              </tr>
-              @endforeach
+              {{-- Data akan di-load via server-side DataTables (AJAX) --}}
             </tbody>
           </table>
         </div>
@@ -214,39 +182,7 @@
               </tr>
             </thead>
             <tbody>
-              @foreach($upahs as $upah)
-              <tr>
-                <td>{{ $upah->kode }}</td>
-                <td>{{ $upah->jenis_pekerja }}</td>
-                <td>{{ $upah->satuan }}</td>
-                <td class="text-end">Rp {{ number_format($upah->harga_satuan, 0, ',', '.') }}</td>
-                <td>{{ $upah->keterangan }}</td>
-                <td class="text-center">
-                  <a href="{{ route('hsd-upah.edit', $upah->id) }}" class="btn btn-sm btn-outline-primary rounded">
-                      <i class="fas fa-edit"></i> Edit
-                  </a>
-
-                  {{-- Tombol History Upah --}}
-                  <button type="button"
-                          class="btn btn-sm btn-outline-info rounded btn-history-upah"
-                          data-bs-toggle="modal"
-                          data-bs-target="#historyUpahModal"
-                          data-id="{{ $upah->id }}"
-                          data-name="{{ $upah->jenis_pekerja }}">
-                      <i class="fas fa-clock-rotate-left"></i> Riwayat
-                  </button>
-
-                  {{-- Tombol Hapus --}}
-                  <button type="button" class="btn btn-sm btn-outline-danger rounded"
-                          data-bs-toggle="modal"
-                          data-bs-target="#deleteUpahModal"
-                          data-id="{{ $upah->id }}"
-                          data-name="{{ $upah->jenis_pekerja }}">
-                      <i class="fas fa-trash-alt"></i> Hapus
-                  </button>
-                </td>
-              </tr>
-              @endforeach
+              {{-- Data akan di-load via server-side DataTables (AJAX) --}}
             </tbody>
           </table>
         </div>
@@ -293,63 +229,7 @@
               </tr>
             </thead>
             <tbody>
-              @forelse($ahsps as $a)
-              <tr>
-                <td>{{ $a->id }}</td>
-                <td>{{ $a->kode_pekerjaan }}</td>
-                <td>{{ $a->nama_pekerjaan }}</td>
-                <td>{{ $a->kategori->nama ?? '-' }}</td>
-                <td>{{ $a->satuan }}</td>
-                <td class="text-end">Rp {{ number_format($a->total_harga, 0, ',', '.') }}</td>
-                <td class="text-end">Rp {{ number_format($a->total_harga_pembulatan ?? 0, 0, ',', '.') }}</td>
-                <td class="text-center">
-                  @if($a->is_locked)
-                    <span class="badge bg-danger rounded-pill py-2 px-3">Terkunci <i class="fas fa-lock ms-1"></i></span>
-                  @else
-                    <span class="badge bg-success rounded-pill py-2 px-3">Draft <i class="fas fa-pencil-alt ms-1"></i></span>
-                  @endif
-                </td>
-                <td class="text-center">
-                  <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                      Aksi
-                    </button>
-                    <ul class="dropdown-menu">
-                      <li>
-                        <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#duplicateAhspModal" data-id="{{ $a->id }}" data-name="{{ $a->nama_pekerjaan }}">
-                            <i class="fas fa-copy me-1"></i> Duplikat
-                        </button>
-                      </li>
-                      <li>
-                        <a href="{{ route('ahsp.show', $a->id) }}" class="dropdown-item">
-                          <i class="fas fa-eye me-1"></i> Lihat
-                        </a>
-                      </li>
-                      @if(!$a->is_locked)
-                        <li>
-                          <a href="{{ route('ahsp.edit', $a->id) }}" class="dropdown-item">
-                            <i class="fas fa-edit me-1"></i> Edit
-                          </a>
-                        </li>
-                        <li>
-                          <button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteAhspModal" data-id="{{ $a->id }}" data-name="{{ $a->nama_pekerjaan }}">
-                            <i class="fas fa-trash-alt me-1"></i> Hapus
-                          </button>
-                        </li>
-                      @else
-                        <li>
-                          <button class="dropdown-item text-muted" disabled>
-                            <i class="fas fa-lock me-1"></i> Terkunci
-                          </button>
-                        </li>
-                      @endif
-                    </ul>
-                  </div>
-                </td>
-              </tr>
-              @empty
-              <tr><td colspan="9" class="text-center py-4">Belum ada data AHSP.</td></tr>
-              @endforelse
+              {{-- Data akan di-load via server-side DataTables (AJAX) --}}
             </tbody>
           </table>
         </div>
@@ -612,24 +492,230 @@
 
 
     $(document).ready(function () {
-        // Inisialisasi tabel Material secara langsung
-        let tableMaterial = $('#tableMaterial').DataTable({ responsive: true });
+        // ============= SERVER-SIDE DATATABLES MATERIAL =============
+        let tableMaterial = $('#tableMaterial').DataTable({
+            processing: true,
+            serverSide: true,
+            responsive: true,
+            ajax: '{{ route("ahsp.data.material") }}',
+            columns: [
+                { data: 'kode', name: 'kode' },
+                { data: 'nama', name: 'nama' },
+                { data: 'satuan', name: 'satuan' },
+                { data: 'harga_satuan_formatted', name: 'harga_satuan', className: 'text-end', orderable: true },
+                { data: 'keterangan', name: 'keterangan' },
+                {
+                    data: null,
+                    orderable: false,
+                    searchable: false,
+                    className: 'text-center',
+                    render: function(data, type, row) {
+                        return `
+                            <a href="/hsd-material/${row.id}/edit" class="btn btn-sm btn-outline-primary rounded">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-info rounded btn-history-material"
+                                    data-bs-toggle="modal" data-bs-target="#historyMaterialModal"
+                                    data-id="${row.id}" data-name="${row.nama}">
+                                <i class="fas fa-clock-rotate-left"></i> Riwayat
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger rounded"
+                                    data-bs-toggle="modal" data-bs-target="#deleteMaterialModal"
+                                    data-id="${row.id}" data-name="${row.nama}">
+                                <i class="fas fa-trash-alt"></i> Hapus
+                            </button>
+                        `;
+                    }
+                }
+            ],
+            language: {
+                processing: '<i class="fas fa-spinner fa-spin"></i> Memuat data...',
+                search: 'Cari:',
+                lengthMenu: 'Tampilkan _MENU_ data',
+                info: 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
+                infoEmpty: 'Tidak ada data',
+                infoFiltered: '(difilter dari _MAX_ total data)',
+                zeroRecords: 'Tidak ada data yang cocok',
+                emptyTable: 'Tidak ada data tersedia',
+                paginate: {
+                    first: 'Pertama',
+                    last: 'Terakhir',
+                    next: 'Selanjutnya',
+                    previous: 'Sebelumnya'
+                }
+            }
+        });
 
-        // Flag inisialisasi tabel Upah dan AHSP
+        // ============= SERVER-SIDE DATATABLES UPAH =============
+        let tableUpah = null;
         let tableUpahInitialized = false;
+
+        // ============= SERVER-SIDE DATATABLES AHSP =============
+        let tableAhsp = null;
         let tableAhspInitialized = false;
 
-        // Tab switching
+        // Tab switching with lazy loading
         $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
             const target = $(e.target).attr('data-bs-target');
 
             if (target === '#upahContent' && !tableUpahInitialized) {
-                $('#tableUpah').DataTable({ responsive: true });
+                tableUpah = $('#tableUpah').DataTable({
+                    processing: true,
+                    serverSide: true,
+                    responsive: true,
+                    ajax: '{{ route("ahsp.data.upah") }}',
+                    columns: [
+                        { data: 'kode', name: 'kode' },
+                        { data: 'jenis_pekerja', name: 'jenis_pekerja' },
+                        { data: 'satuan', name: 'satuan' },
+                        { data: 'harga_satuan_formatted', name: 'harga_satuan', className: 'text-end', orderable: true },
+                        { data: 'keterangan', name: 'keterangan' },
+                        {
+                            data: null,
+                            orderable: false,
+                            searchable: false,
+                            className: 'text-center',
+                            render: function(data, type, row) {
+                                return `
+                                    <a href="/hsd-upah/${row.id}/edit" class="btn btn-sm btn-outline-primary rounded">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-info rounded btn-history-upah"
+                                            data-bs-toggle="modal" data-bs-target="#historyUpahModal"
+                                            data-id="${row.id}" data-name="${row.jenis_pekerja}">
+                                        <i class="fas fa-clock-rotate-left"></i> Riwayat
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger rounded"
+                                            data-bs-toggle="modal" data-bs-target="#deleteUpahModal"
+                                            data-id="${row.id}" data-name="${row.jenis_pekerja}">
+                                        <i class="fas fa-trash-alt"></i> Hapus
+                                    </button>
+                                `;
+                            }
+                        }
+                    ],
+                    language: {
+                        processing: '<i class="fas fa-spinner fa-spin"></i> Memuat data...',
+                        search: 'Cari:',
+                        lengthMenu: 'Tampilkan _MENU_ data',
+                        info: 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
+                        infoEmpty: 'Tidak ada data',
+                        infoFiltered: '(difilter dari _MAX_ total data)',
+                        zeroRecords: 'Tidak ada data yang cocok',
+                        emptyTable: 'Tidak ada data tersedia',
+                        paginate: {
+                            first: 'Pertama',
+                            last: 'Terakhir',
+                            next: 'Selanjutnya',
+                            previous: 'Sebelumnya'
+                        }
+                    }
+                });
                 tableUpahInitialized = true;
             }
 
             if (target === '#ahspContent' && !tableAhspInitialized) {
-                $('#tableAhsp').DataTable({ responsive: true });
+                tableAhsp = $('#tableAhsp').DataTable({
+                    processing: true,
+                    serverSide: true,
+                    responsive: true,
+                    ajax: '{{ route("ahsp.data.ahsp") }}',
+                    columns: [
+                        { data: 'id', name: 'id' },
+                        { data: 'kode_pekerjaan', name: 'kode_pekerjaan' },
+                        { data: 'nama_pekerjaan', name: 'nama_pekerjaan' },
+                        { data: 'kategori', name: 'kategori', orderable: false },
+                        { data: 'satuan', name: 'satuan' },
+                        { data: 'total_harga_formatted', name: 'total_harga', className: 'text-end', orderable: true },
+                        { data: 'total_pembulatan_formatted', name: 'total_harga_pembulatan', className: 'text-end', orderable: true },
+                        {
+                            data: 'is_locked',
+                            name: 'is_locked',
+                            className: 'text-center',
+                            render: function(data, type, row) {
+                                if (row.is_locked) {
+                                    return '<span class="badge bg-danger rounded-pill py-2 px-3">Terkunci <i class="fas fa-lock ms-1"></i></span>';
+                                } else {
+                                    return '<span class="badge bg-success rounded-pill py-2 px-3">Draft <i class="fas fa-pencil-alt ms-1"></i></span>';
+                                }
+                            }
+                        },
+                        {
+                            data: null,
+                            orderable: false,
+                            searchable: false,
+                            className: 'text-center',
+                            render: function(data, type, row) {
+                                let actions = `
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-primary dropdown-toggle rounded" type="button" data-bs-toggle="dropdown">
+                                            Aksi
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li>
+                                                <button type="button" class="dropdown-item" 
+                                                        data-bs-toggle="modal" data-bs-target="#duplicateAhspModal" 
+                                                        data-id="${row.id}" data-name="${row.nama_pekerjaan}">
+                                                    <i class="fas fa-copy me-1"></i> Duplikat
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <a href="/ahsp/${row.id}" class="dropdown-item">
+                                                    <i class="fas fa-eye me-1"></i> Lihat
+                                                </a>
+                                            </li>
+                                `;
+                                
+                                if (!row.is_locked) {
+                                    actions += `
+                                            <li>
+                                                <a href="/ahsp/${row.id}/edit" class="dropdown-item">
+                                                    <i class="fas fa-edit me-1"></i> Edit
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <button type="button" class="dropdown-item text-danger" 
+                                                        data-bs-toggle="modal" data-bs-target="#deleteAhspModal" 
+                                                        data-id="${row.id}" data-name="${row.nama_pekerjaan}">
+                                                    <i class="fas fa-trash-alt me-1"></i> Hapus
+                                                </button>
+                                            </li>
+                                    `;
+                                } else {
+                                    actions += `
+                                            <li>
+                                                <button class="dropdown-item text-muted" disabled>
+                                                    <i class="fas fa-lock me-1"></i> Terkunci
+                                                </button>
+                                            </li>
+                                    `;
+                                }
+                                
+                                actions += `
+                                        </ul>
+                                    </div>
+                                `;
+                                return actions;
+                            }
+                        }
+                    ],
+                    language: {
+                        processing: '<i class="fas fa-spinner fa-spin"></i> Memuat data...',
+                        search: 'Cari:',
+                        lengthMenu: 'Tampilkan _MENU_ data',
+                        info: 'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',
+                        infoEmpty: 'Tidak ada data',
+                        infoFiltered: '(difilter dari _MAX_ total data)',
+                        zeroRecords: 'Tidak ada data yang cocok',
+                        emptyTable: 'Tidak ada data tersedia',
+                        paginate: {
+                            first: 'Pertama',
+                            last: 'Terakhir',
+                            next: 'Selanjutnya',
+                            previous: 'Sebelumnya'
+                        }
+                    }
+                });
                 tableAhspInitialized = true;
             }
 

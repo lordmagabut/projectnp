@@ -16,10 +16,180 @@ class AhspController extends Controller
 {
     public function index()
     {
-        $ahsps = AhspHeader::with('kategori')->orderBy('kode_pekerjaan')->get();
-        $upahs = HsdUpah::orderBy('kode')->get();
-        $materials = HsdMaterial::all();
-        return view('ahsp.index', compact('ahsps','upahs','materials'));
+        // Tidak load data lagi, akan di-load via AJAX untuk performa lebih baik
+        return view('ahsp.index');
+    }
+
+    /**
+     * Server-side DataTables untuk Material
+     */
+    public function getMaterialData(Request $request)
+    {
+        $query = HsdMaterial::query();
+
+        // Search
+        if ($search = $request->input('search.value')) {
+            $query->where(function($q) use ($search) {
+                $q->where('kode', 'like', "%{$search}%")
+                  ->orWhere('nama', 'like', "%{$search}%")
+                  ->orWhere('satuan', 'like', "%{$search}%")
+                  ->orWhere('keterangan', 'like', "%{$search}%");
+            });
+        }
+
+        // Total records
+        $totalFiltered = $query->count();
+        $totalData = HsdMaterial::count();
+
+        // Order
+        $orderColumn = $request->input('order.0.column', 0);
+        $orderDir = $request->input('order.0.dir', 'asc');
+        $columns = ['kode', 'nama', 'satuan', 'harga_satuan', 'keterangan'];
+        if (isset($columns[$orderColumn])) {
+            $query->orderBy($columns[$orderColumn], $orderDir);
+        }
+
+        // Pagination
+        $start = $request->input('start', 0);
+        $length = $request->input('length', 10);
+        $materials = $query->skip($start)->take($length)->get();
+
+        // Format data
+        $data = $materials->map(function($material) {
+            return [
+                'id' => $material->id,
+                'kode' => $material->kode,
+                'nama' => $material->nama,
+                'satuan' => $material->satuan,
+                'harga_satuan' => $material->harga_satuan,
+                'harga_satuan_formatted' => 'Rp ' . number_format($material->harga_satuan, 0, ',', '.'),
+                'keterangan' => $material->keterangan ?? '',
+            ];
+        });
+
+        return response()->json([
+            'draw' => intval($request->input('draw')),
+            'recordsTotal' => $totalData,
+            'recordsFiltered' => $totalFiltered,
+            'data' => $data
+        ]);
+    }
+
+    /**
+     * Server-side DataTables untuk Upah
+     */
+    public function getUpahData(Request $request)
+    {
+        $query = HsdUpah::query();
+
+        // Search
+        if ($search = $request->input('search.value')) {
+            $query->where(function($q) use ($search) {
+                $q->where('kode', 'like', "%{$search}%")
+                  ->orWhere('jenis_pekerja', 'like', "%{$search}%")
+                  ->orWhere('satuan', 'like', "%{$search}%")
+                  ->orWhere('keterangan', 'like', "%{$search}%");
+            });
+        }
+
+        // Total records
+        $totalFiltered = $query->count();
+        $totalData = HsdUpah::count();
+
+        // Order
+        $orderColumn = $request->input('order.0.column', 0);
+        $orderDir = $request->input('order.0.dir', 'asc');
+        $columns = ['kode', 'jenis_pekerja', 'satuan', 'harga_satuan', 'keterangan'];
+        if (isset($columns[$orderColumn])) {
+            $query->orderBy($columns[$orderColumn], $orderDir);
+        }
+
+        // Pagination
+        $start = $request->input('start', 0);
+        $length = $request->input('length', 10);
+        $upahs = $query->skip($start)->take($length)->get();
+
+        // Format data
+        $data = $upahs->map(function($upah) {
+            return [
+                'id' => $upah->id,
+                'kode' => $upah->kode,
+                'jenis_pekerja' => $upah->jenis_pekerja,
+                'satuan' => $upah->satuan,
+                'harga_satuan' => $upah->harga_satuan,
+                'harga_satuan_formatted' => 'Rp ' . number_format($upah->harga_satuan, 0, ',', '.'),
+                'keterangan' => $upah->keterangan ?? '',
+            ];
+        });
+
+        return response()->json([
+            'draw' => intval($request->input('draw')),
+            'recordsTotal' => $totalData,
+            'recordsFiltered' => $totalFiltered,
+            'data' => $data
+        ]);
+    }
+
+    /**
+     * Server-side DataTables untuk AHSP
+     */
+    public function getAhspData(Request $request)
+    {
+        $query = AhspHeader::with('kategori');
+
+        // Search
+        if ($search = $request->input('search.value')) {
+            $query->where(function($q) use ($search) {
+                $q->where('kode_pekerjaan', 'like', "%{$search}%")
+                  ->orWhere('nama_pekerjaan', 'like', "%{$search}%")
+                  ->orWhere('satuan', 'like', "%{$search}%")
+                  ->orWhereHas('kategori', function($qq) use ($search) {
+                      $qq->where('nama', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Total records
+        $totalFiltered = $query->count();
+        $totalData = AhspHeader::count();
+
+        // Order
+        $orderColumn = $request->input('order.0.column', 0);
+        $orderDir = $request->input('order.0.dir', 'asc');
+        $columns = ['id', 'kode_pekerjaan', 'nama_pekerjaan', 'kategori_id', 'satuan', 'total_harga', 'total_harga_pembulatan', 'is_locked'];
+        if (isset($columns[$orderColumn])) {
+            $query->orderBy($columns[$orderColumn], $orderDir);
+        } else {
+            $query->orderBy('kode_pekerjaan', 'asc');
+        }
+
+        // Pagination
+        $start = $request->input('start', 0);
+        $length = $request->input('length', 10);
+        $ahsps = $query->skip($start)->take($length)->get();
+
+        // Format data
+        $data = $ahsps->map(function($ahsp) {
+            return [
+                'id' => $ahsp->id,
+                'kode_pekerjaan' => $ahsp->kode_pekerjaan,
+                'nama_pekerjaan' => $ahsp->nama_pekerjaan,
+                'kategori' => $ahsp->kategori->nama ?? '-',
+                'satuan' => $ahsp->satuan,
+                'total_harga' => $ahsp->total_harga,
+                'total_harga_formatted' => 'Rp ' . number_format($ahsp->total_harga, 0, ',', '.'),
+                'total_harga_pembulatan' => $ahsp->total_harga_pembulatan ?? 0,
+                'total_pembulatan_formatted' => 'Rp ' . number_format($ahsp->total_harga_pembulatan ?? 0, 0, ',', '.'),
+                'is_locked' => $ahsp->is_locked,
+            ];
+        });
+
+        return response()->json([
+            'draw' => intval($request->input('draw')),
+            'recordsTotal' => $totalData,
+            'recordsFiltered' => $totalFiltered,
+            'data' => $data
+        ]);
     }
 
     public function create()
