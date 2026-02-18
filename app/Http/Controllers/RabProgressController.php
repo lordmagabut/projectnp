@@ -417,6 +417,21 @@ $realizedMap = $prevMap;
 
             DB::table('rab_progress_detail')->insert($rows);
 
+            // ===== AUTO-TRANSITION STATUS PROYEK: perencanaan → berjalan =====
+            // Trigger saat progress PERTAMA KALI dibuat untuk proyek (status masih 'perencanaan')
+            if ($proyek->status === 'perencanaan') {
+                // Cek apakah ini progress pertama untuk proyek ini
+                $countExisting = \App\Models\RabProgress::where('proyek_id', $proyek->id)
+                    ->where('id', '!=', $rp->id) // exclude progress yang baru dibuat
+                    ->count();
+                
+                // Jika ini progress pertama, auto-transition ke 'berjalan'
+                if ($countExisting === 0) {
+                    $proyek->status = 'berjalan';
+                    $proyek->save();
+                }
+            }
+
             return redirect()->to(
                 route('proyek.show', $proyek->id).'?tab=progress'
                 .($penawaranId ? '&penawaran_id='.$penawaranId : '')

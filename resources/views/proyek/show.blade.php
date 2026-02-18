@@ -165,15 +165,29 @@
                 <tr>
                   <th><i data-feather="check-circle" class="me-2 text-muted"></i> Status</th>
                   <td>
-                    @if($proyek->status == 'aktif')
-                      <span class="badge bg-success"><i class="fas fa-circle me-1"></i> Aktif</span>
+                    @if($proyek->status == 'perencanaan')
+                      <span class="badge bg-primary"><i class="fas fa-circle me-1"></i> Perencanaan</span>
+                    @elseif($proyek->status == 'berjalan')
+                      <span class="badge bg-success"><i class="fas fa-circle me-1"></i> Berjalan</span>
                     @elseif($proyek->status == 'selesai')
                       <span class="badge bg-info"><i class="fas fa-circle me-1"></i> Selesai</span>
+                    @elseif($proyek->status == 'batal')
+                      <span class="badge bg-danger"><i class="fas fa-circle me-1"></i> Batal</span>
                     @else
                       <span class="badge bg-secondary"><i class="fas fa-circle me-1"></i> {{ ucfirst($proyek->status) }}</span>
                     @endif
                   </td>
                 </tr>
+                @if($proyek->status == 'batal' && $proyek->keterangan_batal)
+                <tr>
+                  <th><i data-feather="alert-circle" class="me-2 text-muted"></i> Alasan Pembatalan</th>
+                  <td>
+                    <div class="p-3" style="background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                      {{ $proyek->keterangan_batal }}
+                    </div>
+                  </td>
+                </tr>
+                @endif
                 <tr>
                   <th><i data-feather="play" class="me-2 text-muted"></i> Tanggal Mulai</th>
                   <td>{{ \Carbon\Carbon::parse($proyek->tanggal_mulai)->format('d-m-Y') }}</td>

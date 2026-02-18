@@ -37,6 +37,32 @@
                     </div>
                 @endif
 
+                {{-- Filter Status --}}
+                <div class="mb-3 d-flex gap-2 align-items-center">
+                    <form method="GET" action="{{ route('proyek.index') }}" class="d-flex gap-2">
+                        <select name="status" class="form-select" style="max-width: 200px;" onchange="this.form.submit()">
+                            <option value="">-- Semua Status --</option>
+                            <option value="perencanaan" {{ $selectedStatus == 'perencanaan' ? 'selected' : '' }}>
+                                <i class="fas fa-circle me-1" style="color: #0d6efd;"></i> Perencanaan
+                            </option>
+                            <option value="berjalan" {{ $selectedStatus == 'berjalan' ? 'selected' : '' }}>
+                                <i class="fas fa-circle me-1" style="color: #198754;"></i> Berjalan
+                            </option>
+                            <option value="selesai" {{ $selectedStatus == 'selesai' ? 'selected' : '' }}>
+                                <i class="fas fa-circle me-1" style="color: #0dcaf0;"></i> Selesai
+                            </option>
+                            <option value="batal" {{ $selectedStatus == 'batal' ? 'selected' : '' }}>
+                                <i class="fas fa-circle me-1" style="color: #dc3545;"></i> Batal
+                            </option>
+                        </select>
+                    </form>
+                    @if($selectedStatus)
+                        <a href="{{ route('proyek.index') }}" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-redo me-1"></i> Reset Filter
+                        </a>
+                    @endif
+                </div>
+
                 <div class="table-responsive">
                     <table id="dataTableExample" class="table table-hover table-bordered table-striped align-middle display nowrap" style="width:100%">
                         <thead class="table-secondary">
@@ -46,6 +72,7 @@
                                 <th><i data-feather="file-text" class="me-1"></i> No SPK</th>
                                 <th class="text-end"><i data-feather="dollar-sign" class="me-1"></i> Nilai SPK</th>
                                 <th><i data-feather="compass" class="me-1"></i> Jenis Proyek</th>
+                                <th class="text-center"><i data-feather="check-circle" class="me-1"></i> Status</th>
                                 <th class="text-center"><i data-feather="settings" class="me-1"></i> Aksi</th>
                             </tr>
                         </thead>
@@ -65,6 +92,26 @@
                                 </td>
                                 <td class="text-end fw-bold text-success">Rp. {{ number_format($proyek->nilai_spk, 0, ',', '.') }}</td>
                                 <td>{{ ucfirst($proyek->jenis_proyek) }}</td>
+                                <td class="text-center">
+                                    @if($proyek->status == 'perencanaan')
+                                        <span class="badge bg-primary"><i class="fas fa-circle me-1"></i> Perencanaan</span>
+                                    @elseif($proyek->status == 'berjalan')
+                                        <span class="badge bg-success"><i class="fas fa-circle me-1"></i> Berjalan</span>
+                                    @elseif($proyek->status == 'selesai')
+                                        <span class="badge bg-info"><i class="fas fa-circle me-1"></i> Selesai</span>
+                                    @elseif($proyek->status == 'batal')
+                                        <span class="badge bg-danger" title="{{ $proyek->keterangan_batal ? 'Alasan: ' . $proyek->keterangan_batal : '' }}">
+                                            <i class="fas fa-circle me-1"></i> Batal
+                                        </span>
+                                        @if($proyek->keterangan_batal)
+                                            <div class="small text-muted mt-2" style="max-width: 300px; text-align: left;">
+                                                <strong>Alasan:</strong> {{ $proyek->keterangan_batal }}
+                                            </div>
+                                        @endif
+                                    @else
+                                        <span class="badge bg-secondary"><i class="fas fa-circle me-1"></i> {{ ucfirst($proyek->status) }}</span>
+                                    @endif
+                                </td>
                                 <td class="text-center">
                                     <div class="btn-group" role="group">
                                         <button id="aksiDropdown{{ $proyek->id }}" type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">

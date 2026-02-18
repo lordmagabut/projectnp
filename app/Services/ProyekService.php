@@ -8,14 +8,15 @@ class ProyekService
 {
     public static function validateRequest(Request $request)
     {
-        return $request->validate([
+        $rules = [
             'nama_proyek' => 'required|string|max:255',
             'pemberi_kerja_id' => 'required|integer|exists:pemberi_kerja,id',
             'no_spk' => 'nullable|string|max:100',
             'nilai_spk' => 'nullable|numeric',
             'tanggal_mulai' => 'nullable|date',
             'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai',
-            'status' => 'required|in:perencanaan,berjalan,selesai',
+            'status' => 'required|in:perencanaan,berjalan,selesai,batal',
+            'keterangan_batal' => $request->status === 'batal' ? 'required|string|max:500' : 'nullable|string|max:500',
             'lokasi' => 'required|string|max:255',
             'site_manager_name' => 'nullable|string|max:255',
             'project_manager_name' => 'nullable|string|max:255',
@@ -24,19 +25,22 @@ class ProyekService
             'uang_muka_mode' => 'required|in:proporsional,utuh',
             'kontingensi_persen' => 'nullable|numeric|min:0|max:100',
             'file_spk' => 'nullable|file|mimes:pdf|max:102400',
-        ]);
+        ];
+        
+        return $request->validate($rules);
     }
 
     public static function validateUpdateRequest(Request $request)
     {
-        return $request->validate([
+        $rules = [
             'nama_proyek' => 'required|string|max:255',
             'pemberi_kerja_id' => 'required|exists:pemberi_kerja,id',
             'no_spk' => 'required|string|max:100',
             'nilai_spk' => 'required|numeric',
             'tanggal_mulai' => 'nullable|date',
             'tanggal_selesai' => 'nullable|date',
-            'status' => 'required|in:perencanaan,berjalan,selesai',
+            'status' => 'required|in:perencanaan,berjalan,selesai,batal',
+            'keterangan_batal' => $request->status === 'batal' ? 'required|string|max:500' : 'nullable|string|max:500',
             'lokasi' => 'required|string|max:255',
             'site_manager_name' => 'nullable|string|max:255',
             'project_manager_name' => 'nullable|string|max:255',
@@ -44,10 +48,12 @@ class ProyekService
             'diskon_rab' => 'nullable|numeric|min:0',
             'kontingensi_persen' => 'nullable|numeric|min:0|max:100',
             'file_spk' => 'nullable|file|mimes:pdf|max:102400',
-            'file_gambar_kerja' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:102400', // Max 100MB
+            'file_gambar_kerja' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:102400',
             'penawaran_price_mode' => 'required|in:pisah,gabung',
             'uang_muka_mode' => 'required|in:proporsional,utuh',
-        ]);
+        ];
+        
+        return $request->validate($rules);
     }
 
     public static function hitungKontrak($proyek, $request)

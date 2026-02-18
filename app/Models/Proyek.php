@@ -28,6 +28,7 @@ class Proyek extends Model
         'durasi_retensi',
         'gunakan_retensi',
         'status',
+        'keterangan_batal',
         'lokasi',
         'file_spk',
         'file_gambar_kerja',

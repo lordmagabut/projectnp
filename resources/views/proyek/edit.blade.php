@@ -161,16 +161,29 @@
           <div class="row g-3 mt-1">
             <div class="col-md-4">
               <label for="status" class="form-label">Status</label>
-              <select name="status" class="form-select" required>
+              <select name="status" class="form-select" id="statusSelect" required>
                 @php $statusVal = old('status', $proyek->status ?? 'perencanaan'); @endphp
                 <option value="perencanaan" {{ $statusVal=='perencanaan' ? 'selected' : '' }}>Perencanaan</option>
                 <option value="berjalan"    {{ $statusVal=='berjalan'    ? 'selected' : '' }}>Berjalan</option>
                 <option value="selesai"     {{ $statusVal=='selesai'     ? 'selected' : '' }}>Selesai</option>
+                <option value="batal"       {{ $statusVal=='batal'       ? 'selected' : '' }}>Batal</option>
               </select>
             </div>
             <div class="col-md-8">
               <label class="form-label">Lokasi</label>
               <input type="text" name="lokasi" class="form-control" value="{{ old('lokasi', $proyek->lokasi) }}" required>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-12" id="keteranganBatalDiv" style="display: {{ $statusVal === 'batal' ? 'block' : 'none' }};">
+              <label for="keteranganBatal" class="form-label">
+                <span class="text-danger">*</span> Alasan Pembatalan
+              </label>
+              <textarea name="keterangan_batal" id="keteranganBatal" class="form-control" 
+                        rows="4" placeholder="Jelaskan alasan pembatalan proyek..." 
+                        {{ $statusVal === 'batal' ? 'required' : '' }}>{{ old('keterangan_batal', $proyek->keterangan_batal) }}</textarea>
+              <small class="text-muted">Wajib diisi jika status dipilih 'Batal'</small>
             </div>
           </div>
 
@@ -331,6 +344,29 @@
     applyPph && applyPph.addEventListener('change', togglePph);
     togglePpn();
     togglePph();
+  })();
+
+  // Toggle keterangan_batal visibility based on status selection
+  (function(){
+    function toggleKeteranganBatal(){
+      const statusSelect = document.getElementById('statusSelect');
+      const keteranganDiv = document.getElementById('keteranganBatalDiv');
+      const keteranganTextarea = document.getElementById('keteranganBatal');
+      
+      if (statusSelect && keteranganDiv && keteranganTextarea) {
+        const isBatal = statusSelect.value === 'batal';
+        if (isBatal) {
+          keteranganDiv.style.display = 'block';
+          keteranganTextarea.setAttribute('required', 'required');
+        } else {
+          keteranganDiv.style.display = 'none';
+          keteranganTextarea.removeAttribute('required');
+        }
+      }
+    }
+
+    const statusSelect = document.getElementById('statusSelect');
+    statusSelect && statusSelect.addEventListener('change', toggleKeteranganBatal);
   })();
 </script>
 @endpush

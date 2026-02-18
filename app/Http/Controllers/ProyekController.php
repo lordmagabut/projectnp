@@ -31,10 +31,19 @@ class ProyekController extends Controller
     /* =========================
        LIST & CREATE VIEWS
     ========================= */
-    public function index()
+    public function index(Request $request)
     {
-        $proyeks = Proyek::with(['pemberiKerja'])->get();
-        return view('proyek.index', compact('proyeks'));
+        $query = Proyek::with(['pemberiKerja']);
+        
+        // Filter berdasarkan status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        
+        $proyeks = $query->orderBy('nama_proyek')->get();
+        $selectedStatus = $request->status ?? '';
+        
+        return view('proyek.index', compact('proyeks', 'selectedStatus'));
     }
 
     public function create()
@@ -116,10 +125,9 @@ public function update(Request $request, $id)
         // Update data proyek non-file
         $proyek->update($data);
 
-        // Update status proyek
-        $proyek->status = ($request->tanggal_mulai && $request->tanggal_selesai && $proyek->status === 'perencanaan')
-            ? 'berjalan'
-            : ($request->status ?? $proyek->status);
+        // Update status proyek - hanya dari user manual selection, BUKAN dari tanggal input
+        // Auto-transition ke 'berjalan' akan terjadi saat membuat progress pertama kali
+        $proyek->status = $request->status ?? $proyek->status;
         $proyek->save();
 
         // Recalculate nilai penawaran (termasuk kontigensi) setelah update proyek
