@@ -273,13 +273,12 @@
         $hdrNama = optional($h)->deskripsi ?? '';
         foreach(($h->rabDetails ?? []) as $d) {
           $vol = (float)($d->volume ?? 0);
-          // try multiple possible price fields (from penawaran vs master RAB)
-          $unitMat = (float)($d->harga_material_penawaran_item ?? $d->harga_material ?? $d->harga_satuan ?? 0);
+          // FIX: Ambil harga_material dan harga_upah TERPISAH - jangan gunakan harga_satuan sebagai fallback material
+          // Alasan: harga_satuan = harga_material + harga_upah (HASIL PENGGABUNGAN, bukan material standalone)
+          // Jika hanya jasa (harga_material=0, harga_upah=1000), maka harga_satuan=1000, 
+          // dan jika fallback ke harga_satuan, akan duplikasi (Material=1000, Jasa=1000)
+          $unitMat = (float)($d->harga_material_penawaran_item ?? $d->harga_material ?? 0);
           $unitJasa = (float)($d->harga_upah_penawaran_item ?? $d->harga_upah ?? 0);
-          // if still zero but there's a combined harga_satuan, use it as material
-          if ($unitMat == 0 && isset($d->harga_satuan) && (float)$d->harga_satuan > 0) {
-            $unitMat = (float)$d->harga_satuan;
-          }
           $flatItemsRab[] = [
             'kode' => (string)($d->kode ?? ''),
             'uraian' => (string)($d->deskripsi ?? ''),

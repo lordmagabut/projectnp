@@ -951,15 +951,12 @@
         <th style="width:10%">Termin</th>
         <th>No. BAPP</th>
         <th class="text-center" style="width:8%">Jenis</th>
-        @if($priceMode === 'pisah')
-          <th class="text-end" style="width:12%">WO Material</th>
-          <th class="text-end" style="width:12%">WO Upah</th>
-          <th class="text-end" style="width:12%">DPP Material</th>
-          <th class="text-end" style="width:12%">DPP Jasa</th>
-        @else
-          <th class="text-end" style="width:14%">WO (Gabungan)</th>
-          <th class="text-end" style="width:14%">DPP (Gabungan)</th>
-        @endif
+        <th class="text-end" style="width:12%">WO Material</th>
+        <th class="text-end" style="width:12%">WO Upah</th>
+        <th class="text-end" style="width:12%">DPP Material</th>
+        <th class="text-end" style="width:12%">DPP Jasa</th>
+        <th class="text-end" style="width:14%">WO (Gabungan)</th>
+        <th class="text-end" style="width:14%">DPP (Gabungan)</th>
         <th class="text-end" style="width:14%">Tagihan (Bruto+PPN)</th>
         <th class="text-center" style="width:90px">Aksi</th>
       </tr>
@@ -980,19 +977,16 @@
                 <span class="badge bg-light text-secondary" title="Normal Progress">Normal</span>
               @endif
             </td>
-            @if($priceMode === 'pisah')
-              <td class="text-end">{{ $rp($s->nilai_wo_material) }}</td>
-              <td class="text-end">{{ $rp($s->nilai_wo_jasa) }}</td>
-              <td class="text-end">{{ $rp($s->dpp_material) }}</td>
-              <td class="text-end">{{ $rp($s->dpp_jasa) }}</td>
-            @else
-              @php
-                $woTotal = $s->nilai_wo_total ?? ($s->nilai_wo_material + $s->nilai_wo_jasa);
-                $dppTotal = ($s->dpp_material ?? 0) + ($s->dpp_jasa ?? 0);
-              @endphp
-              <td class="text-end">{{ $rp($woTotal) }}</td>
-              <td class="text-end">{{ $rp($dppTotal) }}</td>
-            @endif
+            <td class="text-end">{{ $rp($s->nilai_wo_material) }}</td>
+            <td class="text-end">{{ $rp($s->nilai_wo_jasa) }}</td>
+            <td class="text-end">{{ $rp($s->dpp_material) }}</td>
+            <td class="text-end">{{ $rp($s->dpp_jasa) }}</td>
+            @php
+              $woTotal = $s->nilai_wo_total ?? ($s->nilai_wo_material + $s->nilai_wo_jasa);
+              $dppTotal = ($s->dpp_material ?? 0) + ($s->dpp_jasa ?? 0);
+            @endphp
+            <td class="text-end">{{ $rp($woTotal) }}</td>
+            <td class="text-end">{{ $rp($dppTotal) }}</td>
             <td class="text-end fw-semibold text-primary">{{ $rp($s->total_tagihan) }}</td>
             <td class="text-center">
               <div class="dropdown">
@@ -1030,7 +1024,7 @@
             </td>
           </tr>
         @empty
-          <tr><td colspan="{{ $priceMode === 'pisah' ? 11 : 9 }}" class="text-center text-muted py-3">Belum ada sertifikat untuk penawaran ini.</td></tr>
+          <tr><td colspan="14" class="text-center text-muted py-3">Belum ada sertifikat untuk penawaran ini.</td></tr>
         @endforelse
       </tbody>
     </table>
@@ -1421,13 +1415,23 @@ document.addEventListener('DOMContentLoaded', function () {
 document.addEventListener('DOMContentLoaded', function () {
   const t1 = document.getElementById('tbl-sertifikat');
   if (t1 && window.jQuery) {
-    $(t1).DataTable({
-      paging: true,
-      searching: true,
-      responsive: true,
-      order: [[2,'desc']], // sort by tanggal
-      language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/id.json' }
-    });
+    const priceMode = @json($priceMode);
+    const hasRows = t1.querySelector('tbody tr:not(:last-child)') !== null;
+    
+    if (hasRows) {
+      // Column indices: 0=#, 1=NoSert, 2=Tgl, 3=Termin, 4=NoBAPP, 5=Jenis, 6=WOMat, 7=WOUpah, 8=DPPMat, 9=DPPJasa, 10=WOGab, 11=DPPGab, 12=Tagihan, 13=Aksi
+      $(t1).DataTable({
+        paging: true,
+        searching: true,
+        responsive: false,
+        order: [[2,'desc']], // sort by tanggal
+        columnDefs: [
+          { targets: [6, 7, 8, 9], visible: priceMode === 'pisah' }, // WO Material, WO Upah, DPP Material, DPP Jasa
+          { targets: [10, 11], visible: priceMode !== 'pisah' } // WO Gabungan, DPP Gabungan
+        ],
+        language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/id.json' }
+      });
+    }
   }
 });
 </script>
